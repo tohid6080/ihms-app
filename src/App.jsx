@@ -32,35 +32,42 @@ const ANOMALY_FORMATS = [
 
 const APP_NAME = "Integrated HSE Management System";
 
-const employerModules = [
+// ترتیب ماژول‌های سامانه IHMS طبق نقشه‌ی راه پروژه.
+// فقط "مدیریت عدم انطباق‌ها (Anomaly Report)" و "ایجاد حساب کاربری" فعلاً پیاده‌سازی شده‌اند؛
+// بقیه به‌عنوان جای‌نگه‌دار (Placeholder) نمایش داده می‌شوند تا در فازهای بعدی توسعه یابند.
+const HSE_MODULES = [
+  { key: "profile", label: "پروفایل من" },
+  {
+    key: "manageUsers",
+    label: "ایجاد حساب کاربری برای پیمانکاران",
+    employerOnly: true,
+    sub: [
+      { key: "manageUsersAccounts", label: "ثبت/ویرایش حساب کاربری پیمانکار" },
+      { key: "manageContractorInfo", label: "اطلاعات و قرارداد پیمانکاران" },
+    ],
+  },
   {
     key: "anomalyReport",
-    label: "Anomaly Report",
+    label: "مدیریت عدم انطباق‌ها (Anomaly Report)",
     icon: true,
     sub: [
-      { key: "anomalyForm", label: "ثبت آنومالی" },
+      { key: "anomalyForm", label: "ثبت آنومالی", employerOnly: true },
       { key: "anomalyList", label: "لیست آنومالی‌ها" },
     ],
   },
-  { key: "manageUsers", label: "ایجاد/ویرایش حساب کاربری" },
-  { key: "manageContractorInfo", label: "لیست پیمانکاران" },
-  { key: "finance", label: "گزارش‌های مالی" },
-  { key: "invoices", label: "تایید صورت‌وضعیت‌ها" },
-  { key: "messages", label: "پیام‌ها" },
-];
-
-const contractorModules = [
-  { key: "assignedTasks", label: "کارهای محول‌شده" },
-  { key: "dailyReport", label: "ثبت گزارش کار روزانه" },
-  {
-    key: "anomalyReport",
-    label: "Anomaly Report",
-    icon: true,
-    sub: [{ key: "anomalyList", label: "لیست آنومالی‌ها" }],
-  },
-  { key: "invoice", label: "ثبت صورت‌وضعیت" },
-  { key: "messages", label: "پیام‌ها" },
-  { key: "profile", label: "پروفایل من" },
+  { key: "incident", label: "مدیریت حوادث (Incident Management)" },
+  { key: "nearMiss", label: "مدیریت شبه‌حوادث (Near Miss)" },
+  { key: "capa", label: "مدیریت اقدامات اصلاحی و پیشگیرانه (CAPA)" },
+  { key: "riskAssessment", label: "مدیریت ارزیابی ریسک (Risk Assessment)" },
+  { key: "hazards", label: "مدیریت عوامل زیان‌آور محیط کار" },
+  { key: "occupationalHealth", label: "مدیریت معاینات طب کار" },
+  { key: "training", label: "مدیریت آموزش‌های HSE" },
+  { key: "permit", label: "مدیریت مجوزهای کار (Permit to Work)" },
+  { key: "ppe", label: "مدیریت تجهیزات حفاظت فردی (PPE)" },
+  { key: "audit", label: "مدیریت ممیزی‌ها (Audit Management)" },
+  { key: "kpi", label: "مدیریت شاخص‌های عملکرد HSE (KPI Dashboard)" },
+  { key: "documents", label: "مدیریت مستندات HSE" },
+  { key: "managerDashboard", label: "داشبورد مدیریتی و گزارش‌های تحلیلی" },
 ];
 
 // ---------- لایه ذخیره‌سازی (Supabase REST API) ----------
@@ -331,6 +338,25 @@ function LoginScreen({ onLogin }) {
         </button>
 
         <p style={styles.hint}>Designed by: Tohid Mirasadi</p>
+      </div>
+    </div>
+  );
+}
+
+// ---------- پروفایل کاربر ----------
+function ProfileView({ onBack, currentUser, roleLabel }) {
+  return (
+    <div style={{ maxWidth: 420, margin: "0 auto", padding: 24 }}>
+      {onBack && <div style={styles.backLink} onClick={onBack}>← بازگشت به منو</div>}
+      <div style={{ ...styles.card, width: "auto" }}>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+          <div style={styles.brandBadge}>
+            <AlertTriangle size={22} color="#fff" />
+          </div>
+        </div>
+        <h3 style={{ textAlign: "center", marginBottom: 4 }}>{currentUser?.username}</h3>
+        <p style={{ textAlign: "center", color: "#888", fontSize: 13, marginTop: 0 }}>{roleLabel}</p>
+        <p style={{ textAlign: "center", color: "#aaa", fontSize: 11, marginTop: 20, direction: "ltr" }}>{APP_NAME}</p>
       </div>
     </div>
   );
@@ -1220,16 +1246,14 @@ function AdminDashboard({ onLogout }) {
 function EmployerDashboard({ onLogout, currentUser }) {
   const [view, setView] = useState("menu");
 
-  const directRoutes = {
-    manageUsers: "manageUsers",
-    manageContractorInfo: "manageContractorInfo",
+  const openModule = (mod) => {
+    if (mod.key === "profile") { setView("profile"); return; }
+    if (mod.sub) { setView(mod.key); return; }
+    alert(`ماژول «${mod.label}» به‌زودی اضافه می‌شود`);
   };
 
-  const openModule = (mod) => {
-    if (mod.sub) { setView(mod.key); return; }
-    if (directRoutes[mod.key]) { setView(directRoutes[mod.key]); return; }
-    alert(`رفتن به: ${mod.label} (اینجا مسیر واقعی را وصل کنید)`);
-  };
+  const anomalyMod = HSE_MODULES.find((m) => m.key === "anomalyReport");
+  const usersMod = HSE_MODULES.find((m) => m.key === "manageUsers");
 
   return (
     <div style={styles.dashboardWrapper}>
@@ -1243,7 +1267,7 @@ function EmployerDashboard({ onLogout, currentUser }) {
 
       {view === "menu" && (
         <div style={styles.menuList}>
-          {employerModules.map((mod) => (
+          {HSE_MODULES.map((mod) => (
             <div
               key={mod.key}
               style={{ ...styles.menuCard, ...(mod.icon ? styles.anomalyMenuCard : {}) }}
@@ -1260,20 +1284,32 @@ function EmployerDashboard({ onLogout, currentUser }) {
       {view === "anomalyReport" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
           <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
-          <h3 style={{ marginBottom: 12 }}>Anomaly Report</h3>
+          <h3 style={{ marginBottom: 12 }}>{anomalyMod.label}</h3>
           <div style={styles.menuList2}>
-            <div style={{ ...styles.menuCard, ...styles.anomalyMenuCard }} onClick={() => setView("anomalyForm")}>
-              <AlertTriangle size={16} style={{ marginLeft: 8, verticalAlign: "middle" }} />ثبت آنومالی
-            </div>
-            <div style={{ ...styles.menuCard, ...styles.anomalyMenuCard }} onClick={() => setView("anomalyList")}>
-              <AlertTriangle size={16} style={{ marginLeft: 8, verticalAlign: "middle" }} />لیست آنومالی‌ها
-            </div>
+            {anomalyMod.sub.map((s) => (
+              <div key={s.key} style={{ ...styles.menuCard, ...styles.anomalyMenuCard }} onClick={() => setView(s.key)}>
+                <AlertTriangle size={16} style={{ marginLeft: 8, verticalAlign: "middle" }} />{s.label}
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {view === "manageUsers" && <ContractorAccountManager onBack={() => setView("menu")} />}
-      {view === "manageContractorInfo" && <ContractorInfoManager onBack={() => setView("menu")} />}
+      {view === "manageUsers" && (
+        <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
+          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
+          <h3 style={{ marginBottom: 12 }}>{usersMod.label}</h3>
+          <div style={styles.menuList2}>
+            {usersMod.sub.map((s) => (
+              <div key={s.key} style={styles.menuCard} onClick={() => setView(s.key)}>{s.label}</div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel="کارفرما" />}
+      {view === "manageUsersAccounts" && <ContractorAccountManager onBack={() => setView("manageUsers")} />}
+      {view === "manageContractorInfo" && <ContractorInfoManager onBack={() => setView("manageUsers")} />}
       {view === "anomalyForm" && <AnomalyForm onBack={() => setView("anomalyReport")} currentUser={currentUser} onSaved={() => setView("anomalyList")} />}
       {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="EMPLOYER" />}
     </div>
@@ -1281,13 +1317,18 @@ function EmployerDashboard({ onLogout, currentUser }) {
 }
 
 // ---------- پنل پیمانکار ----------
-function ContractorDashboard({ onLogout }) {
+function ContractorDashboard({ onLogout, currentUser }) {
   const [view, setView] = useState("menu");
 
   const openModule = (mod) => {
+    if (mod.key === "profile") { setView("profile"); return; }
+    if (mod.employerOnly) { alert("این بخش فقط برای کارفرما/ادمین در دسترس است"); return; }
     if (mod.sub) { setView(mod.key); return; }
-    alert(`رفتن به: ${mod.label} (اینجا مسیر واقعی را وصل کنید)`);
+    alert(`ماژول «${mod.label}» به‌زودی اضافه می‌شود`);
   };
+
+  const anomalyMod = HSE_MODULES.find((m) => m.key === "anomalyReport");
+  const anomalySub = anomalyMod.sub.filter((s) => !s.employerOnly);
 
   return (
     <div style={styles.dashboardWrapper}>
@@ -1301,10 +1342,10 @@ function ContractorDashboard({ onLogout }) {
 
       {view === "menu" && (
         <div style={styles.menuList}>
-          {contractorModules.map((mod) => (
+          {HSE_MODULES.map((mod) => (
             <div
               key={mod.key}
-              style={{ ...styles.menuCard, ...(mod.icon ? styles.anomalyMenuCard : {}) }}
+              style={{ ...styles.menuCard, ...(mod.icon ? styles.anomalyMenuCard : {}), ...(mod.employerOnly ? { opacity: 0.55 } : {}) }}
               onClick={() => openModule(mod)}
             >
               {mod.icon && <AlertTriangle size={16} style={{ marginLeft: 8, verticalAlign: "middle" }} />}
@@ -1318,15 +1359,18 @@ function ContractorDashboard({ onLogout }) {
       {view === "anomalyReport" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
           <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
-          <h3 style={{ marginBottom: 12 }}>Anomaly Report</h3>
+          <h3 style={{ marginBottom: 12 }}>{anomalyMod.label}</h3>
           <div style={styles.menuList2}>
-            <div style={{ ...styles.menuCard, ...styles.anomalyMenuCard }} onClick={() => setView("anomalyList")}>
-              <AlertTriangle size={16} style={{ marginLeft: 8, verticalAlign: "middle" }} />لیست آنومالی‌ها
-            </div>
+            {anomalySub.map((s) => (
+              <div key={s.key} style={{ ...styles.menuCard, ...styles.anomalyMenuCard }} onClick={() => setView(s.key)}>
+                <AlertTriangle size={16} style={{ marginLeft: 8, verticalAlign: "middle" }} />{s.label}
+              </div>
+            ))}
           </div>
         </div>
       )}
 
+      {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel="پیمانکار" />}
       {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="CONTRACTOR" />}
     </div>
   );
@@ -1367,7 +1411,7 @@ function AppInner() {
   if (!currentUser) return <LoginScreen onLogin={setCurrentUser} />;
   if (currentUser.role === "ADMIN") return <AdminDashboard onLogout={() => setCurrentUser(null)} />;
   if (currentUser.role === "EMPLOYER") return <EmployerDashboard onLogout={() => setCurrentUser(null)} currentUser={currentUser} />;
-  return <ContractorDashboard onLogout={() => setCurrentUser(null)} />;
+  return <ContractorDashboard onLogout={() => setCurrentUser(null)} currentUser={currentUser} />;
 }
 
 export default function App() {
