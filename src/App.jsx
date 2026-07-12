@@ -65,8 +65,8 @@ const HSE_MODULES = [
 // ---------- لایه ذخیره‌سازی (Supabase REST API) ----------
 // نکته امنیتی: فقط از کلید publishable/anon استفاده می‌شود، هرگز کلید secret را
 // داخل کد سمت مرورگر قرار ندهید چون هرکسی که اپ را باز کند می‌تواند آن را ببیند.
-const SUPABASE_URL = "https://oyiyxhwvtqpqxolmmcui.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_hHpuzRu-1030cKEfCyidpQ_mfhbH050";
+const SUPABASE_URL = "https://zmmxiyqlwkqjzghbcydi.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_PnB5Mp5wo_EOzJHa7HGwBQ_gqF1gvo0";
 
 async function sb(path, options = {}) {
   try {
