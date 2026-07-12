@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { AlertTriangle, Plus, X, ChevronRight, LogOut, Search, Filter, CheckCircle2, Clock, Camera, ImagePlus, Trash2 } from "lucide-react";
+import { AlertTriangle, Plus, X, ChevronRight, LogOut, Search, Filter, CheckCircle2, Clock, Camera, ImagePlus, Trash2, FileSpreadsheet, FileText } from "lucide-react";
+import * as XLSX from "xlsx";
 
 /**
  * اپلیکیشن کارفرما / پیمانکار / ادمین + ماژول ثبت و پیگیری آنومالی HSE
@@ -142,6 +143,44 @@ async function updateContractorDB(id, patch) {
 }
 async function deleteContractorDB(id) {
   await sb(`contractors?id=eq.${id}`, { method: "DELETE", prefer: "return=minimal" });
+}
+
+// ---------- حساب‌های کارفرما/همکاران (ایجادشده توسط ادمین، با سطح دسترسی قابل‌تنظیم) ----------
+function employerAccountFromRow(r) {
+  return {
+    id: r.id,
+    name: r.name,
+    username: r.username,
+    password: r.password,
+    canEdit: r.can_edit !== false,
+    role: "EMPLOYER",
+  };
+}
+
+async function loadEmployerAccounts() {
+  const rows = await sb("employer_accounts?select=*&order=name.asc");
+  return (sbOk(rows) ? rows : []).map(employerAccountFromRow);
+}
+async function insertEmployerAccount(rec) {
+  const rows = await sb("employer_accounts", {
+    method: "POST",
+    body: JSON.stringify([{ name: rec.name, username: rec.username, password: rec.password, can_edit: rec.canEdit }]),
+  });
+  if (!sbOk(rows)) return { __error: true, message: sbErrMsg(rows) };
+  return employerAccountFromRow(rows[0]);
+}
+async function updateEmployerAccountDB(id, patch) {
+  const dbPatch = {};
+  if ("name" in patch) dbPatch.name = patch.name;
+  if ("username" in patch) dbPatch.username = patch.username;
+  if ("password" in patch) dbPatch.password = patch.password;
+  if ("canEdit" in patch) dbPatch.can_edit = patch.canEdit;
+  const rows = await sb(`employer_accounts?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(dbPatch) });
+  if (!sbOk(rows)) return { __error: true, message: sbErrMsg(rows) };
+  return employerAccountFromRow(rows[0]);
+}
+async function deleteEmployerAccountDB(id) {
+  await sb(`employer_accounts?id=eq.${id}`, { method: "DELETE", prefer: "return=minimal" });
 }
 
 function anomalyFromRow(r) {
@@ -371,7 +410,76 @@ function JalaliDateInput({ value, onChange }) {
   );
 }
 
-// عکس گرفته‌شده با دوربین/گالری را کوچک می‌کند تا حجم ذخیره‌سازی معقول بماند
+// ---------- خروجی گزارش (Excel / PDF) ----------
+function statusLabelFa(status) {
+  if (status === "Closed") return "بسته";
+  if (status === "pending_review") return "در انتظار تأیید";
+  return "باز";
+}
+
+function anomalyExportRows(list) {
+  return list.map((a, idx) => ({
+    "ردیف": idx + 1,
+    "شماره پیگیری": a.trackingNumber,
+    "تاریخ": isoToJalaliDisplay(a.date),
+    "ناحیه": a.area,
+    "پیمانکار": a.contractor,
+    "دسته‌بندی": a.category,
+    "سطح ریسک": a.riskLevel,
+    "وضعیت": statusLabelFa(a.status),
+    "شرح آنومالی": a.description,
+    "اقدام پیمانکار": a.contractorAction || "",
+    "تاریخ بسته شدن": a.closeDate ? isoToJalaliDisplay(a.closeDate) : "",
+  }));
+}
+
+function exportAnomaliesExcel(list, title) {
+  const rows = anomalyExportRows(list);
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws["!cols"] = [{ wch: 5 }, { wch: 14 }, { wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 8 }, { wch: 14 }, { wch: 36 }, { wch: 30 }, { wch: 12 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Anomalies");
+  XLSX.writeFile(wb, `${title}.xlsx`);
+}
+
+function escapeHtml(s) {
+  return String(s || "")
+    .split("&").join("&amp;")
+    .split("<").join("&lt;")
+    .split(">").join("&gt;")
+    .split('"').join("&quot;")
+    .split("'").join("&#39;");
+}
+
+function exportAnomaliesPdf(list, title) {
+  const win = window.open("", "_blank");
+  if (!win) { alert("اجازه‌ی باز شدن پنجره‌ی جدید داده نشد؛ لطفاً popup blocker مرورگر را غیرفعال کنید."); return; }
+  const headers = ["ردیف", "شماره پیگیری", "تاریخ", "ناحیه", "پیمانکار", "دسته‌بندی", "سطح ریسک", "وضعیت", "شرح آنومالی", "اقدام پیمانکار", "تاریخ بسته شدن"];
+  const bodyRows = anomalyExportRows(list)
+    .map((r) => `<tr>${Object.values(r).map((v) => `<td>${escapeHtml(v)}</td>`).join("")}</tr>`)
+    .join("");
+  const html = `<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
+  <style>
+    body { font-family: Tahoma, Arial, sans-serif; direction: rtl; padding: 20px; color: #111; }
+    h2 { text-align: center; margin-bottom: 4px; }
+    p.meta { text-align: center; color: #666; font-size: 12px; margin-top: 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 16px; }
+    th, td { border: 1px solid #ccc; padding: 5px; text-align: right; vertical-align: top; }
+    th { background: #f1f5f9; }
+    @media print { @page { size: landscape; margin: 12mm; } }
+  </style></head>
+  <body>
+    <h2>${escapeHtml(title)}</h2>
+    <p class="meta">${APP_NAME} — تعداد موارد: ${list.length}</p>
+    <table><thead><tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead><tbody>${bodyRows}</tbody></table>
+  </body></html>`;
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 350);
+}
+
+
 function resizeImageFile(file, maxDim = 1280, quality = 0.72) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -412,7 +520,17 @@ function LoginScreen({ onLogin }) {
     if (seedMatch) {
       setLoading(false);
       setError("");
-      onLogin(seedMatch);
+      onLogin({ ...seedMatch, canEdit: true, name: seedMatch.role === "EMPLOYER" ? "کارفرما (حساب اصلی)" : seedMatch.username });
+      return;
+    }
+
+    // سپس حساب‌های کارفرما/همکاران که ادمین ایجاد کرده بررسی می‌شوند
+    const employerAccounts = await loadEmployerAccounts();
+    const employerMatch = employerAccounts.find((u) => u.username === username.trim() && u.password === password);
+    if (employerMatch) {
+      setLoading(false);
+      setError("");
+      onLogin(employerMatch);
       return;
     }
 
@@ -602,6 +720,132 @@ function ContractorManager({ onBack }) {
               <div style={{ display: "flex", gap: 8 }}>
                 <button type="button" style={styles.smallButton} onClick={() => startEdit(c)}>تغییر</button>
                 <button type="button" style={{ ...styles.smallButton, background: "#dc2626" }} onClick={() => handleDelete(c.id, c.name)}>حذف</button>
+              </div>
+            </div>
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
+// ---------- مدیریت حساب‌های کارفرما/همکاران (فقط ادمین) ----------
+function EmployerAccountManager({ onBack }) {
+  const [accounts, setAccounts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [canEdit, setCanEdit] = useState(true);
+  const [formError, setFormError] = useState("");
+  const [editingId, setEditingId] = useState(null);
+  const [editData, setEditData] = useState({});
+
+  useEffect(() => {
+    (async () => {
+      setAccounts(await loadEmployerAccounts());
+      setLoading(false);
+    })();
+  }, []);
+
+  const usernameTaken = (uname, excludeId) =>
+    SEED_USERS.some((u) => u.username === uname) || accounts.some((a) => a.username === uname && a.id !== excludeId);
+
+  const handleAdd = async () => {
+    const uname = username.trim();
+    if (!name.trim() || !uname || !password) { setFormError("نام، نام کاربری و رمز عبور الزامی است"); return; }
+    if (usernameTaken(uname, null)) { setFormError("این نام کاربری قبلاً استفاده شده است"); return; }
+    const inserted = await insertEmployerAccount({ name: name.trim(), username: uname, password, canEdit });
+    if (!inserted || inserted.__error) { setFormError(`خطا در ذخیره‌سازی: ${inserted?.message || "نامشخص"}`); return; }
+    setAccounts([...accounts, inserted]);
+    setName(""); setUsername(""); setPassword(""); setCanEdit(true); setFormError(""); setShowForm(false);
+  };
+
+  const startEdit = (a) => { setEditingId(a.id); setEditData({ name: a.name, username: a.username, password: a.password, canEdit: a.canEdit }); };
+  const cancelEdit = () => { setEditingId(null); setEditData({}); };
+
+  const saveEdit = async (id) => {
+    const uname = (editData.username || "").trim();
+    if (!editData.name?.trim() || !uname || !editData.password) { alert("نام، نام کاربری و رمز عبور نمی‌توانند خالی باشند"); return; }
+    if (usernameTaken(uname, id)) { alert("این نام کاربری قبلاً برای حساب دیگری استفاده شده است"); return; }
+    const updated = await updateEmployerAccountDB(id, { ...editData, name: editData.name.trim(), username: uname });
+    if (!updated || updated.__error) { alert(`خطا در ذخیره‌سازی: ${updated?.message || "نامشخص"}`); return; }
+    setAccounts(accounts.map((a) => (a.id === id ? updated : a)));
+    cancelEdit();
+  };
+
+  const handleDelete = async (id, name) => {
+    if (confirm(`آیا از حذف حساب «${name}» مطمئن هستید؟`)) {
+      await deleteEmployerAccountDB(id);
+      setAccounts(accounts.filter((a) => a.id !== id));
+    }
+  };
+
+  if (loading) return <div style={{ padding: 24, textAlign: "center", color: "#888" }}>در حال بارگذاری...</div>;
+
+  return (
+    <div style={{ maxWidth: 560, margin: "0 auto", padding: 24 }}>
+      {onBack && <div style={styles.backLink} onClick={onBack}>← بازگشت به منو</div>}
+      <p style={{ color: "#888", fontSize: 13 }}>حساب‌هایی که اینجا می‌سازی، نقش «کارفرما» دارند و می‌توانند وارد سامانه شوند. سطح دسترسی هرکدام را خودت مشخص می‌کنی.</p>
+
+      <div style={{ ...styles.menuCard, background: "#2563eb", color: "#fff", textAlign: "center" }} onClick={() => setShowForm((v) => !v)}>
+        {showForm ? "بستن فرم" : "+ افزودن حساب کارفرما/همکار جدید"}
+      </div>
+
+      {showForm && (
+        <div style={styles.card}>
+          <label style={styles.label}>نام / عنوان (مثلاً «دفتر ستاد» یا نام همکار)</label>
+          <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} dir="rtl" />
+          <label style={styles.label}>نام کاربری</label>
+          <input style={styles.input} value={username} onChange={(e) => setUsername(e.target.value)} dir="rtl" />
+          <label style={styles.label}>رمز عبور</label>
+          <input style={styles.input} value={password} onChange={(e) => setPassword(e.target.value)} dir="rtl" />
+          <label style={styles.label}>سطح دسترسی</label>
+          <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+            <button type="button" onClick={() => setCanEdit(true)} style={{ flex: 1, padding: "10px 6px", borderRadius: 8, border: canEdit ? "2px solid #2563eb" : "1px solid #ccc", background: canEdit ? "#eff6ff" : "#fff", color: "#2563eb", fontSize: 13, cursor: "pointer", fontWeight: canEdit ? "bold" : "normal" }}>دسترسی کامل (ثبت و تأیید)</button>
+            <button type="button" onClick={() => setCanEdit(false)} style={{ flex: 1, padding: "10px 6px", borderRadius: 8, border: !canEdit ? "2px solid #475569" : "1px solid #ccc", background: !canEdit ? "#f1f5f9" : "#fff", color: "#475569", fontSize: 13, cursor: "pointer", fontWeight: !canEdit ? "bold" : "normal" }}>فقط مشاهده</button>
+          </div>
+          {formError && <p style={styles.error}>{formError}</p>}
+          <button type="button" style={styles.button} onClick={handleAdd}>افزودن حساب</button>
+        </div>
+      )}
+
+      <h3 style={{ marginTop: 24 }}>حساب‌های ثبت‌شده ({accounts.length})</h3>
+      {accounts.length === 0 && <p style={{ color: "#888" }}>هنوز هیچ حسابی اضافه نشده است.</p>}
+
+      {accounts.map((a) =>
+        editingId === a.id ? (
+          <div key={a.id} style={styles.card}>
+            <label style={styles.label}>نام / عنوان</label>
+            <input style={styles.input} value={editData.name} onChange={(e) => setEditData({ ...editData, name: e.target.value })} dir="rtl" />
+            <label style={styles.label}>نام کاربری</label>
+            <input style={styles.input} value={editData.username} onChange={(e) => setEditData({ ...editData, username: e.target.value })} dir="rtl" />
+            <label style={styles.label}>رمز عبور</label>
+            <input style={styles.input} value={editData.password} onChange={(e) => setEditData({ ...editData, password: e.target.value })} dir="rtl" />
+            <label style={styles.label}>سطح دسترسی</label>
+            <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+              <button type="button" onClick={() => setEditData({ ...editData, canEdit: true })} style={{ flex: 1, padding: "10px 6px", borderRadius: 8, border: editData.canEdit ? "2px solid #2563eb" : "1px solid #ccc", background: editData.canEdit ? "#eff6ff" : "#fff", color: "#2563eb", fontSize: 13, cursor: "pointer" }}>دسترسی کامل</button>
+              <button type="button" onClick={() => setEditData({ ...editData, canEdit: false })} style={{ flex: 1, padding: "10px 6px", borderRadius: 8, border: !editData.canEdit ? "2px solid #475569" : "1px solid #ccc", background: !editData.canEdit ? "#f1f5f9" : "#fff", color: "#475569", fontSize: 13, cursor: "pointer" }}>فقط مشاهده</button>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+              <button type="button" style={styles.button} onClick={() => saveEdit(a.id)}>ذخیره</button>
+              <button type="button" style={{ ...styles.button, background: "#999" }} onClick={cancelEdit}>انصراف</button>
+            </div>
+          </div>
+        ) : (
+          <div key={a.id} style={{ ...styles.card, width: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <div style={{ fontWeight: "bold", fontSize: 16 }}>{a.name}</div>
+                <div style={{ fontSize: 13, color: "#2563eb", marginTop: 4, direction: "ltr", textAlign: "right" }}>یوزر: {a.username}</div>
+                <span style={{ ...styles.badge, marginTop: 6, display: "inline-block", color: a.canEdit ? "#166534" : "#92400e", background: a.canEdit ? "#dcfce7" : "#fef3c7" }}>
+                  {a.canEdit ? "دسترسی کامل" : "فقط مشاهده"}
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button type="button" style={styles.smallButton} onClick={() => startEdit(a)}>تغییر</button>
+                <button type="button" style={{ ...styles.smallButton, background: "#dc2626" }} onClick={() => handleDelete(a.id, a.name)}>حذف</button>
               </div>
             </div>
           </div>
@@ -848,8 +1092,9 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
 }
 
 // ---------- لیست و پیگیری آنومالی‌ها ----------
-function AnomalyList({ onBack, role, currentUser }) {
-  const isReviewer = role === "EMPLOYER" || role === "ADMIN";
+function AnomalyList({ onBack, role, currentUser, readOnly }) {
+  const isReviewer = (role === "EMPLOYER" || role === "ADMIN") && !readOnly;
+  const isReadOnlyReviewer = (role === "EMPLOYER" || role === "ADMIN") && !!readOnly;
   const isContractor = role === "CONTRACTOR";
   const myContractorName = (currentUser?.name || "").trim().toLowerCase();
 
@@ -1063,6 +1308,25 @@ function AnomalyList({ onBack, role, currentUser }) {
           <option value="all">همه سطوح ریسک</option>
           {RISK_LEVELS.map((r) => <option key={r.value} value={r.value}>{r.value}</option>)}
         </select>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <button
+          type="button"
+          style={{ ...styles.smallButton, flex: 1, background: "#16a34a", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+          onClick={() => exportAnomaliesExcel(filtered, isContractor ? `آنومالی‌های ${currentUser?.name || "پیمانکار"}` : "لیست آنومالی‌ها")}
+          disabled={filtered.length === 0}
+        >
+          <FileSpreadsheet size={15} /> خروجی Excel
+        </button>
+        <button
+          type="button"
+          style={{ ...styles.smallButton, flex: 1, background: "#475569", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+          onClick={() => exportAnomaliesPdf(filtered, isContractor ? `آنومالی‌های ${currentUser?.name || "پیمانکار"}` : "لیست آنومالی‌ها")}
+          disabled={filtered.length === 0}
+        >
+          <FileText size={15} /> خروجی PDF
+        </button>
       </div>
 
       <h3 style={{ marginTop: 20 }}>موارد ثبت‌شده ({filtered.length})</h3>
@@ -1285,6 +1549,18 @@ function AnomalyList({ onBack, role, currentUser }) {
                     <button type="button" style={{ ...styles.smallButton, background: "#dc2626" }} onClick={() => handleDelete(a.id, a.trackingNumber)}>حذف آنومالی</button>
                   </div>
                 )}
+                {isReadOnlyReviewer && (
+                  <div style={{ fontSize: 13, color: "#555", lineHeight: 1.9 }}>
+                    <div style={{ background: "#f1f5f9", color: "#475569", padding: "4px 10px", borderRadius: 999, display: "inline-block", fontSize: 11, marginBottom: 8 }}>دسترسی فقط مشاهده</div>
+                    {a.correctiveAction && <div><b>اقدام اصلاحی:</b> {a.correctiveAction}</div>}
+                    {a.contractorAction && <div><b>اقدام پیمانکار:</b> {a.contractorAction}</div>}
+                    {a.obstacles && <div><b>موانع و مشکلات:</b> {a.obstacles}</div>}
+                    {a.follower && <div><b>شخص پیگیر:</b> {a.follower}</div>}
+                    {a.reviewNote && <div><b>یادداشت بازگشت:</b> {a.reviewNote}</div>}
+                    {a.status === "Closed" && a.closeDate && <div><b>تاریخ بسته شدن:</b> {isoToJalaliDisplay(a.closeDate)}</div>}
+                    {a.effectiveness && <div><b>اثربخشی:</b> {a.effectiveness}</div>}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1304,7 +1580,8 @@ function AnomalyList({ onBack, role, currentUser }) {
 }
 
 // ---------- پنل ادمین ----------
-function AdminDashboard({ onLogout }) {
+function AdminDashboard({ onLogout, currentUser }) {
+  const [view, setView] = useState("menu");
   return (
     <div style={styles.dashboardWrapper}>
       <div style={styles.topBar}>
@@ -1314,7 +1591,22 @@ function AdminDashboard({ onLogout }) {
         </div>
         <button style={styles.logoutButton} onClick={onLogout}><LogOut size={14} style={{ marginLeft: 6 }} />خروج</button>
       </div>
-      <ContractorManager />
+
+      {view === "menu" && (
+        <div style={styles.menuList}>
+          <div style={styles.menuCard} onClick={() => setView("profile")}>پروفایل من</div>
+          <div style={styles.menuCard} onClick={() => setView("employers")}>مدیریت حساب‌های کارفرما/همکاران</div>
+          <div style={styles.menuCard} onClick={() => setView("contractors")}>مدیریت پیمانکاران</div>
+          <div style={{ ...styles.menuCard, ...styles.anomalyMenuCard }} onClick={() => setView("anomalyList")}>
+            <AlertTriangle size={16} style={{ marginLeft: 8, verticalAlign: "middle" }} />مدیریت عدم انطباق‌ها (Anomaly Report)
+          </div>
+        </div>
+      )}
+
+      {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel="ادمین" />}
+      {view === "employers" && <EmployerAccountManager onBack={() => setView("menu")} />}
+      {view === "contractors" && <ContractorManager onBack={() => setView("menu")} />}
+      {view === "anomalyList" && <AnomalyList onBack={() => setView("menu")} role="ADMIN" />}
     </div>
   );
 }
@@ -1322,22 +1614,28 @@ function AdminDashboard({ onLogout }) {
 // ---------- پنل کارفرما ----------
 function EmployerDashboard({ onLogout, currentUser }) {
   const [view, setView] = useState("menu");
+  const canEdit = currentUser?.canEdit !== false;
 
   const openModule = (mod) => {
     if (mod.key === "profile") { setView("profile"); return; }
-    if (mod.key === "manageUsers") { setView("manageUsers"); return; }
+    if (mod.key === "manageUsers") {
+      if (!canEdit) { alert("این بخش فقط با دسترسی کامل در دسترس است"); return; }
+      setView("manageUsers");
+      return;
+    }
     if (mod.sub) { setView(mod.key); return; }
     alert(`ماژول «${mod.label}» به‌زودی اضافه می‌شود`);
   };
 
   const anomalyMod = HSE_MODULES.find((m) => m.key === "anomalyReport");
+  const anomalySub = anomalyMod.sub.filter((s) => canEdit || !s.employerOnly);
 
   return (
     <div style={styles.dashboardWrapper}>
       <div style={styles.topBar}>
         <div>
           <div style={styles.appNameTag}>{APP_NAME}</div>
-          <h2 style={{ margin: 0 }}>پنل کارفرما</h2>
+          <h2 style={{ margin: 0 }}>پنل کارفرما {!canEdit && <span style={{ fontSize: 12, opacity: 0.85 }}>(فقط مشاهده)</span>}</h2>
         </div>
         <button style={styles.logoutButton} onClick={onLogout}><LogOut size={14} style={{ marginLeft: 6 }} />خروج</button>
       </div>
@@ -1347,7 +1645,7 @@ function EmployerDashboard({ onLogout, currentUser }) {
           {HSE_MODULES.map((mod) => (
             <div
               key={mod.key}
-              style={{ ...styles.menuCard, ...(mod.icon ? styles.anomalyMenuCard : {}) }}
+              style={{ ...styles.menuCard, ...(mod.icon ? styles.anomalyMenuCard : {}), ...(mod.employerOnly && !canEdit ? { opacity: 0.55 } : {}) }}
               onClick={() => openModule(mod)}
             >
               {mod.icon && <AlertTriangle size={16} style={{ marginLeft: 8, verticalAlign: "middle" }} />}
@@ -1363,7 +1661,7 @@ function EmployerDashboard({ onLogout, currentUser }) {
           <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
           <h3 style={{ marginBottom: 12 }}>{anomalyMod.label}</h3>
           <div style={styles.menuList2}>
-            {anomalyMod.sub.map((s) => (
+            {anomalySub.map((s) => (
               <div key={s.key} style={{ ...styles.menuCard, ...styles.anomalyMenuCard }} onClick={() => setView(s.key)}>
                 <AlertTriangle size={16} style={{ marginLeft: 8, verticalAlign: "middle" }} />{s.label}
               </div>
@@ -1372,10 +1670,10 @@ function EmployerDashboard({ onLogout, currentUser }) {
         </div>
       )}
 
-      {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel="کارفرما" />}
+      {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel={canEdit ? "کارفرما" : "کارفرما (فقط مشاهده)"} />}
       {view === "manageUsers" && <ContractorManager onBack={() => setView("menu")} />}
       {view === "anomalyForm" && <AnomalyForm onBack={() => setView("anomalyReport")} currentUser={currentUser} onSaved={() => setView("anomalyList")} />}
-      {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="EMPLOYER" />}
+      {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="EMPLOYER" currentUser={currentUser} readOnly={!canEdit} />}
     </div>
   );
 }
@@ -1473,7 +1771,7 @@ function AppInner() {
   const [currentUser, setCurrentUser] = useState(null);
 
   if (!currentUser) return <LoginScreen onLogin={setCurrentUser} />;
-  if (currentUser.role === "ADMIN") return <AdminDashboard onLogout={() => setCurrentUser(null)} />;
+  if (currentUser.role === "ADMIN") return <AdminDashboard onLogout={() => setCurrentUser(null)} currentUser={currentUser} />;
   if (currentUser.role === "EMPLOYER") return <EmployerDashboard onLogout={() => setCurrentUser(null)} currentUser={currentUser} />;
   return <ContractorDashboard onLogout={() => setCurrentUser(null)} currentUser={currentUser} />;
 }
