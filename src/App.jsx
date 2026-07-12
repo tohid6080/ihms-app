@@ -37,15 +37,7 @@ const APP_NAME = "Integrated HSE Management System";
 // بقیه به‌عنوان جای‌نگه‌دار (Placeholder) نمایش داده می‌شوند تا در فازهای بعدی توسعه یابند.
 const HSE_MODULES = [
   { key: "profile", label: "پروفایل من" },
-  {
-    key: "manageUsers",
-    label: "ایجاد حساب کاربری برای پیمانکاران",
-    employerOnly: true,
-    sub: [
-      { key: "manageUsersAccounts", label: "ثبت/ویرایش حساب کاربری پیمانکار" },
-      { key: "manageContractorInfo", label: "اطلاعات و قرارداد پیمانکاران" },
-    ],
-  },
+  { key: "manageUsers", label: "ایجاد حساب کاربری برای پیمانکاران", employerOnly: true },
   {
     key: "anomalyReport",
     label: "مدیریت عدم انطباق‌ها (Anomaly Report)",
@@ -113,33 +105,42 @@ function sbErrMsg(rows) {
 // حساب‌های ادمین و کارفرما ثابت هستند و مستقل از دیتابیس بررسی می‌شوند
 // تا در صورت هر مشکلی در اتصال، ورود این دو نقش همیشه کار کند.
 // دیتابیس فقط حساب‌های پیمانکار (که توسط ادمین/کارفرما ساخته می‌شوند) را نگه می‌دارد.
-async function loadContractorUsers() {
-  const rows = await sb("contractor_accounts?select=*&order=username.asc");
-  return sbOk(rows) ? rows : [];
-}
-async function insertContractorUser(user) {
-  const rows = await sb("contractor_accounts", { method: "POST", body: JSON.stringify([{ username: user.username, password: user.password, role: "CONTRACTOR" }]) });
-  if (!sbOk(rows)) return { __error: true, message: sbErrMsg(rows) };
-  return rows[0];
-}
-async function updateContractorUserDB(id, patch) {
-  await sb(`contractor_accounts?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(patch), prefer: "return=minimal" });
-}
-async function deleteContractorUserDB(id) {
-  await sb(`contractor_accounts?id=eq.${id}`, { method: "DELETE", prefer: "return=minimal" });
+function contractorFromRow(r) {
+  return {
+    id: r.id,
+    name: r.name,
+    startDate: r.start_date || "",
+    contractDetails: r.contract_details || "",
+    username: r.username || "",
+    password: r.password || "",
+    role: "CONTRACTOR",
+  };
 }
 
-async function loadContractorRecords() {
+async function loadContractors() {
   const rows = await sb("contractors?select=*&order=name.asc");
-  return (sbOk(rows) ? rows : []).map((r) => ({ id: r.id, name: r.name, startDate: r.start_date || "", contractDetails: r.contract_details || "" }));
+  return (sbOk(rows) ? rows : []).map(contractorFromRow);
 }
-async function insertContractorRecord(rec) {
-  const rows = await sb("contractors", { method: "POST", body: JSON.stringify([{ name: rec.name, start_date: rec.startDate, contract_details: rec.contractDetails }]) });
+async function insertContractor(rec) {
+  const rows = await sb("contractors", {
+    method: "POST",
+    body: JSON.stringify([{ name: rec.name, start_date: rec.startDate || null, contract_details: rec.contractDetails, username: rec.username, password: rec.password }]),
+  });
   if (!sbOk(rows)) return { __error: true, message: sbErrMsg(rows) };
-  const r = rows[0];
-  return { id: r.id, name: r.name, startDate: r.start_date || "", contractDetails: r.contract_details || "" };
+  return contractorFromRow(rows[0]);
 }
-async function deleteContractorRecordDB(id) {
+async function updateContractorDB(id, patch) {
+  const dbPatch = {};
+  if ("name" in patch) dbPatch.name = patch.name;
+  if ("startDate" in patch) dbPatch.start_date = patch.startDate || null;
+  if ("contractDetails" in patch) dbPatch.contract_details = patch.contractDetails;
+  if ("username" in patch) dbPatch.username = patch.username;
+  if ("password" in patch) dbPatch.password = patch.password;
+  const rows = await sb(`contractors?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(dbPatch) });
+  if (!sbOk(rows)) return { __error: true, message: sbErrMsg(rows) };
+  return contractorFromRow(rows[0]);
+}
+async function deleteContractorDB(id) {
   await sb(`contractors?id=eq.${id}`, { method: "DELETE", prefer: "return=minimal" });
 }
 
@@ -248,6 +249,128 @@ function nowHM() {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
+// ---------- تبدیل تاریخ میلادی <-> شمسی (بدون نیاز به کتابخانه خارجی) ----------
+function isLeapJalaliYear(jy) {
+  return (((jy - (jy > 0 ? 474 : 473)) % 2820 + 474 + 38) * 682) % 2816 < 682;
+}
+
+function jalaliMonthLength(jy, jm) {
+  if (jm <= 6) return 31;
+  if (jm <= 11) return 30;
+  return isLeapJalaliYear(jy) ? 30 : 29;
+}
+
+function gregorianToJalali(gy, gm, gd) {
+  const gDaysInMonth = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+  let jy = gy <= 1600 ? 0 : 979;
+  const gy2 = gy <= 1600 ? gy - 621 : gy - 1600;
+  const gy3 = gm > 2 ? gy2 + 1 : gy2;
+  let days = 365 * gy2 + Math.floor((gy3 + 3) / 4) - Math.floor((gy3 + 99) / 100) + Math.floor((gy3 + 399) / 400) - 80 + gd + gDaysInMonth[gm - 1];
+  jy += 33 * Math.floor(days / 12053);
+  days %= 12053;
+  jy += 4 * Math.floor(days / 1461);
+  days %= 1461;
+  if (days > 365) {
+    jy += Math.floor((days - 1) / 365);
+    days = (days - 1) % 365;
+  }
+  const jm = days < 186 ? 1 + Math.floor(days / 31) : 7 + Math.floor((days - 186) / 30);
+  const jd = 1 + (days < 186 ? days % 31 : (days - 186) % 30);
+  return [jy, jm, jd];
+}
+
+function jalaliToGregorian(jy, jm, jd) {
+  let gy = jy <= 979 ? 621 : 1600;
+  const jy2 = jy <= 979 ? jy : jy - 979;
+  let days = 365 * jy2 + Math.floor(jy2 / 33) * 8 + Math.floor(((jy2 % 33) + 3) / 4) + 78 + jd + (jm < 7 ? (jm - 1) * 31 : (jm - 7) * 30 + 186);
+  gy += 400 * Math.floor(days / 146097);
+  days %= 146097;
+  if (days > 36524) {
+    gy += 100 * Math.floor((days - 1) / 36524);
+    days = (days - 1) % 36524;
+    if (days >= 365) days++;
+  }
+  gy += 4 * Math.floor(days / 1461);
+  days %= 1461;
+  if (days > 365) {
+    gy += Math.floor((days - 1) / 365);
+    days = (days - 1) % 365;
+  }
+  const gd = days + 1;
+  const isGLeap = (gy % 4 === 0 && gy % 100 !== 0) || gy % 400 === 0;
+  const gMonthLen = [0, 31, isGLeap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  let gm = 1;
+  let rem = gd;
+  while (gm <= 12 && rem > gMonthLen[gm]) {
+    rem -= gMonthLen[gm];
+    gm++;
+  }
+  return [gy, gm, rem];
+}
+
+function todayJalaliParts() {
+  const now = new Date();
+  return gregorianToJalali(now.getFullYear(), now.getMonth() + 1, now.getDate());
+}
+
+function isoToJalali(iso) {
+  if (!iso) return null;
+  const [gy, gm, gd] = iso.split("-").map(Number);
+  if (!gy) return null;
+  return gregorianToJalali(gy, gm, gd);
+}
+
+function isoToJalaliDisplay(iso) {
+  const p = isoToJalali(iso);
+  if (!p) return "";
+  return `${p[0]}/${String(p[1]).padStart(2, "0")}/${String(p[2]).padStart(2, "0")}`;
+}
+
+const JALALI_MONTHS = ["فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"];
+
+// انتخاب‌گر تاریخ شمسی (سه select: سال/ماه/روز) — مقدار ورودی/خروجی ISO میلادی (yyyy-mm-dd) برای سازگاری با دیتابیس
+function JalaliDateInput({ value, onChange }) {
+  const todayParts = todayJalaliParts();
+  const parsed = isoToJalali(value);
+  const jy = parsed ? parsed[0] : todayParts[0];
+  const jm = parsed ? parsed[1] : todayParts[1];
+  const jd = parsed ? parsed[2] : todayParts[2];
+
+  useEffect(() => {
+    if (!value) {
+      const [gy, gm, gd] = jalaliToGregorian(todayParts[0], todayParts[1], todayParts[2]);
+      onChange(`${gy}-${String(gm).padStart(2, "0")}-${String(gd).padStart(2, "0")}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const years = [];
+  for (let y = todayParts[0] - 6; y <= todayParts[0] + 2; y++) years.push(y);
+  const dayCount = jalaliMonthLength(jy, jm);
+  const days = Array.from({ length: dayCount }, (_, i) => i + 1);
+
+  const emit = (ny, nm, nd) => {
+    const maxD = jalaliMonthLength(ny, nm);
+    const safeD = Math.min(nd, maxD);
+    const [gy, gm, gd] = jalaliToGregorian(ny, nm, safeD);
+    onChange(`${gy}-${String(gm).padStart(2, "0")}-${String(gd).padStart(2, "0")}`);
+  };
+
+  return (
+    <div style={{ display: "flex", gap: 6 }} dir="rtl">
+      <select style={{ ...styles.input, flex: 1.2 }} value={jy} onChange={(e) => emit(Number(e.target.value), jm, jd)}>
+        {years.map((y) => <option key={y} value={y}>{y}</option>)}
+      </select>
+      <select style={{ ...styles.input, flex: 1.4 }} value={jm} onChange={(e) => emit(jy, Number(e.target.value), jd)}>
+        {JALALI_MONTHS.map((m, idx) => <option key={idx} value={idx + 1}>{m}</option>)}
+      </select>
+      <select style={{ ...styles.input, flex: 1 }} value={jd} onChange={(e) => emit(jy, jm, Number(e.target.value))}>
+        {days.map((d) => <option key={d} value={d}>{d}</option>)}
+      </select>
+    </div>
+  );
+}
+
 // عکس گرفته‌شده با دوربین/گالری را کوچک می‌کند تا حجم ذخیره‌سازی معقول بماند
 function resizeImageFile(file, maxDim = 1280, quality = 0.72) {
   return new Promise((resolve, reject) => {
@@ -293,9 +416,9 @@ function LoginScreen({ onLogin }) {
       return;
     }
 
-    // سپس حساب‌های پیمانکار که در storage ذخیره شده‌اند بررسی می‌شوند
-    const contractorUsers = await loadContractorUsers();
-    const found = contractorUsers.find((u) => u.username === username.trim() && u.password === password);
+    // سپس حساب‌های پیمانکار که در دیتابیس ذخیره شده‌اند بررسی می‌شوند
+    const contractors = await loadContractors();
+    const found = contractors.find((u) => u.username && u.username === username.trim() && u.password === password);
     setLoading(false);
     if (found) {
       setError("");
@@ -362,138 +485,60 @@ function ProfileView({ onBack, currentUser, roleLabel }) {
   );
 }
 
-// ---------- مدیریت حساب‌های کاربری پیمانکار ----------
-function ContractorAccountManager({ onBack }) {
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [newUsername, setNewUsername] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [formError, setFormError] = useState("");
-  const [editingId, setEditingId] = useState(null);
-  const [editUsername, setEditUsername] = useState("");
-  const [editPassword, setEditPassword] = useState("");
-
-  useEffect(() => {
-    (async () => {
-      setUsers(await loadContractorUsers());
-      setLoading(false);
-    })();
-  }, []);
-
-  const contractors = users;
-
-  const handleAddContractor = async () => {
-    const uname = newUsername.trim();
-    if (!uname || !newPassword) { setFormError("نام کاربری و رمز عبور را وارد کنید"); return; }
-    if (SEED_USERS.some((u) => u.username === uname) || users.some((u) => u.username === uname)) { setFormError("این نام کاربری قبلاً استفاده شده است"); return; }
-
-    const inserted = await insertContractorUser({ username: uname, password: newPassword });
-    if (!inserted || inserted.__error) { setFormError(`خطا در ذخیره‌سازی: ${inserted?.message || "نامشخص"}`); return; }
-    setUsers([...users, inserted]);
-    setNewUsername(""); setNewPassword(""); setFormError(""); setShowForm(false);
-  };
-
-  const startEdit = (user) => {
-    setEditingId(user.id); setEditUsername(user.username); setEditPassword(user.password);
-  };
-  const cancelEdit = () => { setEditingId(null); setEditUsername(""); setEditPassword(""); };
-
-  const saveEdit = async (id) => {
-    const uname = editUsername.trim();
-    if (!uname || !editPassword) { alert("نام کاربری و رمز عبور نمی‌توانند خالی باشند"); return; }
-    if (SEED_USERS.some((u) => u.username === uname) || users.some((u) => u.username === uname && u.id !== id)) { alert("این نام کاربری قبلاً برای کاربر دیگری استفاده شده است"); return; }
-    await updateContractorUserDB(id, { username: uname, password: editPassword });
-    setUsers(users.map((u) => (u.id === id ? { ...u, username: uname, password: editPassword } : u)));
-    cancelEdit();
-  };
-
-  const handleDelete = async (id, username) => {
-    if (confirm(`آیا از حذف حساب کاربری «${username}» مطمئن هستید؟`)) {
-      await deleteContractorUserDB(id);
-      setUsers(users.filter((u) => u.id !== id));
-    }
-  };
-
-  if (loading) return <div style={{ padding: 24, textAlign: "center", color: "#888" }}>در حال بارگذاری...</div>;
-
-  return (
-    <div style={{ maxWidth: 560, margin: "0 auto", padding: 24 }}>
-      {onBack && <div style={styles.backLink} onClick={onBack}>← بازگشت به منو</div>}
-
-      <div style={{ ...styles.menuCard, background: "#2563eb", color: "#fff", textAlign: "center" }} onClick={() => setShowForm((v) => !v)}>
-        {showForm ? "بستن فرم" : "+ ایجاد حساب کاربری پیمانکار"}
-      </div>
-
-      {showForm && (
-        <div style={styles.card}>
-          <label style={styles.label}>نام کاربری پیمانکار</label>
-          <input style={styles.input} value={newUsername} onChange={(e) => setNewUsername(e.target.value)} dir="rtl" />
-          <label style={styles.label}>رمز عبور</label>
-          <input style={styles.input} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} dir="rtl" />
-          {formError && <p style={styles.error}>{formError}</p>}
-          <button type="button" style={styles.button} onClick={handleAddContractor}>ایجاد حساب</button>
-        </div>
-      )}
-
-      <h3 style={{ marginTop: 24 }}>لیست پیمانکاران ({contractors.length})</h3>
-      {contractors.length === 0 && <p style={{ color: "#888" }}>هنوز هیچ پیمانکاری اضافه نشده است.</p>}
-
-      {contractors.map((user) =>
-        editingId === user.id ? (
-          <div key={user.id} style={styles.card}>
-            <label style={styles.label}>نام کاربری</label>
-            <input style={styles.input} value={editUsername} onChange={(e) => setEditUsername(e.target.value)} dir="rtl" />
-            <label style={styles.label}>رمز عبور</label>
-            <input style={styles.input} value={editPassword} onChange={(e) => setEditPassword(e.target.value)} dir="rtl" />
-            <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-              <button type="button" style={styles.button} onClick={() => saveEdit(user.id)}>ذخیره</button>
-              <button type="button" style={{ ...styles.button, background: "#999" }} onClick={cancelEdit}>انصراف</button>
-            </div>
-          </div>
-        ) : (
-          <div key={user.id} style={styles.userRow}>
-            <span>{user.username}</span>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button type="button" style={styles.smallButton} onClick={() => startEdit(user)}>تغییر</button>
-              <button type="button" style={{ ...styles.smallButton, background: "#dc2626" }} onClick={() => handleDelete(user.id, user.username)}>حذف</button>
-            </div>
-          </div>
-        )
-      )}
-    </div>
-  );
-}
-
-// ---------- اطلاعات پروژه‌ای پیمانکاران (نام، تاریخ شروع، قرارداد) ----------
-function ContractorInfoManager({ onBack }) {
-  const [records, setRecords] = useState([]);
+// ---------- مدیریت یکپارچه پیمانکاران (اطلاعات شرکت + حساب کاربری ورود) ----------
+function ContractorManager({ onBack }) {
+  const [contractors, setContractors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [startDate, setStartDate] = useState("");
   const [contractDetails, setContractDetails] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [formError, setFormError] = useState("");
+  const [editingId, setEditingId] = useState(null);
+  const [editData, setEditData] = useState({});
 
   useEffect(() => {
     (async () => {
-      setRecords(await loadContractorRecords());
+      setContractors(await loadContractors());
       setLoading(false);
     })();
   }, []);
 
+  const usernameTaken = (uname, excludeId) =>
+    SEED_USERS.some((u) => u.username === uname) || contractors.some((c) => c.username === uname && c.id !== excludeId);
+
   const handleAdd = async () => {
-    if (!name.trim() || !startDate || !contractDetails.trim()) { setFormError("لطفاً همه فیلدها را پر کنید"); return; }
-    const inserted = await insertContractorRecord({ name: name.trim(), startDate, contractDetails: contractDetails.trim() });
+    const uname = username.trim();
+    if (!name.trim() || !uname || !password) { setFormError("نام پیمانکار، نام کاربری و رمز عبور الزامی است"); return; }
+    if (usernameTaken(uname, null)) { setFormError("این نام کاربری قبلاً استفاده شده است"); return; }
+    const inserted = await insertContractor({ name: name.trim(), startDate, contractDetails: contractDetails.trim(), username: uname, password });
     if (!inserted || inserted.__error) { setFormError(`خطا در ذخیره‌سازی: ${inserted?.message || "نامشخص"}`); return; }
-    setRecords([...records, inserted]);
-    setName(""); setStartDate(""); setContractDetails(""); setFormError(""); setShowForm(false);
+    setContractors([...contractors, inserted]);
+    setName(""); setStartDate(""); setContractDetails(""); setUsername(""); setPassword(""); setFormError(""); setShowForm(false);
   };
 
-  const handleDelete = async (id, recordName) => {
-    if (confirm(`آیا از حذف اطلاعات «${recordName}» مطمئن هستید؟`)) {
-      await deleteContractorRecordDB(id);
-      setRecords(records.filter((r) => r.id !== id));
+  const startEdit = (c) => {
+    setEditingId(c.id);
+    setEditData({ name: c.name, startDate: c.startDate, contractDetails: c.contractDetails, username: c.username, password: c.password });
+  };
+  const cancelEdit = () => { setEditingId(null); setEditData({}); };
+
+  const saveEdit = async (id) => {
+    const uname = (editData.username || "").trim();
+    if (!editData.name?.trim() || !uname || !editData.password) { alert("نام پیمانکار، نام کاربری و رمز عبور نمی‌توانند خالی باشند"); return; }
+    if (usernameTaken(uname, id)) { alert("این نام کاربری قبلاً برای پیمانکار دیگری استفاده شده است"); return; }
+    const updated = await updateContractorDB(id, { ...editData, name: editData.name.trim(), username: uname });
+    if (!updated || updated.__error) { alert(`خطا در ذخیره‌سازی: ${updated?.message || "نامشخص"}`); return; }
+    setContractors(contractors.map((c) => (c.id === id ? updated : c)));
+    cancelEdit();
+  };
+
+  const handleDelete = async (id, name) => {
+    if (confirm(`آیا از حذف پیمانکار «${name}» مطمئن هستید؟`)) {
+      await deleteContractorDB(id);
+      setContractors(contractors.filter((c) => c.id !== id));
     }
   };
 
@@ -510,31 +555,58 @@ function ContractorInfoManager({ onBack }) {
       {showForm && (
         <div style={styles.card}>
           <label style={styles.label}>نام پیمانکار</label>
-          <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} dir="rtl" />
+          <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} dir="rtl" placeholder="همین نام در لیست کشویی «پیمانکار» فرم آنومالی نشان داده می‌شود" />
           <label style={styles.label}>تاریخ شروع به کار</label>
-          <input style={styles.input} type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          <JalaliDateInput value={startDate} onChange={setStartDate} />
           <label style={styles.label}>مشخصات قرارداد</label>
-          <textarea style={{ ...styles.input, minHeight: 90, resize: "vertical", fontFamily: "inherit" }} value={contractDetails} onChange={(e) => setContractDetails(e.target.value)} dir="rtl" />
+          <textarea style={{ ...styles.input, minHeight: 70, resize: "vertical", fontFamily: "inherit" }} value={contractDetails} onChange={(e) => setContractDetails(e.target.value)} dir="rtl" />
+          <label style={styles.label}>نام کاربری (برای ورود پیمانکار به سامانه)</label>
+          <input style={styles.input} value={username} onChange={(e) => setUsername(e.target.value)} dir="rtl" />
+          <label style={styles.label}>رمز عبور</label>
+          <input style={styles.input} value={password} onChange={(e) => setPassword(e.target.value)} dir="rtl" />
           {formError && <p style={styles.error}>{formError}</p>}
-          <button type="button" style={styles.button} onClick={handleAdd}>افزودن</button>
+          <button type="button" style={styles.button} onClick={handleAdd}>افزودن پیمانکار</button>
         </div>
       )}
 
-      <h3 style={{ marginTop: 24 }}>پیمانکاران ثبت‌شده ({records.length})</h3>
-      {records.length === 0 && <p style={{ color: "#888" }}>هنوز هیچ پیمانکاری ثبت نشده است.</p>}
+      <h3 style={{ marginTop: 24 }}>پیمانکاران ثبت‌شده ({contractors.length})</h3>
+      {contractors.length === 0 && <p style={{ color: "#888" }}>هنوز هیچ پیمانکاری ثبت نشده است.</p>}
 
-      {records.map((r) => (
-        <div key={r.id} style={{ ...styles.card, width: "auto" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div>
-              <div style={{ fontWeight: "bold", fontSize: 16 }}>{r.name}</div>
-              <div style={{ fontSize: 13, color: "#666", marginTop: 4 }}>تاریخ شروع: {r.startDate}</div>
-              <div style={{ fontSize: 13, color: "#666", marginTop: 4 }}>قرارداد: {r.contractDetails}</div>
+      {contractors.map((c) =>
+        editingId === c.id ? (
+          <div key={c.id} style={styles.card}>
+            <label style={styles.label}>نام پیمانکار</label>
+            <input style={styles.input} value={editData.name} onChange={(e) => setEditData({ ...editData, name: e.target.value })} dir="rtl" />
+            <label style={styles.label}>تاریخ شروع به کار</label>
+            <JalaliDateInput value={editData.startDate} onChange={(v) => setEditData({ ...editData, startDate: v })} />
+            <label style={styles.label}>مشخصات قرارداد</label>
+            <textarea style={{ ...styles.input, minHeight: 70, fontFamily: "inherit" }} value={editData.contractDetails} onChange={(e) => setEditData({ ...editData, contractDetails: e.target.value })} dir="rtl" />
+            <label style={styles.label}>نام کاربری</label>
+            <input style={styles.input} value={editData.username} onChange={(e) => setEditData({ ...editData, username: e.target.value })} dir="rtl" />
+            <label style={styles.label}>رمز عبور</label>
+            <input style={styles.input} value={editData.password} onChange={(e) => setEditData({ ...editData, password: e.target.value })} dir="rtl" />
+            <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+              <button type="button" style={styles.button} onClick={() => saveEdit(c.id)}>ذخیره</button>
+              <button type="button" style={{ ...styles.button, background: "#999" }} onClick={cancelEdit}>انصراف</button>
             </div>
-            <button type="button" style={{ ...styles.smallButton, background: "#dc2626" }} onClick={() => handleDelete(r.id, r.name)}>حذف</button>
           </div>
-        </div>
-      ))}
+        ) : (
+          <div key={c.id} style={{ ...styles.card, width: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <div style={{ fontWeight: "bold", fontSize: 16 }}>{c.name}</div>
+                {c.startDate && <div style={{ fontSize: 13, color: "#666", marginTop: 4 }}>تاریخ شروع: {isoToJalaliDisplay(c.startDate)}</div>}
+                {c.contractDetails && <div style={{ fontSize: 13, color: "#666", marginTop: 4 }}>قرارداد: {c.contractDetails}</div>}
+                <div style={{ fontSize: 13, color: "#2563eb", marginTop: 4, direction: "ltr", textAlign: "right" }}>یوزر: {c.username}</div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button type="button" style={styles.smallButton} onClick={() => startEdit(c)}>تغییر</button>
+                <button type="button" style={{ ...styles.smallButton, background: "#dc2626" }} onClick={() => handleDelete(c.id, c.name)}>حذف</button>
+              </div>
+            </div>
+          </div>
+        )
+      )}
     </div>
   );
 }
@@ -576,7 +648,7 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
 
   useEffect(() => {
     (async () => {
-      const records = await loadContractorRecords();
+      const records = await loadContractors();
       setContractorNames(records.map((r) => r.name));
     })();
   }, []);
@@ -648,10 +720,10 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
         <div style={styles.formGrid}>
           <div>
             <label style={styles.label}>پیمانکار</label>
-            <input style={styles.input} list="contractor-names" value={contractor} onChange={(e) => setContractor(e.target.value)} dir="rtl" />
-            <datalist id="contractor-names">
-              {contractorNames.map((n) => <option key={n} value={n} />)}
-            </datalist>
+            <select style={styles.input} value={contractor} onChange={(e) => setContractor(e.target.value)} dir="rtl">
+              <option value="">— انتخاب کنید —</option>
+              {contractorNames.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
           </div>
           <div>
             <label style={styles.label}>پیمانکار فرعی</label>
@@ -666,7 +738,7 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
           </div>
           <div>
             <label style={styles.label}>تاریخ</label>
-            <input style={styles.input} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <JalaliDateInput value={date} onChange={setDate} />
           </div>
         </div>
 
@@ -776,9 +848,10 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
 }
 
 // ---------- لیست و پیگیری آنومالی‌ها ----------
-function AnomalyList({ onBack, role }) {
+function AnomalyList({ onBack, role, currentUser }) {
   const isReviewer = role === "EMPLOYER" || role === "ADMIN";
   const isContractor = role === "CONTRACTOR";
+  const myContractorName = (currentUser?.name || "").trim().toLowerCase();
 
   const [anomalies, setAnomalies] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -806,7 +879,11 @@ function AnomalyList({ onBack, role }) {
 
   useEffect(() => { load(); }, []);
 
-  const filtered = anomalies.filter((a) => {
+  const scoped = isContractor && myContractorName
+    ? anomalies.filter((a) => (a.contractor || "").trim().toLowerCase() === myContractorName)
+    : anomalies;
+
+  const filtered = scoped.filter((a) => {
     if (statusFilter !== "all" && a.status !== statusFilter) return false;
     if (riskFilter !== "all" && a.riskLevel !== riskFilter) return false;
     if (search.trim()) {
@@ -818,11 +895,11 @@ function AnomalyList({ onBack, role }) {
   });
 
   const counts = {
-    total: anomalies.length,
-    open: anomalies.filter((a) => a.status === "open").length,
-    review: anomalies.filter((a) => a.status === "pending_review").length,
-    closed: anomalies.filter((a) => a.status === "Closed").length,
-    high: anomalies.filter((a) => a.riskLevel === "High" && a.status !== "Closed").length,
+    total: scoped.length,
+    open: scoped.filter((a) => a.status === "open").length,
+    review: scoped.filter((a) => a.status === "pending_review").length,
+    closed: scoped.filter((a) => a.status === "Closed").length,
+    high: scoped.filter((a) => a.riskLevel === "High" && a.status !== "Closed").length,
   };
 
   const resetActionState = () => {
@@ -1013,7 +1090,7 @@ function AnomalyList({ onBack, role }) {
                 </div>
                 <div style={{ fontSize: 14, marginTop: 8 }}>{a.description}</div>
                 <div style={{ fontSize: 12, color: "#888", marginTop: 6 }}>
-                  {a.area} {a.contractor && `· ${a.contractor}`} {a.date && `· ${a.date}`} {a.sender && `· ثبت توسط ${a.sender}`}
+                  {a.area} {a.contractor && `· ${a.contractor}`} {a.date && `· ${isoToJalaliDisplay(a.date)}`} {a.sender && `· ثبت توسط ${a.sender}`}
                 </div>
               </div>
               <ChevronRight size={18} color="#999" style={{ transform: isOpenCard ? "rotate(-90deg)" : "none", transition: "transform .15s" }} />
@@ -1113,7 +1190,7 @@ function AnomalyList({ onBack, role }) {
                   <div style={{ fontSize: 13, color: "#555", lineHeight: 1.9 }}>
                     {a.contractorAction && <div><b>اقدام اصلاحی شما:</b> {a.contractorAction}</div>}
                     <div><b>وضعیت:</b> تأیید و بسته شد توسط کارفرما</div>
-                    {a.closeDate && <div><b>تاریخ بسته شدن:</b> {a.closeDate}</div>}
+                    {a.closeDate && <div><b>تاریخ بسته شدن:</b> {isoToJalaliDisplay(a.closeDate)}</div>}
                   </div>
                 )}
 
@@ -1151,7 +1228,7 @@ function AnomalyList({ onBack, role }) {
                 {isReviewer && a.status === "Closed" && (
                   <div style={{ fontSize: 13, color: "#555", lineHeight: 1.9 }}>
                     {a.contractorAction && <div><b>اقدام پیمانکار:</b> {a.contractorAction}</div>}
-                    {a.closeDate && <div><b>تاریخ بسته شدن:</b> {a.closeDate}</div>}
+                    {a.closeDate && <div><b>تاریخ بسته شدن:</b> {isoToJalaliDisplay(a.closeDate)}</div>}
                     {a.effectiveness && <div><b>اثربخشی:</b> {a.effectiveness}</div>}
                   </div>
                 )}
@@ -1187,7 +1264,7 @@ function AnomalyList({ onBack, role }) {
                           <div style={styles.formGrid}>
                             <div>
                               <label style={styles.label}>تاریخ بسته شدن</label>
-                              <input style={styles.input} type="date" value={draft.closeDate} onChange={(e) => setDraft({ ...draft, closeDate: e.target.value })} />
+                              <JalaliDateInput value={draft.closeDate} onChange={(v) => setDraft({ ...draft, closeDate: v })} />
                             </div>
                             <div>
                               <label style={styles.label}>اثربخشی</label>
@@ -1203,7 +1280,7 @@ function AnomalyList({ onBack, role }) {
                     )}
                   </div>
                 )}
-                {isReviewer && (
+                {isReviewer && a.status !== "pending_review" && (
                   <div style={{ marginTop: 16 }}>
                     <button type="button" style={{ ...styles.smallButton, background: "#dc2626" }} onClick={() => handleDelete(a.id, a.trackingNumber)}>حذف آنومالی</button>
                   </div>
@@ -1237,7 +1314,7 @@ function AdminDashboard({ onLogout }) {
         </div>
         <button style={styles.logoutButton} onClick={onLogout}><LogOut size={14} style={{ marginLeft: 6 }} />خروج</button>
       </div>
-      <ContractorAccountManager />
+      <ContractorManager />
     </div>
   );
 }
@@ -1248,12 +1325,12 @@ function EmployerDashboard({ onLogout, currentUser }) {
 
   const openModule = (mod) => {
     if (mod.key === "profile") { setView("profile"); return; }
+    if (mod.key === "manageUsers") { setView("manageUsers"); return; }
     if (mod.sub) { setView(mod.key); return; }
     alert(`ماژول «${mod.label}» به‌زودی اضافه می‌شود`);
   };
 
   const anomalyMod = HSE_MODULES.find((m) => m.key === "anomalyReport");
-  const usersMod = HSE_MODULES.find((m) => m.key === "manageUsers");
 
   return (
     <div style={styles.dashboardWrapper}>
@@ -1295,21 +1372,8 @@ function EmployerDashboard({ onLogout, currentUser }) {
         </div>
       )}
 
-      {view === "manageUsers" && (
-        <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
-          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
-          <h3 style={{ marginBottom: 12 }}>{usersMod.label}</h3>
-          <div style={styles.menuList2}>
-            {usersMod.sub.map((s) => (
-              <div key={s.key} style={styles.menuCard} onClick={() => setView(s.key)}>{s.label}</div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel="کارفرما" />}
-      {view === "manageUsersAccounts" && <ContractorAccountManager onBack={() => setView("manageUsers")} />}
-      {view === "manageContractorInfo" && <ContractorInfoManager onBack={() => setView("manageUsers")} />}
+      {view === "manageUsers" && <ContractorManager onBack={() => setView("menu")} />}
       {view === "anomalyForm" && <AnomalyForm onBack={() => setView("anomalyReport")} currentUser={currentUser} onSaved={() => setView("anomalyList")} />}
       {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="EMPLOYER" />}
     </div>
@@ -1371,7 +1435,7 @@ function ContractorDashboard({ onLogout, currentUser }) {
       )}
 
       {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel="پیمانکار" />}
-      {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="CONTRACTOR" />}
+      {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="CONTRACTOR" currentUser={currentUser} />}
     </div>
   );
 }
