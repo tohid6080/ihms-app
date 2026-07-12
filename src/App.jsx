@@ -506,6 +506,36 @@ function resizeImageFile(file, maxDim = 1280, quality = 0.72) {
 }
 
 // ---------- صفحه ورود ----------
+// ---------- لوگوی سامانه (نشان IHMS با سیلوئت نیروگاه در پس‌زمینه) ----------
+function IhmsLogo({ size = 96 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 200 200" role="img" aria-label="IHMS">
+      <defs>
+        <clipPath id="ihmsCircleClip"><circle cx="100" cy="100" r="96" /></clipPath>
+      </defs>
+      <circle cx="100" cy="100" r="98" fill="#fff" stroke="#0f5132" strokeWidth="4" />
+      <g clipPath="url(#ihmsCircleClip)">
+        <image href="./plant-bg.png" x="0" y="118" width="200" height="82" preserveAspectRatio="xMidYMax slice" opacity="0.32" />
+      </g>
+      <text x="100" y="88" textAnchor="middle" fontSize="32" fontWeight="700" fill="#0f5132" letterSpacing="1" fontFamily="Tahoma, Arial, sans-serif">IHMS</text>
+      <path d="M68 104 C 84 111, 116 111, 132 104" stroke="#7a1332" strokeWidth="2" fill="none" strokeLinecap="round" />
+      <g transform="translate(52,112) scale(0.55)">
+        <path d="M18 0 C30 0 36 8 36 18 C36 30 26 40 18 45 C10 40 0 30 0 18 C0 8 6 0 18 0 Z" fill="#7a1332" />
+        <path d="M9 18 C9 12 13 8 18 8 C23 8 27 12 27 18 L27 22 L9 22 Z" fill="white" />
+        <rect x="6" y="21" width="24" height="4" rx="2" fill="white" />
+      </g>
+      <g transform="translate(88,114) scale(0.5)">
+        <path d="M18 42 C7 33 0 24 0 15 C0 7 6 1 14 1 C18 1 22 4 24 8 C26 4 30 1 34 1 C42 1 48 7 48 15 C48 24 41 33 30 42 L24 47 Z" fill="#0f5132" />
+        <polyline points="4,20 14,20 18,10 22,28 26,16 30,20 44,20" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      </g>
+      <g transform="translate(126,112) scale(0.55)">
+        <circle cx="18" cy="20" r="20" fill="#7a1332" />
+        <path d="M9 26 C9 14 20 10 27 10 C27 18 22 28 12 28 C10 28 9 27 9 26 Z" fill="white" />
+      </g>
+    </svg>
+  );
+}
+
 function LoginScreen({ onLogin }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -550,9 +580,7 @@ function LoginScreen({ onLogin }) {
     <div style={styles.centerScreen}>
       <div style={styles.card}>
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
-          <div style={styles.brandBadge}>
-            <AlertTriangle size={22} color="#fff" />
-          </div>
+          <IhmsLogo size={120} />
         </div>
         <h2 style={{ textAlign: "center", marginBottom: 2, fontSize: 19, direction: "ltr" }}>{APP_NAME}</h2>
         <p style={{ textAlign: "center", color: "#888", fontSize: 13, marginTop: 0, marginBottom: 20 }}>
@@ -591,9 +619,7 @@ function ProfileView({ onBack, currentUser, roleLabel }) {
       {onBack && <div style={styles.backLink} onClick={onBack}>← بازگشت به منو</div>}
       <div style={{ ...styles.card, width: "auto" }}>
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
-          <div style={styles.brandBadge}>
-            <AlertTriangle size={22} color="#fff" />
-          </div>
+          <IhmsLogo size={80} />
         </div>
         <h3 style={{ textAlign: "center", marginBottom: 4 }}>{currentUser?.username}</h3>
         <p style={{ textAlign: "center", color: "#888", fontSize: 13, marginTop: 0 }}>{roleLabel}</p>
@@ -795,7 +821,7 @@ function EmployerAccountManager({ onBack }) {
 
       {showForm && (
         <div style={styles.card}>
-          <label style={styles.label}>نام / عنوان (مثلاً «دفتر ستاد» یا نام همکار)</label>
+          <label style={styles.label}>نام / عنوان</label>
           <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} dir="rtl" />
           <label style={styles.label}>نام کاربری</label>
           <input style={styles.input} value={username} onChange={(e) => setUsername(e.target.value)} dir="rtl" />
@@ -1093,9 +1119,12 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
 
 // ---------- لیست و پیگیری آنومالی‌ها ----------
 function AnomalyList({ onBack, role, currentUser, readOnly }) {
-  const isReviewer = (role === "EMPLOYER" || role === "ADMIN") && !readOnly;
-  const isReadOnlyReviewer = (role === "EMPLOYER" || role === "ADMIN") && !!readOnly;
+  const isAdmin = role === "ADMIN";
+  const isReviewer = (role === "EMPLOYER" || isAdmin) && !readOnly;
+  const isReadOnlyReviewer = (role === "EMPLOYER" || isAdmin) && !!readOnly;
   const isContractor = role === "CONTRACTOR";
+  // ادمین علاوه بر تأیید/رد، می‌تواند مثل پیمانکار هم اقدام اصلاحی ثبت و ارسال کند
+  const canActAsContractor = isContractor || isAdmin;
   const myContractorName = (currentUser?.name || "").trim().toLowerCase();
 
   const [anomalies, setAnomalies] = useState([]);
@@ -1408,8 +1437,8 @@ function AnomalyList({ onBack, role, currentUser, readOnly }) {
                   </div>
                 )}
 
-                {/* ---- پیمانکار: ثبت اقدام اصلاحی ---- */}
-                {isContractor && a.status === "open" && (
+                {/* ---- پیمانکار / ادمین: ثبت اقدام اصلاحی ---- */}
+                {canActAsContractor && a.status === "open" && (
                   <div>
                     <label style={styles.label}>شرح اقدام اصلاحی انجام‌شده</label>
                     <textarea style={{ ...styles.input, minHeight: 70, fontFamily: "inherit" }} value={actionText} onChange={(e) => setActionText(e.target.value)} dir="rtl" placeholder="توضیح دهید چه اقدامی برای رفع این آنومالی انجام دادید" />
@@ -1440,7 +1469,7 @@ function AnomalyList({ onBack, role, currentUser, readOnly }) {
                     )}
 
                     <button type="button" style={styles.button} onClick={() => submitForReview(a)} disabled={actionSaving || !actionText.trim()}>
-                      {actionSaving ? "در حال ارسال..." : "ارسال برای تأیید کارفرما"}
+                      {actionSaving ? "در حال ارسال..." : isAdmin ? "ثبت اقدام و ارسال برای تأیید" : "ارسال برای تأیید کارفرما"}
                     </button>
                   </div>
                 )}
@@ -1582,6 +1611,7 @@ function AnomalyList({ onBack, role, currentUser, readOnly }) {
 // ---------- پنل ادمین ----------
 function AdminDashboard({ onLogout, currentUser }) {
   const [view, setView] = useState("menu");
+  const anomalyMod = HSE_MODULES.find((m) => m.key === "anomalyReport");
   return (
     <div style={styles.dashboardWrapper}>
       <div style={styles.topBar}>
@@ -1597,8 +1627,23 @@ function AdminDashboard({ onLogout, currentUser }) {
           <div style={styles.menuCard} onClick={() => setView("profile")}>پروفایل من</div>
           <div style={styles.menuCard} onClick={() => setView("employers")}>مدیریت حساب‌های کارفرما/همکاران</div>
           <div style={styles.menuCard} onClick={() => setView("contractors")}>مدیریت پیمانکاران</div>
-          <div style={{ ...styles.menuCard, ...styles.anomalyMenuCard }} onClick={() => setView("anomalyList")}>
-            <AlertTriangle size={16} style={{ marginLeft: 8, verticalAlign: "middle" }} />مدیریت عدم انطباق‌ها (Anomaly Report)
+          <div style={{ ...styles.menuCard, ...styles.anomalyMenuCard }} onClick={() => setView("anomalyReport")}>
+            <AlertTriangle size={16} style={{ marginLeft: 8, verticalAlign: "middle" }} />{anomalyMod.label}
+            <ChevronRight size={16} color="#999" style={{ float: "left", transform: "rotate(180deg)" }} />
+          </div>
+        </div>
+      )}
+
+      {view === "anomalyReport" && (
+        <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
+          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
+          <h3 style={{ marginBottom: 12 }}>{anomalyMod.label}</h3>
+          <div style={styles.menuList2}>
+            {anomalyMod.sub.map((s) => (
+              <div key={s.key} style={{ ...styles.menuCard, ...styles.anomalyMenuCard }} onClick={() => setView(s.key)}>
+                <AlertTriangle size={16} style={{ marginLeft: 8, verticalAlign: "middle" }} />{s.label}
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -1606,7 +1651,8 @@ function AdminDashboard({ onLogout, currentUser }) {
       {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel="ادمین" />}
       {view === "employers" && <EmployerAccountManager onBack={() => setView("menu")} />}
       {view === "contractors" && <ContractorManager onBack={() => setView("menu")} />}
-      {view === "anomalyList" && <AnomalyList onBack={() => setView("menu")} role="ADMIN" />}
+      {view === "anomalyForm" && <AnomalyForm onBack={() => setView("anomalyReport")} currentUser={currentUser} onSaved={() => setView("anomalyList")} />}
+      {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="ADMIN" currentUser={currentUser} />}
     </div>
   );
 }
