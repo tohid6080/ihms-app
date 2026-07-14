@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { AlertTriangle, Plus, X, ChevronRight, LogOut, Search, Filter, CheckCircle2, Clock, Camera, ImagePlus, Trash2, FileSpreadsheet, FileText } from "lucide-react";
+import { AlertTriangle, Plus, X, ChevronRight, LogOut, Search, Filter, CheckCircle2, Clock, Camera, ImagePlus, Trash2, FileSpreadsheet, FileText, User, Users, ShieldCheck, LayoutGrid } from "lucide-react";
 import * as XLSX from "xlsx";
 
 /**
@@ -16,7 +16,7 @@ const SEED_USERS = [
 ];
 
 const RISK_LEVELS = [
-  { value: "High", label: "بالا (High)", color: "#dc2626", bg: "#fee2e2" },
+  { value: "High", label: "بالا (High)", color: "#c92a2a", bg: "#fee2e2" },
   { value: "Med", label: "متوسط (Med)", color: "#d97706", bg: "#fef3c7" },
   { value: "Low", label: "پایین (Low)", color: "#16a34a", bg: "#dcfce7" },
 ];
@@ -464,7 +464,7 @@ function exportAnomaliesPdf(list, title) {
     h2 { text-align: center; margin-bottom: 4px; }
     p.meta { text-align: center; color: #666; font-size: 12px; margin-top: 0; }
     table { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 16px; }
-    th, td { border: 1px solid #ccc; padding: 5px; text-align: right; vertical-align: top; }
+    th, td { border: 1px solid #e3e8ee; padding: 5px; text-align: right; vertical-align: top; }
     th { background: #f1f5f9; }
     @media print { @page { size: landscape; margin: 12mm; } }
   </style></head>
@@ -578,12 +578,12 @@ function LoginScreen({ onLogin }) {
 
   return (
     <div style={styles.centerScreen}>
-      <div style={styles.card}>
+      <div style={{ ...styles.card, width: 360 }}>
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
           <IhmsLogo size={120} />
         </div>
-        <h2 style={{ textAlign: "center", marginBottom: 2, fontSize: 19, direction: "ltr" }}>{APP_NAME}</h2>
-        <p style={{ textAlign: "center", color: "#888", fontSize: 13, marginTop: 0, marginBottom: 20 }}>
+        <h2 style={{ textAlign: "center", marginBottom: 2, fontSize: 18, direction: "ltr", color: THEME.navy, fontWeight: 700, letterSpacing: "-0.01em" }}>{APP_NAME}</h2>
+        <p style={{ textAlign: "center", color: THEME.text3, fontSize: 12.5, marginTop: 4, marginBottom: 22, fontWeight: 500 }}>
           ورود به سامانه
         </p>
 
@@ -602,7 +602,7 @@ function LoginScreen({ onLogin }) {
 
         {error && <p style={styles.error}>{error}</p>}
 
-        <button type="button" style={styles.button} onClick={handleSubmit} disabled={loading}>
+        <button type="button" style={{ ...styles.button, opacity: loading ? 0.75 : 1 }} onClick={handleSubmit} disabled={loading}>
           {loading ? "در حال بررسی..." : "ورود"}
         </button>
 
@@ -622,7 +622,7 @@ function ProfileView({ onBack, currentUser, roleLabel }) {
           <IhmsLogo size={80} />
         </div>
         <h3 style={{ textAlign: "center", marginBottom: 4 }}>{currentUser?.username}</h3>
-        <p style={{ textAlign: "center", color: "#888", fontSize: 13, marginTop: 0 }}>{roleLabel}</p>
+        <p style={{ textAlign: "center", color: "#93a1b0", fontSize: 13, marginTop: 0 }}>{roleLabel}</p>
         <p style={{ textAlign: "center", color: "#aaa", fontSize: 11, marginTop: 20, direction: "ltr" }}>{APP_NAME}</p>
       </div>
     </div>
@@ -686,13 +686,13 @@ function ContractorManager({ onBack }) {
     }
   };
 
-  if (loading) return <div style={{ padding: 24, textAlign: "center", color: "#888" }}>در حال بارگذاری...</div>;
+  if (loading) return <div style={{ padding: 24, textAlign: "center", color: "#93a1b0" }}>در حال بارگذاری...</div>;
 
   return (
     <div style={{ maxWidth: 560, margin: "0 auto", padding: 24 }}>
       {onBack && <div style={styles.backLink} onClick={onBack}>← بازگشت به منو</div>}
 
-      <div style={{ ...styles.menuCard, background: "#2563eb", color: "#fff", textAlign: "center" }} onClick={() => setShowForm((v) => !v)}>
+      <div style={{ ...styles.menuCard, background: "#0d8f8a", color: "#fff", textAlign: "center" }} onClick={() => setShowForm((v) => !v)}>
         {showForm ? "بستن فرم" : "+ افزودن پیمانکار جدید"}
       </div>
 
@@ -714,7 +714,7 @@ function ContractorManager({ onBack }) {
       )}
 
       <h3 style={{ marginTop: 24 }}>پیمانکاران ثبت‌شده ({contractors.length})</h3>
-      {contractors.length === 0 && <p style={{ color: "#888" }}>هنوز هیچ پیمانکاری ثبت نشده است.</p>}
+      {contractors.length === 0 && <p style={{ color: "#93a1b0" }}>هنوز هیچ پیمانکاری ثبت نشده است.</p>}
 
       {contractors.map((c) =>
         editingId === c.id ? (
@@ -731,7 +731,7 @@ function ContractorManager({ onBack }) {
             <input style={styles.input} value={editData.password} onChange={(e) => setEditData({ ...editData, password: e.target.value })} dir="rtl" />
             <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
               <button type="button" style={styles.button} onClick={() => saveEdit(c.id)}>ذخیره</button>
-              <button type="button" style={{ ...styles.button, background: "#999" }} onClick={cancelEdit}>انصراف</button>
+              <button type="button" style={{ ...styles.button, background: "#5b6b7d" }} onClick={cancelEdit}>انصراف</button>
             </div>
           </div>
         ) : (
@@ -741,11 +741,11 @@ function ContractorManager({ onBack }) {
                 <div style={{ fontWeight: "bold", fontSize: 16 }}>{c.name}</div>
                 {c.startDate && <div style={{ fontSize: 13, color: "#666", marginTop: 4 }}>تاریخ شروع: {isoToJalaliDisplay(c.startDate)}</div>}
                 {c.contractDetails && <div style={{ fontSize: 13, color: "#666", marginTop: 4 }}>قرارداد: {c.contractDetails}</div>}
-                <div style={{ fontSize: 13, color: "#2563eb", marginTop: 4, direction: "ltr", textAlign: "right" }}>یوزر: {c.username}</div>
+                <div style={{ fontSize: 13, color: "#0d8f8a", marginTop: 4, direction: "ltr", textAlign: "right" }}>یوزر: {c.username}</div>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button type="button" style={styles.smallButton} onClick={() => startEdit(c)}>تغییر</button>
-                <button type="button" style={{ ...styles.smallButton, background: "#dc2626" }} onClick={() => handleDelete(c.id, c.name)}>حذف</button>
+                <button type="button" style={{ ...styles.smallButton, background: "#c92a2a" }} onClick={() => handleDelete(c.id, c.name)}>حذف</button>
               </div>
             </div>
           </div>
@@ -808,14 +808,14 @@ function EmployerAccountManager({ onBack }) {
     }
   };
 
-  if (loading) return <div style={{ padding: 24, textAlign: "center", color: "#888" }}>در حال بارگذاری...</div>;
+  if (loading) return <div style={{ padding: 24, textAlign: "center", color: "#93a1b0" }}>در حال بارگذاری...</div>;
 
   return (
     <div style={{ maxWidth: 560, margin: "0 auto", padding: 24 }}>
       {onBack && <div style={styles.backLink} onClick={onBack}>← بازگشت به منو</div>}
-      <p style={{ color: "#888", fontSize: 13 }}>حساب‌هایی که اینجا می‌سازی، نقش «کارفرما» دارند و می‌توانند وارد سامانه شوند. سطح دسترسی هرکدام را خودت مشخص می‌کنی.</p>
+      <p style={{ color: "#93a1b0", fontSize: 13 }}>حساب‌هایی که اینجا می‌سازی، نقش «کارفرما» دارند و می‌توانند وارد سامانه شوند. سطح دسترسی هرکدام را خودت مشخص می‌کنی.</p>
 
-      <div style={{ ...styles.menuCard, background: "#2563eb", color: "#fff", textAlign: "center" }} onClick={() => setShowForm((v) => !v)}>
+      <div style={{ ...styles.menuCard, background: "#0d8f8a", color: "#fff", textAlign: "center" }} onClick={() => setShowForm((v) => !v)}>
         {showForm ? "بستن فرم" : "+ افزودن حساب کارفرما/همکار جدید"}
       </div>
 
@@ -829,8 +829,8 @@ function EmployerAccountManager({ onBack }) {
           <input style={styles.input} value={password} onChange={(e) => setPassword(e.target.value)} dir="rtl" />
           <label style={styles.label}>سطح دسترسی</label>
           <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-            <button type="button" onClick={() => setCanEdit(true)} style={{ flex: 1, padding: "10px 6px", borderRadius: 8, border: canEdit ? "2px solid #2563eb" : "1px solid #ccc", background: canEdit ? "#eff6ff" : "#fff", color: "#2563eb", fontSize: 13, cursor: "pointer", fontWeight: canEdit ? "bold" : "normal" }}>دسترسی کامل (ثبت و تأیید)</button>
-            <button type="button" onClick={() => setCanEdit(false)} style={{ flex: 1, padding: "10px 6px", borderRadius: 8, border: !canEdit ? "2px solid #475569" : "1px solid #ccc", background: !canEdit ? "#f1f5f9" : "#fff", color: "#475569", fontSize: 13, cursor: "pointer", fontWeight: !canEdit ? "bold" : "normal" }}>فقط مشاهده</button>
+            <button type="button" onClick={() => setCanEdit(true)} style={{ flex: 1, padding: "10px 6px", borderRadius: 8, border: canEdit ? "2px solid #0d8f8a" : "1px solid #e3e8ee", background: canEdit ? "#e3f5f4" : "#fff", color: "#0d8f8a", fontSize: 13, cursor: "pointer", fontWeight: canEdit ? "bold" : "normal" }}>دسترسی کامل (ثبت و تأیید)</button>
+            <button type="button" onClick={() => setCanEdit(false)} style={{ flex: 1, padding: "10px 6px", borderRadius: 8, border: !canEdit ? "2px solid #123a54" : "1px solid #e3e8ee", background: !canEdit ? "#f1f5f9" : "#fff", color: "#334155", fontSize: 13, cursor: "pointer", fontWeight: !canEdit ? "bold" : "normal" }}>فقط مشاهده</button>
           </div>
           {formError && <p style={styles.error}>{formError}</p>}
           <button type="button" style={styles.button} onClick={handleAdd}>افزودن حساب</button>
@@ -838,7 +838,7 @@ function EmployerAccountManager({ onBack }) {
       )}
 
       <h3 style={{ marginTop: 24 }}>حساب‌های ثبت‌شده ({accounts.length})</h3>
-      {accounts.length === 0 && <p style={{ color: "#888" }}>هنوز هیچ حسابی اضافه نشده است.</p>}
+      {accounts.length === 0 && <p style={{ color: "#93a1b0" }}>هنوز هیچ حسابی اضافه نشده است.</p>}
 
       {accounts.map((a) =>
         editingId === a.id ? (
@@ -851,12 +851,12 @@ function EmployerAccountManager({ onBack }) {
             <input style={styles.input} value={editData.password} onChange={(e) => setEditData({ ...editData, password: e.target.value })} dir="rtl" />
             <label style={styles.label}>سطح دسترسی</label>
             <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-              <button type="button" onClick={() => setEditData({ ...editData, canEdit: true })} style={{ flex: 1, padding: "10px 6px", borderRadius: 8, border: editData.canEdit ? "2px solid #2563eb" : "1px solid #ccc", background: editData.canEdit ? "#eff6ff" : "#fff", color: "#2563eb", fontSize: 13, cursor: "pointer" }}>دسترسی کامل</button>
-              <button type="button" onClick={() => setEditData({ ...editData, canEdit: false })} style={{ flex: 1, padding: "10px 6px", borderRadius: 8, border: !editData.canEdit ? "2px solid #475569" : "1px solid #ccc", background: !editData.canEdit ? "#f1f5f9" : "#fff", color: "#475569", fontSize: 13, cursor: "pointer" }}>فقط مشاهده</button>
+              <button type="button" onClick={() => setEditData({ ...editData, canEdit: true })} style={{ flex: 1, padding: "10px 6px", borderRadius: 8, border: editData.canEdit ? "2px solid #0d8f8a" : "1px solid #e3e8ee", background: editData.canEdit ? "#e3f5f4" : "#fff", color: "#0d8f8a", fontSize: 13, cursor: "pointer" }}>دسترسی کامل</button>
+              <button type="button" onClick={() => setEditData({ ...editData, canEdit: false })} style={{ flex: 1, padding: "10px 6px", borderRadius: 8, border: !editData.canEdit ? "2px solid #123a54" : "1px solid #e3e8ee", background: !editData.canEdit ? "#f1f5f9" : "#fff", color: "#334155", fontSize: 13, cursor: "pointer" }}>فقط مشاهده</button>
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
               <button type="button" style={styles.button} onClick={() => saveEdit(a.id)}>ذخیره</button>
-              <button type="button" style={{ ...styles.button, background: "#999" }} onClick={cancelEdit}>انصراف</button>
+              <button type="button" style={{ ...styles.button, background: "#5b6b7d" }} onClick={cancelEdit}>انصراف</button>
             </div>
           </div>
         ) : (
@@ -864,14 +864,14 @@ function EmployerAccountManager({ onBack }) {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
                 <div style={{ fontWeight: "bold", fontSize: 16 }}>{a.name}</div>
-                <div style={{ fontSize: 13, color: "#2563eb", marginTop: 4, direction: "ltr", textAlign: "right" }}>یوزر: {a.username}</div>
+                <div style={{ fontSize: 13, color: "#0d8f8a", marginTop: 4, direction: "ltr", textAlign: "right" }}>یوزر: {a.username}</div>
                 <span style={{ ...styles.badge, marginTop: 6, display: "inline-block", color: a.canEdit ? "#166534" : "#92400e", background: a.canEdit ? "#dcfce7" : "#fef3c7" }}>
                   {a.canEdit ? "دسترسی کامل" : "فقط مشاهده"}
                 </span>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button type="button" style={styles.smallButton} onClick={() => startEdit(a)}>تغییر</button>
-                <button type="button" style={{ ...styles.smallButton, background: "#dc2626" }} onClick={() => handleDelete(a.id, a.name)}>حذف</button>
+                <button type="button" style={{ ...styles.smallButton, background: "#c92a2a" }} onClick={() => handleDelete(a.id, a.name)}>حذف</button>
               </div>
             </div>
           </div>
@@ -971,10 +971,10 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
 
       <div style={{ ...styles.card, width: "auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-          <AlertTriangle size={20} color="#dc2626" />
+          <AlertTriangle size={20} color="#c92a2a" />
           <h3 style={{ margin: 0 }}>گزارش شرایط ناایمن / اعمال ناایمن (آنومالی)</h3>
         </div>
-        <p style={{ color: "#888", fontSize: 13, marginTop: 4 }}>این قسمت توسط کارفرما تکمیل می‌شود</p>
+        <p style={{ color: "#93a1b0", fontSize: 13, marginTop: 4 }}>این قسمت توسط کارفرما تکمیل می‌شود</p>
 
         <div style={styles.formGrid}>
           <div>
@@ -1026,7 +1026,7 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
                   type="button"
                   onClick={() => setRiskLevel(r.value)}
                   style={{
-                    flex: 1, padding: "8px 6px", borderRadius: 8, border: riskLevel === r.value ? `2px solid ${r.color}` : "1px solid #ccc",
+                    flex: 1, padding: "8px 6px", borderRadius: 8, border: riskLevel === r.value ? `2px solid ${r.color}` : "1px solid #e3e8ee",
                     background: riskLevel === r.value ? r.bg : "#fff", color: r.color, fontSize: 13, cursor: "pointer", fontWeight: riskLevel === r.value ? "bold" : "normal",
                   }}
                 >
@@ -1077,7 +1077,7 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
           </label>
           <label
             style={{
-              ...styles.smallButton, flex: 1, background: "#475569", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 0", position: "relative", overflow: "hidden",
+              ...styles.smallButton, flex: 1, background: "#334155", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 0", position: "relative", overflow: "hidden",
               opacity: photoBusy || photos.length >= 8 ? 0.5 : 1, pointerEvents: photoBusy || photos.length >= 8 ? "none" : "auto",
             }}
           >
@@ -1091,7 +1091,7 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
             />
           </label>
         </div>
-        {photoBusy && <p style={{ fontSize: 12, color: "#888", marginTop: 8 }}>در حال پردازش عکس...</p>}
+        {photoBusy && <p style={{ fontSize: 12, color: "#93a1b0", marginTop: 8 }}>در حال پردازش عکس...</p>}
 
 
         {photos.length > 0 && (
@@ -1287,7 +1287,7 @@ function AnomalyList({ onBack, role, currentUser, readOnly }) {
     return { label: "باز", color: "#92400e", bg: "#fef3c7", Icon: Clock };
   };
 
-  if (loading) return <div style={{ padding: 24, textAlign: "center", color: "#888" }}>در حال بارگذاری...</div>;
+  if (loading) return <div style={{ padding: 24, textAlign: "center", color: "#93a1b0" }}>در حال بارگذاری...</div>;
 
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", padding: 24 }}>
@@ -1318,7 +1318,7 @@ function AnomalyList({ onBack, role, currentUser, readOnly }) {
 
       <div style={styles.filterBar}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, background: "#fff", borderRadius: 8, padding: "6px 10px", border: "1px solid #ddd" }}>
-          <Search size={16} color="#888" />
+          <Search size={16} color="#93a1b0" />
           <input
             style={{ border: "none", outline: "none", flex: 1, fontSize: 14 }}
             placeholder="جستجو (شماره، پیمانکار، ناحیه، شرح)..."
@@ -1350,7 +1350,7 @@ function AnomalyList({ onBack, role, currentUser, readOnly }) {
         </button>
         <button
           type="button"
-          style={{ ...styles.smallButton, flex: 1, background: "#475569", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+          style={{ ...styles.smallButton, flex: 1, background: "#334155", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
           onClick={() => exportAnomaliesPdf(filtered, isContractor ? `آنومالی‌های ${currentUser?.name || "پیمانکار"}` : "لیست آنومالی‌ها")}
           disabled={filtered.length === 0}
         >
@@ -1358,9 +1358,9 @@ function AnomalyList({ onBack, role, currentUser, readOnly }) {
         </button>
       </div>
 
-      <h3 style={{ marginTop: 20 }}>موارد ثبت‌شده ({filtered.length})</h3>
+      <h3 style={{ marginTop: 22, fontSize: 15.5, color: THEME.navy, fontWeight: 700 }}>موارد ثبت‌شده ({filtered.length})</h3>
 
-      {filtered.length === 0 && <p style={{ color: "#888" }}>موردی یافت نشد.</p>}
+      {filtered.length === 0 && <p style={{ color: THEME.text3 }}>موردی یافت نشد.</p>}
 
       {filtered.map((a) => {
         const rm = riskMeta(a.riskLevel);
@@ -1370,27 +1370,27 @@ function AnomalyList({ onBack, role, currentUser, readOnly }) {
         const reportPhotos = photos.filter((p) => p.stage !== "fix");
         const fixPhotos = photos.filter((p) => p.stage === "fix");
         return (
-          <div key={a.id} style={{ ...styles.card, width: "auto", marginBottom: 12 }}>
+          <div key={a.id} style={{ ...styles.card, width: "auto", marginBottom: 12, borderInlineStart: `4px solid ${rm.color}`, padding: "20px 22px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", cursor: "pointer" }} onClick={() => startExpand(a)}>
               <div style={{ flex: 1 }}>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                  <span style={{ fontWeight: "bold" }}>{a.trackingNumber}</span>
+                  <span style={{ fontWeight: 700, color: THEME.navy, fontSize: 14.5 }}>{a.trackingNumber}</span>
                   <span style={{ ...styles.badge, color: rm.color, background: rm.bg }}>{a.riskLevel}</span>
                   <span style={{ ...styles.badge, color: sm.color, background: sm.bg }}>
                     <sm.Icon size={12} style={{ display: "inline", marginLeft: 3 }} />{sm.label}
                   </span>
                   {a.category && <span style={styles.badge}>{a.category}</span>}
                 </div>
-                <div style={{ fontSize: 14, marginTop: 8 }}>{a.description}</div>
-                <div style={{ fontSize: 12, color: "#888", marginTop: 6 }}>
+                <div style={{ fontSize: 14, marginTop: 9, color: THEME.text }}>{a.description}</div>
+                <div style={{ fontSize: 11.5, color: THEME.text3, marginTop: 7, fontWeight: 500 }}>
                   {a.area} {a.contractor && `· ${a.contractor}`} {a.date && `· ${isoToJalaliDisplay(a.date)}`} {a.sender && `· ثبت توسط ${a.sender}`}
                 </div>
               </div>
-              <ChevronRight size={18} color="#999" style={{ transform: isOpenCard ? "rotate(-90deg)" : "none", transition: "transform .15s" }} />
+              <ChevronRight size={18} color={THEME.text3} style={{ transform: isOpenCard ? "rotate(-90deg)" : "none", transition: "transform .15s", flexShrink: 0, marginRight: 6 }} />
             </div>
 
             {isOpenCard && (
-              <div style={{ marginTop: 16, borderTop: "1px solid #eee", paddingTop: 16 }}>
+              <div style={{ marginTop: 16, borderTop: `1px solid ${THEME.border}`, paddingTop: 16 }}>
                 {a.reviewNote && a.status === "open" && (
                   <div style={{ background: "#fee2e2", color: "#991b1b", padding: 10, borderRadius: 8, fontSize: 13, marginBottom: 14 }}>
                     <b>بازگشت توسط کارفرما:</b> {a.reviewNote}
@@ -1400,7 +1400,7 @@ function AnomalyList({ onBack, role, currentUser, readOnly }) {
                 {a.photoCount > 0 && (
                   <div style={{ marginBottom: 16 }}>
                     {photosLoading && !photosMap[a.id] ? (
-                      <p style={{ fontSize: 12, color: "#888" }}>در حال بارگذاری عکس‌ها...</p>
+                      <p style={{ fontSize: 12, color: "#93a1b0" }}>در حال بارگذاری عکس‌ها...</p>
                     ) : (
                       <>
                         {reportPhotos.length > 0 && (
@@ -1449,12 +1449,12 @@ function AnomalyList({ onBack, role, currentUser, readOnly }) {
                         <Camera size={16} /> گرفتن عکس
                         <input type="file" accept="image/*" capture="environment" style={{ position: "absolute", width: 1, height: 1, opacity: 0, overflow: "hidden", pointerEvents: "none" }} onChange={(e) => { handleActionPickFiles(e.target.files); e.target.value = ""; }} />
                       </label>
-                      <label style={{ ...styles.smallButton, flex: 1, background: "#475569", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 0", position: "relative", overflow: "hidden", opacity: actionPhotoBusy || actionPhotos.length >= 8 ? 0.5 : 1, pointerEvents: actionPhotoBusy || actionPhotos.length >= 8 ? "none" : "auto" }}>
+                      <label style={{ ...styles.smallButton, flex: 1, background: "#334155", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 0", position: "relative", overflow: "hidden", opacity: actionPhotoBusy || actionPhotos.length >= 8 ? 0.5 : 1, pointerEvents: actionPhotoBusy || actionPhotos.length >= 8 ? "none" : "auto" }}>
                         <ImagePlus size={16} /> افزودن از گالری
                         <input type="file" accept="image/*" multiple style={{ position: "absolute", width: 1, height: 1, opacity: 0, overflow: "hidden", pointerEvents: "none" }} onChange={(e) => { handleActionPickFiles(e.target.files); e.target.value = ""; }} />
                       </label>
                     </div>
-                    {actionPhotoBusy && <p style={{ fontSize: 12, color: "#888", marginTop: 8 }}>در حال پردازش عکس...</p>}
+                    {actionPhotoBusy && <p style={{ fontSize: 12, color: "#93a1b0", marginTop: 8 }}>در حال پردازش عکس...</p>}
                     {actionPhotos.length > 0 && (
                       <div style={styles.photoGrid}>
                         {actionPhotos.map((src, idx) => (
@@ -1500,7 +1500,7 @@ function AnomalyList({ onBack, role, currentUser, readOnly }) {
                         <button type="button" style={styles.button} onClick={() => approveAnomaly(a)} disabled={reviewSaving}>
                           {reviewSaving ? "در حال ثبت..." : "تأیید و بستن"}
                         </button>
-                        <button type="button" style={{ ...styles.smallButton, background: "#dc2626" }} onClick={() => setShowRejectBox(true)}>
+                        <button type="button" style={{ ...styles.smallButton, background: "#c92a2a" }} onClick={() => setShowRejectBox(true)}>
                           رد و بازگشت
                         </button>
                       </div>
@@ -1509,10 +1509,10 @@ function AnomalyList({ onBack, role, currentUser, readOnly }) {
                         <label style={styles.label}>دلیل بازگشت (برای پیمانکار نمایش داده می‌شود)</label>
                         <textarea style={{ ...styles.input, minHeight: 60, fontFamily: "inherit" }} value={rejectNote} onChange={(e) => setRejectNote(e.target.value)} dir="rtl" />
                         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                          <button type="button" style={{ ...styles.button, background: "#dc2626" }} onClick={() => rejectAnomaly(a)} disabled={reviewSaving}>
+                          <button type="button" style={{ ...styles.button, background: "#c92a2a" }} onClick={() => rejectAnomaly(a)} disabled={reviewSaving}>
                             {reviewSaving ? "در حال ثبت..." : "تأیید بازگشت"}
                           </button>
-                          <button type="button" style={{ ...styles.smallButton, background: "#999" }} onClick={() => setShowRejectBox(false)}>انصراف</button>
+                          <button type="button" style={{ ...styles.smallButton, background: "#5b6b7d" }} onClick={() => setShowRejectBox(false)}>انصراف</button>
                         </div>
                       </>
                     )}
@@ -1575,12 +1575,12 @@ function AnomalyList({ onBack, role, currentUser, readOnly }) {
                 )}
                 {isReviewer && a.status !== "pending_review" && (
                   <div style={{ marginTop: 16 }}>
-                    <button type="button" style={{ ...styles.smallButton, background: "#dc2626" }} onClick={() => handleDelete(a.id, a.trackingNumber)}>حذف آنومالی</button>
+                    <button type="button" style={{ ...styles.smallButton, background: "#c92a2a" }} onClick={() => handleDelete(a.id, a.trackingNumber)}>حذف آنومالی</button>
                   </div>
                 )}
                 {isReadOnlyReviewer && (
                   <div style={{ fontSize: 13, color: "#555", lineHeight: 1.9 }}>
-                    <div style={{ background: "#f1f5f9", color: "#475569", padding: "4px 10px", borderRadius: 999, display: "inline-block", fontSize: 11, marginBottom: 8 }}>دسترسی فقط مشاهده</div>
+                    <div style={{ background: "#f1f5f9", color: "#334155", padding: "4px 10px", borderRadius: 999, display: "inline-block", fontSize: 11, marginBottom: 8 }}>دسترسی فقط مشاهده</div>
                     {a.correctiveAction && <div><b>اقدام اصلاحی:</b> {a.correctiveAction}</div>}
                     {a.contractorAction && <div><b>اقدام پیمانکار:</b> {a.contractorAction}</div>}
                     {a.obstacles && <div><b>موانع و مشکلات:</b> {a.obstacles}</div>}
@@ -1609,6 +1609,46 @@ function AnomalyList({ onBack, role, currentUser, readOnly }) {
 }
 
 // ---------- پنل ادمین ----------
+const MODULE_ICON = { profile: User, manageUsers: Users, anomalyReport: AlertTriangle };
+
+// ---------- ردیف منوی استاندارد (آیکون + عنوان + شورون) ----------
+function MenuRow({ icon: IconEl, label, onClick, accent, muted, sub }) {
+  return (
+    <div
+      style={{
+        ...styles.menuCard,
+        ...(accent ? styles.anomalyMenuCard : {}),
+        ...(muted ? { opacity: 0.55 } : {}),
+        justifyContent: "space-between",
+      }}
+      onClick={onClick}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: 9,
+            background: accent ? "rgba(13,143,138,0.14)" : "#eef1f5",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <IconEl size={17} color={accent ? THEME.tealDeep : THEME.navyMid} />
+        </div>
+        <span>{label}</span>
+      </div>
+      {sub ? (
+        <ChevronRight size={16} color={THEME.text3} style={{ transform: "rotate(180deg)" }} />
+      ) : (
+        <ChevronRight size={16} color={THEME.text3} style={{ transform: "rotate(180deg)", opacity: 0.4 }} />
+      )}
+    </div>
+  );
+}
+
 function AdminDashboard({ onLogout, currentUser }) {
   const [view, setView] = useState("menu");
   const anomalyMod = HSE_MODULES.find((m) => m.key === "anomalyReport");
@@ -1624,25 +1664,20 @@ function AdminDashboard({ onLogout, currentUser }) {
 
       {view === "menu" && (
         <div style={styles.menuList}>
-          <div style={styles.menuCard} onClick={() => setView("profile")}>پروفایل من</div>
-          <div style={styles.menuCard} onClick={() => setView("employers")}>مدیریت حساب‌های کارفرما/همکاران</div>
-          <div style={styles.menuCard} onClick={() => setView("contractors")}>مدیریت پیمانکاران</div>
-          <div style={{ ...styles.menuCard, ...styles.anomalyMenuCard }} onClick={() => setView("anomalyReport")}>
-            <AlertTriangle size={16} style={{ marginLeft: 8, verticalAlign: "middle" }} />{anomalyMod.label}
-            <ChevronRight size={16} color="#999" style={{ float: "left", transform: "rotate(180deg)" }} />
-          </div>
+          <MenuRow icon={User} label="پروفایل من" onClick={() => setView("profile")} />
+          <MenuRow icon={Users} label="مدیریت حساب‌های کارفرما/همکاران" onClick={() => setView("employers")} />
+          <MenuRow icon={ShieldCheck} label="مدیریت پیمانکاران" onClick={() => setView("contractors")} />
+          <MenuRow icon={AlertTriangle} label={anomalyMod.label} onClick={() => setView("anomalyReport")} accent sub />
         </div>
       )}
 
       {view === "anomalyReport" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
           <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
-          <h3 style={{ marginBottom: 12 }}>{anomalyMod.label}</h3>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{anomalyMod.label}</h3>
           <div style={styles.menuList2}>
             {anomalyMod.sub.map((s) => (
-              <div key={s.key} style={{ ...styles.menuCard, ...styles.anomalyMenuCard }} onClick={() => setView(s.key)}>
-                <AlertTriangle size={16} style={{ marginLeft: 8, verticalAlign: "middle" }} />{s.label}
-              </div>
+              <MenuRow key={s.key} icon={AlertTriangle} label={s.label} onClick={() => setView(s.key)} accent />
             ))}
           </div>
         </div>
@@ -1689,15 +1724,15 @@ function EmployerDashboard({ onLogout, currentUser }) {
       {view === "menu" && (
         <div style={styles.menuList}>
           {HSE_MODULES.map((mod) => (
-            <div
+            <MenuRow
               key={mod.key}
-              style={{ ...styles.menuCard, ...(mod.icon ? styles.anomalyMenuCard : {}), ...(mod.employerOnly && !canEdit ? { opacity: 0.55 } : {}) }}
+              icon={MODULE_ICON[mod.key] || LayoutGrid}
+              label={mod.label}
               onClick={() => openModule(mod)}
-            >
-              {mod.icon && <AlertTriangle size={16} style={{ marginLeft: 8, verticalAlign: "middle" }} />}
-              {mod.label}
-              {mod.sub && <ChevronRight size={16} color="#999" style={{ float: "left", transform: "rotate(180deg)" }} />}
-            </div>
+              accent={!!mod.icon}
+              muted={mod.employerOnly && !canEdit}
+              sub={!!mod.sub}
+            />
           ))}
         </div>
       )}
@@ -1705,12 +1740,10 @@ function EmployerDashboard({ onLogout, currentUser }) {
       {view === "anomalyReport" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
           <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
-          <h3 style={{ marginBottom: 12 }}>{anomalyMod.label}</h3>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{anomalyMod.label}</h3>
           <div style={styles.menuList2}>
             {anomalySub.map((s) => (
-              <div key={s.key} style={{ ...styles.menuCard, ...styles.anomalyMenuCard }} onClick={() => setView(s.key)}>
-                <AlertTriangle size={16} style={{ marginLeft: 8, verticalAlign: "middle" }} />{s.label}
-              </div>
+              <MenuRow key={s.key} icon={AlertTriangle} label={s.label} onClick={() => setView(s.key)} accent />
             ))}
           </div>
         </div>
@@ -1751,15 +1784,15 @@ function ContractorDashboard({ onLogout, currentUser }) {
       {view === "menu" && (
         <div style={styles.menuList}>
           {HSE_MODULES.map((mod) => (
-            <div
+            <MenuRow
               key={mod.key}
-              style={{ ...styles.menuCard, ...(mod.icon ? styles.anomalyMenuCard : {}), ...(mod.employerOnly ? { opacity: 0.55 } : {}) }}
+              icon={MODULE_ICON[mod.key] || LayoutGrid}
+              label={mod.label}
               onClick={() => openModule(mod)}
-            >
-              {mod.icon && <AlertTriangle size={16} style={{ marginLeft: 8, verticalAlign: "middle" }} />}
-              {mod.label}
-              {mod.sub && <ChevronRight size={16} color="#999" style={{ float: "left", transform: "rotate(180deg)" }} />}
-            </div>
+              accent={!!mod.icon}
+              muted={!!mod.employerOnly}
+              sub={!!mod.sub}
+            />
           ))}
         </div>
       )}
@@ -1767,12 +1800,10 @@ function ContractorDashboard({ onLogout, currentUser }) {
       {view === "anomalyReport" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
           <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
-          <h3 style={{ marginBottom: 12 }}>{anomalyMod.label}</h3>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{anomalyMod.label}</h3>
           <div style={styles.menuList2}>
             {anomalySub.map((s) => (
-              <div key={s.key} style={{ ...styles.menuCard, ...styles.anomalyMenuCard }} onClick={() => setView(s.key)}>
-                <AlertTriangle size={16} style={{ marginLeft: 8, verticalAlign: "middle" }} />{s.label}
-              </div>
+              <MenuRow key={s.key} icon={AlertTriangle} label={s.label} onClick={() => setView(s.key)} accent />
             ))}
           </div>
         </div>
@@ -1800,7 +1831,7 @@ class ErrorBoundary extends React.Component {
     if (this.state.error) {
       return (
         <div style={{ padding: 24, fontFamily: "Tahoma, Arial, sans-serif", direction: "rtl", maxWidth: 560, margin: "40px auto" }}>
-          <h3 style={{ color: "#dc2626" }}>مشکلی در اجرای اپلیکیشن پیش آمد</h3>
+          <h3 style={{ color: "#c92a2a" }}>مشکلی در اجرای اپلیکیشن پیش آمد</h3>
           <p style={{ fontSize: 13, color: "#555" }}>لطفاً متن زیر را برای بررسی ارسال کنید:</p>
           <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, color: "#991b1b", background: "#fee2e2", padding: 12, borderRadius: 8 }}>
             {String((this.state.error && this.state.error.message) || this.state.error)}
@@ -1831,39 +1862,59 @@ export default function App() {
 }
 
 // ---------- استایل‌ها ----------
+// ---------- توکن‌های طراحی (پالت و تایپوگرافی سازمانی) ----------
+const THEME = {
+  navy: "#0e2a3f",
+  navyDeep: "#0a1f30",
+  navyMid: "#123a54",
+  teal: "#0d8f8a",
+  tealDeep: "#0a7570",
+  tealSoft: "#e3f5f4",
+  bg: "#f2f5f8",
+  surface: "#ffffff",
+  border: "#e3e8ee",
+  borderStrong: "#cbd5e1",
+  text: "#152535",
+  text2: "#5b6b7d",
+  text3: "#93a1b0",
+  danger: "#c92a2a",
+  dangerBg: "#fdecec",
+  font: "'Vazirmatn', 'Inter', Tahoma, Arial, sans-serif",
+};
+
 const styles = {
-  centerScreen: { display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "#f5f5f7", fontFamily: "Tahoma, Arial, sans-serif" },
-  brandBadge: { width: 44, height: 44, borderRadius: 12, background: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center" },
-  card: { background: "#fff", padding: 32, borderRadius: 12, boxShadow: "0 4px 20px rgba(0,0,0,0.08)", width: 340, direction: "rtl", marginBottom: 12 },
-  label: { display: "block", marginBottom: 6, marginTop: 16, fontSize: 14, color: "#333" },
-  input: { width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #ccc", fontSize: 15, boxSizing: "border-box" },
-  button: { width: "100%", marginTop: 24, padding: "12px", borderRadius: 8, border: "none", background: "#2563eb", color: "#fff", fontSize: 16, cursor: "pointer" },
-  smallButton: { padding: "8px 14px", borderRadius: 6, border: "none", background: "#2563eb", color: "#fff", fontSize: 13, cursor: "pointer" },
-  error: { color: "#dc2626", fontSize: 13, marginTop: 12, marginBottom: 0 },
-  hint: { fontSize: 12, color: "#888", marginTop: 16, textAlign: "center", direction: "ltr" },
-  dashboardWrapper: { direction: "rtl", fontFamily: "Tahoma, Arial, sans-serif", minHeight: "100vh", background: "#f5f5f7" },
-  topBar: { display: "flex", justifyContent: "space-between", alignItems: "center", background: "#2563eb", color: "#fff", padding: "16px 24px" },
-  appNameTag: { fontSize: 11, opacity: 0.85, marginBottom: 2, direction: "ltr", textAlign: "right" },
-  logoutButton: { display: "flex", alignItems: "center", background: "transparent", border: "1px solid #fff", color: "#fff", padding: "6px 14px", borderRadius: 6, cursor: "pointer" },
-  menuList: { padding: 24, display: "flex", flexDirection: "column", gap: 12, maxWidth: 480, margin: "0 auto" },
-  menuList2: { display: "flex", flexDirection: "column", gap: 12 },
-  menuCard: { background: "#fff", padding: 20, borderRadius: 10, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", cursor: "pointer", fontSize: 16 },
-  anomalyMenuCard: { border: "1px solid #fecaca", background: "#fff7f7" },
-  userRow: { background: "#fff", padding: "14px 20px", borderRadius: 10, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 15 },
-  backLink: { cursor: "pointer", color: "#2563eb", marginBottom: 16, fontSize: 14 },
+  centerScreen: { display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: `radial-gradient(1100px 500px at 15% -10%, ${THEME.tealSoft} 0%, transparent 55%), linear-gradient(160deg, #f6f8fa 0%, #e9eef3 100%)`, fontFamily: THEME.font, padding: 20 },
+  brandBadge: { width: 44, height: 44, borderRadius: 12, background: THEME.teal, display: "flex", alignItems: "center", justifyContent: "center" },
+  card: { background: THEME.surface, padding: 30, borderRadius: 16, boxShadow: "0 1px 2px rgba(15,42,63,0.04), 0 12px 32px -12px rgba(15,42,63,0.14)", border: `1px solid ${THEME.border}`, width: 340, direction: "rtl", marginBottom: 14 },
+  label: { display: "block", marginBottom: 6, marginTop: 16, fontSize: 13, fontWeight: 600, color: THEME.text2, letterSpacing: "0.01em" },
+  input: { width: "100%", padding: "11px 13px", borderRadius: 9, border: `1.5px solid ${THEME.border}`, fontSize: 14.5, boxSizing: "border-box", fontFamily: THEME.font, color: THEME.text, background: "#fbfcfd", outline: "none", transition: "border-color .15s" },
+  button: { width: "100%", marginTop: 24, padding: "13px", borderRadius: 10, border: "none", background: `linear-gradient(180deg, ${THEME.teal}, ${THEME.tealDeep})`, color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer", boxShadow: "0 1px 2px rgba(0,0,0,0.06), 0 6px 16px -6px rgba(13,143,138,0.5)", fontFamily: THEME.font, letterSpacing: "0.01em" },
+  smallButton: { padding: "9px 16px", borderRadius: 8, border: "none", background: THEME.navyMid, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: THEME.font },
+  error: { color: THEME.danger, fontSize: 13, marginTop: 12, marginBottom: 0, fontWeight: 500 },
+  hint: { fontSize: 11.5, color: THEME.text3, marginTop: 18, textAlign: "center", direction: "ltr", letterSpacing: "0.02em" },
+  dashboardWrapper: { direction: "rtl", fontFamily: THEME.font, minHeight: "100vh", background: THEME.bg },
+  topBar: { display: "flex", justifyContent: "space-between", alignItems: "center", background: `linear-gradient(120deg, ${THEME.navy}, ${THEME.navyDeep})`, color: "#fff", padding: "18px 22px", boxShadow: "0 4px 18px -6px rgba(10,31,48,0.45)", position: "sticky", top: 0, zIndex: 20 },
+  appNameTag: { fontSize: 10.5, opacity: 0.6, marginBottom: 3, direction: "ltr", textAlign: "right", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600 },
+  logoutButton: { display: "flex", alignItems: "center", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.22)", color: "#fff", padding: "8px 16px", borderRadius: 9, cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: THEME.font },
+  menuList: { padding: "20px 18px 32px", display: "flex", flexDirection: "column", gap: 10, maxWidth: 520, margin: "0 auto" },
+  menuList2: { display: "flex", flexDirection: "column", gap: 10 },
+  menuCard: { background: THEME.surface, padding: "17px 18px", borderRadius: 13, boxShadow: "0 1px 2px rgba(15,42,63,0.04), 0 4px 14px -8px rgba(15,42,63,0.12)", border: `1px solid ${THEME.border}`, cursor: "pointer", fontSize: 14.5, fontWeight: 600, color: THEME.text, display: "flex", alignItems: "center" },
+  anomalyMenuCard: { borderInlineStart: `3px solid ${THEME.teal}`, background: THEME.tealSoft },
+  userRow: { background: THEME.surface, padding: "14px 18px", borderRadius: 12, border: `1px solid ${THEME.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 14.5 },
+  backLink: { cursor: "pointer", color: THEME.teal, marginBottom: 18, fontSize: 13.5, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4 },
   formGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 },
-  statsRow: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(72px, 1fr))", gap: 8, marginTop: 8 },
-  statBox: { background: "#eef2ff", borderRadius: 10, padding: "12px 6px", textAlign: "center" },
-  statNum: { fontSize: 20, fontWeight: "bold", color: "#3730a3" },
-  statLabel: { fontSize: 11, color: "#555", marginTop: 2 },
+  statsRow: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(78px, 1fr))", gap: 10, marginTop: 8 },
+  statBox: { background: THEME.surface, border: `1px solid ${THEME.border}`, borderRadius: 13, padding: "14px 8px", textAlign: "center", boxShadow: "0 1px 2px rgba(15,42,63,0.03)" },
+  statNum: { fontSize: 21, fontWeight: 700, color: THEME.navy, fontFamily: THEME.font },
+  statLabel: { fontSize: 10.5, color: THEME.text3, marginTop: 3, fontWeight: 600 },
   filterBar: { display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" },
-  filterSelect: { padding: "8px 10px", borderRadius: 8, border: "1px solid #ddd", fontSize: 13, background: "#fff" },
-  badge: { fontSize: 11, padding: "2px 8px", borderRadius: 999, background: "#f1f5f9", color: "#475569" },
+  filterSelect: { padding: "9px 11px", borderRadius: 9, border: `1.5px solid ${THEME.border}`, fontSize: 13, background: THEME.surface, color: THEME.text, fontFamily: THEME.font },
+  badge: { fontSize: 11, padding: "3px 10px", borderRadius: 999, background: "#eef1f5", color: THEME.text2, fontWeight: 600 },
   photoGrid: { display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 },
   photoThumbWrap: { position: "relative", width: 80, height: 80 },
-  photoThumb: { width: 80, height: 80, objectFit: "cover", borderRadius: 8, border: "1px solid #ddd", cursor: "pointer" },
-  photoRemoveBtn: { position: "absolute", top: -6, right: -6, width: 22, height: 22, borderRadius: "50%", background: "#dc2626", border: "2px solid #fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" },
-  photoViewerOverlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 },
-  photoViewerImg: { maxWidth: "100%", maxHeight: "90vh", borderRadius: 8 },
+  photoThumb: { width: 80, height: 80, objectFit: "cover", borderRadius: 10, border: `1px solid ${THEME.border}`, cursor: "pointer" },
+  photoRemoveBtn: { position: "absolute", top: -6, right: -6, width: 22, height: 22, borderRadius: "50%", background: THEME.danger, border: "2px solid #fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" },
+  photoViewerOverlay: { position: "fixed", inset: 0, background: "rgba(10,20,30,0.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 },
+  photoViewerImg: { maxWidth: "100%", maxHeight: "90vh", borderRadius: 10 },
   photoViewerClose: { position: "absolute", top: 20, left: 20, background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" },
 };
