@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { AlertTriangle, Plus, X, ChevronRight, LogOut, Search, Filter, CheckCircle2, Clock, Camera, ImagePlus, Trash2, FileSpreadsheet, FileText, User, Users, ShieldCheck, LayoutGrid } from "lucide-react";
 import * as XLSX from "xlsx";
+import BowTieDashboard from "./bowtie/BowTieDashboard.jsx";
+import { APP_NAME, sb, sbOk, sbErrMsg, uid, todayISO, THEME, styles } from "./shared.js";
 
 /**
  * اپلیکیشن کارفرما / پیمانکار / ادمین + ماژول ثبت و پیگیری آنومالی HSE
@@ -31,7 +33,6 @@ const ANOMALY_FORMATS = [
   "بازرسی", "مدیریت تغییر", "عوامل زیان‌آور محیط کار", "ممیزی", "معاینات ادواری", "گزارش روزانه", "سایر",
 ];
 
-const APP_NAME = "Integrated HSE Management System";
 
 // ترتیب ماژول‌های سامانه IHMS طبق نقشه‌ی راه پروژه.
 // فقط "مدیریت عدم انطباق‌ها (Anomaly Report)" و "ایجاد حساب کاربری" فعلاً پیاده‌سازی شده‌اند؛
@@ -51,7 +52,15 @@ const HSE_MODULES = [
   { key: "incident", label: "مدیریت حوادث (Incident Management)" },
   { key: "nearMiss", label: "مدیریت شبه‌حوادث (Near Miss)" },
   { key: "capa", label: "مدیریت اقدامات اصلاحی و پیشگیرانه (CAPA)" },
-  { key: "riskAssessment", label: "مدیریت ارزیابی ریسک (Risk Assessment)" },
+  {
+    key: "riskAssessment",
+    label: "مدیریت ارزیابی ریسک (Risk Assessment)",
+    icon: true,
+    employerOnly: true,
+    sub: [
+      { key: "bowtieDashboard", label: "BowTie Risk Analysis" },
+    ],
+  },
   { key: "hazards", label: "مدیریت عوامل زیان‌آور محیط کار" },
   { key: "occupationalHealth", label: "مدیریت معاینات طب کار" },
   { key: "training", label: "مدیریت آموزش‌های HSE" },
@@ -64,44 +73,8 @@ const HSE_MODULES = [
 ];
 
 // ---------- لایه ذخیره‌سازی (Supabase REST API) ----------
-// نکته امنیتی: فقط از کلید publishable/anon استفاده می‌شود، هرگز کلید secret را
-// داخل کد سمت مرورگر قرار ندهید چون هرکسی که اپ را باز کند می‌تواند آن را ببیند.
-const SUPABASE_URL = "https://zmmxiyqlwkqjzghbcydi.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_PnB5Mp5wo_EOzJHa7HGwBQ_gqF1gvo0";
-
-async function sb(path, options = {}) {
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-      ...options,
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        "Content-Type": "application/json",
-        Prefer: options.prefer || "return=representation",
-        ...(options.headers || {}),
-      },
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      console.error("Supabase error", res.status, text);
-      return { __error: true, status: res.status, message: text || `HTTP ${res.status}` };
-    }
-    if (res.status === 204) return [];
-    const text = await res.text();
-    return text ? JSON.parse(text) : [];
-  } catch (e) {
-    console.error("Supabase fetch failed", e);
-    return { __error: true, status: 0, message: String((e && e.message) || e) };
-  }
-}
-
-function sbOk(rows) {
-  return Array.isArray(rows);
-}
-function sbErrMsg(rows) {
-  if (rows && rows.__error) return rows.message;
-  return "خطای نامشخص";
-}
+// sb / sbOk / sbErrMsg اکنون در shared.js تعریف شده‌اند تا هم App.jsx و هم
+// ماژول‌های فرعی (مثل bowtie/) بدون وابستگی حلقوی به آن‌ها دسترسی داشته باشند.
 
 // حساب‌های ادمین و کارفرما ثابت هستند و مستقل از دیتابیس بررسی می‌شوند
 // تا در صورت هر مشکلی در اتصال، ورود این دو نقش همیشه کار کند.
@@ -275,13 +248,7 @@ async function deleteAnomalyPhotoDB(photoId) {
   await sb(`anomaly_photos?id=eq.${photoId}`, { method: "DELETE", prefer: "return=minimal" });
 }
 
-function uid(prefix) {
-  return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-}
-
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
+// uid / todayISO اکنون در shared.js تعریف شده‌اند.
 
 function nowHM() {
   const d = new Date();
@@ -1652,6 +1619,7 @@ function MenuRow({ icon: IconEl, label, onClick, accent, muted, sub }) {
 function AdminDashboard({ onLogout, currentUser }) {
   const [view, setView] = useState("menu");
   const anomalyMod = HSE_MODULES.find((m) => m.key === "anomalyReport");
+  const riskMod = HSE_MODULES.find((m) => m.key === "riskAssessment");
   return (
     <div style={styles.dashboardWrapper}>
       <div style={styles.topBar}>
@@ -1668,6 +1636,7 @@ function AdminDashboard({ onLogout, currentUser }) {
           <MenuRow icon={Users} label="مدیریت حساب‌های کارفرما/همکاران" onClick={() => setView("employers")} />
           <MenuRow icon={ShieldCheck} label="مدیریت پیمانکاران" onClick={() => setView("contractors")} />
           <MenuRow icon={AlertTriangle} label={anomalyMod.label} onClick={() => setView("anomalyReport")} accent sub />
+          <MenuRow icon={ShieldCheck} label={riskMod.label} onClick={() => setView("riskAssessment")} accent sub />
         </div>
       )}
 
@@ -1683,11 +1652,24 @@ function AdminDashboard({ onLogout, currentUser }) {
         </div>
       )}
 
+      {view === "riskAssessment" && (
+        <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
+          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{riskMod.label}</h3>
+          <div style={styles.menuList2}>
+            {riskMod.sub.map((s) => (
+              <MenuRow key={s.key} icon={ShieldCheck} label={s.label} onClick={() => setView(s.key)} accent />
+            ))}
+          </div>
+        </div>
+      )}
+
       {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel="ادمین" />}
       {view === "employers" && <EmployerAccountManager onBack={() => setView("menu")} />}
       {view === "contractors" && <ContractorManager onBack={() => setView("menu")} />}
       {view === "anomalyForm" && <AnomalyForm onBack={() => setView("anomalyReport")} currentUser={currentUser} onSaved={() => setView("anomalyList")} />}
       {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="ADMIN" currentUser={currentUser} />}
+      {view === "bowtieDashboard" && <BowTieDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} readOnly={false} />}
     </div>
   );
 }
@@ -1699,17 +1681,14 @@ function EmployerDashboard({ onLogout, currentUser }) {
 
   const openModule = (mod) => {
     if (mod.key === "profile") { setView("profile"); return; }
-    if (mod.key === "manageUsers") {
-      if (!canEdit) { alert("این بخش فقط با دسترسی کامل در دسترس است"); return; }
-      setView("manageUsers");
-      return;
-    }
+    if (mod.employerOnly && !canEdit) { alert("این بخش فقط با دسترسی کامل در دسترس است"); return; }
     if (mod.sub) { setView(mod.key); return; }
     alert(`ماژول «${mod.label}» به‌زودی اضافه می‌شود`);
   };
 
   const anomalyMod = HSE_MODULES.find((m) => m.key === "anomalyReport");
   const anomalySub = anomalyMod.sub.filter((s) => canEdit || !s.employerOnly);
+  const riskMod = HSE_MODULES.find((m) => m.key === "riskAssessment");
 
   return (
     <div style={styles.dashboardWrapper}>
@@ -1749,10 +1728,23 @@ function EmployerDashboard({ onLogout, currentUser }) {
         </div>
       )}
 
+      {view === "riskAssessment" && (
+        <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
+          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{riskMod.label}</h3>
+          <div style={styles.menuList2}>
+            {riskMod.sub.map((s) => (
+              <MenuRow key={s.key} icon={ShieldCheck} label={s.label} onClick={() => setView(s.key)} accent />
+            ))}
+          </div>
+        </div>
+      )}
+
       {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel={canEdit ? "کارفرما" : "کارفرما (فقط مشاهده)"} />}
       {view === "manageUsers" && <ContractorManager onBack={() => setView("menu")} />}
       {view === "anomalyForm" && <AnomalyForm onBack={() => setView("anomalyReport")} currentUser={currentUser} onSaved={() => setView("anomalyList")} />}
       {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="EMPLOYER" currentUser={currentUser} readOnly={!canEdit} />}
+      {view === "bowtieDashboard" && <BowTieDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} readOnly={!canEdit} />}
     </div>
   );
 }
@@ -1861,60 +1853,3 @@ export default function App() {
   );
 }
 
-// ---------- استایل‌ها ----------
-// ---------- توکن‌های طراحی (پالت و تایپوگرافی سازمانی) ----------
-const THEME = {
-  navy: "#0e2a3f",
-  navyDeep: "#0a1f30",
-  navyMid: "#123a54",
-  teal: "#0d8f8a",
-  tealDeep: "#0a7570",
-  tealSoft: "#e3f5f4",
-  bg: "#f2f5f8",
-  surface: "#ffffff",
-  border: "#e3e8ee",
-  borderStrong: "#cbd5e1",
-  text: "#152535",
-  text2: "#5b6b7d",
-  text3: "#93a1b0",
-  danger: "#c92a2a",
-  dangerBg: "#fdecec",
-  font: "'Vazirmatn', 'Inter', Tahoma, Arial, sans-serif",
-};
-
-const styles = {
-  centerScreen: { display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", background: `radial-gradient(1100px 500px at 15% -10%, ${THEME.tealSoft} 0%, transparent 55%), linear-gradient(160deg, #f6f8fa 0%, #e9eef3 100%)`, fontFamily: THEME.font, padding: 20 },
-  brandBadge: { width: 44, height: 44, borderRadius: 12, background: THEME.teal, display: "flex", alignItems: "center", justifyContent: "center" },
-  card: { background: THEME.surface, padding: 30, borderRadius: 16, boxShadow: "0 1px 2px rgba(15,42,63,0.04), 0 12px 32px -12px rgba(15,42,63,0.14)", border: `1px solid ${THEME.border}`, width: 340, direction: "rtl", marginBottom: 14 },
-  label: { display: "block", marginBottom: 6, marginTop: 16, fontSize: 13, fontWeight: 600, color: THEME.text2, letterSpacing: "0.01em" },
-  input: { width: "100%", padding: "11px 13px", borderRadius: 9, border: `1.5px solid ${THEME.border}`, fontSize: 14.5, boxSizing: "border-box", fontFamily: THEME.font, color: THEME.text, background: "#fbfcfd", outline: "none", transition: "border-color .15s" },
-  button: { width: "100%", marginTop: 24, padding: "13px", borderRadius: 10, border: "none", background: `linear-gradient(180deg, ${THEME.teal}, ${THEME.tealDeep})`, color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer", boxShadow: "0 1px 2px rgba(0,0,0,0.06), 0 6px 16px -6px rgba(13,143,138,0.5)", fontFamily: THEME.font, letterSpacing: "0.01em" },
-  smallButton: { padding: "9px 16px", borderRadius: 8, border: "none", background: THEME.navyMid, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: THEME.font },
-  error: { color: THEME.danger, fontSize: 13, marginTop: 12, marginBottom: 0, fontWeight: 500 },
-  hint: { fontSize: 11.5, color: THEME.text3, marginTop: 18, textAlign: "center", direction: "ltr", letterSpacing: "0.02em" },
-  dashboardWrapper: { direction: "rtl", fontFamily: THEME.font, minHeight: "100vh", background: THEME.bg },
-  topBar: { display: "flex", justifyContent: "space-between", alignItems: "center", background: `linear-gradient(120deg, ${THEME.navy}, ${THEME.navyDeep})`, color: "#fff", padding: "18px 22px", boxShadow: "0 4px 18px -6px rgba(10,31,48,0.45)", position: "sticky", top: 0, zIndex: 20 },
-  appNameTag: { fontSize: 10.5, opacity: 0.6, marginBottom: 3, direction: "ltr", textAlign: "right", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600 },
-  logoutButton: { display: "flex", alignItems: "center", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.22)", color: "#fff", padding: "8px 16px", borderRadius: 9, cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: THEME.font },
-  menuList: { padding: "20px 18px 32px", display: "flex", flexDirection: "column", gap: 10, maxWidth: 520, margin: "0 auto" },
-  menuList2: { display: "flex", flexDirection: "column", gap: 10 },
-  menuCard: { background: THEME.surface, padding: "17px 18px", borderRadius: 13, boxShadow: "0 1px 2px rgba(15,42,63,0.04), 0 4px 14px -8px rgba(15,42,63,0.12)", border: `1px solid ${THEME.border}`, cursor: "pointer", fontSize: 14.5, fontWeight: 600, color: THEME.text, display: "flex", alignItems: "center" },
-  anomalyMenuCard: { borderInlineStart: `3px solid ${THEME.teal}`, background: THEME.tealSoft },
-  userRow: { background: THEME.surface, padding: "14px 18px", borderRadius: 12, border: `1px solid ${THEME.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 14.5 },
-  backLink: { cursor: "pointer", color: THEME.teal, marginBottom: 18, fontSize: 13.5, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4 },
-  formGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 },
-  statsRow: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(78px, 1fr))", gap: 10, marginTop: 8 },
-  statBox: { background: THEME.surface, border: `1px solid ${THEME.border}`, borderRadius: 13, padding: "14px 8px", textAlign: "center", boxShadow: "0 1px 2px rgba(15,42,63,0.03)" },
-  statNum: { fontSize: 21, fontWeight: 700, color: THEME.navy, fontFamily: THEME.font },
-  statLabel: { fontSize: 10.5, color: THEME.text3, marginTop: 3, fontWeight: 600 },
-  filterBar: { display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" },
-  filterSelect: { padding: "9px 11px", borderRadius: 9, border: `1.5px solid ${THEME.border}`, fontSize: 13, background: THEME.surface, color: THEME.text, fontFamily: THEME.font },
-  badge: { fontSize: 11, padding: "3px 10px", borderRadius: 999, background: "#eef1f5", color: THEME.text2, fontWeight: 600 },
-  photoGrid: { display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 },
-  photoThumbWrap: { position: "relative", width: 80, height: 80 },
-  photoThumb: { width: 80, height: 80, objectFit: "cover", borderRadius: 10, border: `1px solid ${THEME.border}`, cursor: "pointer" },
-  photoRemoveBtn: { position: "absolute", top: -6, right: -6, width: 22, height: 22, borderRadius: "50%", background: THEME.danger, border: "2px solid #fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" },
-  photoViewerOverlay: { position: "fixed", inset: 0, background: "rgba(10,20,30,0.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 },
-  photoViewerImg: { maxWidth: "100%", maxHeight: "90vh", borderRadius: 10 },
-  photoViewerClose: { position: "absolute", top: 20, left: 20, background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" },
-};
