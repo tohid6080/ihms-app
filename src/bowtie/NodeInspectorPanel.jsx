@@ -13,12 +13,18 @@ export default function NodeInspectorPanel({ type, node, readOnly, onClose, onSa
         label: node.label, owner: node.owner, criticality: node.criticality,
         status: node.status, verificationDate: node.verificationDate, isCriticalControl: node.isCriticalControl,
       });
-    } else if (type === "threat" || type === "consequence") {
+    } else if (type === "threat" || type === "consequence" || type === "escalationFactor") {
       setForm({ label: node.label });
+    } else if (type === "escalationControl") {
+      setForm({ label: node.label, owner: node.owner, status: node.status });
     }
   }, [node, type]);
 
-  const titleFor = { threat: "تهدید (Threat)", consequence: "پیامد (Consequence)", barrier: "مانع (Barrier)", topEvent: "رویداد اصلی (Top Event)" }[type];
+  const titleFor = {
+    threat: "تهدید (Threat)", consequence: "پیامد (Consequence)", barrier: "مانع (Barrier)",
+    topEvent: "رویداد اصلی (Top Event)", escalationFactor: "عامل تشدیدکننده (Escalation Factor)",
+    escalationControl: "کنترل تشدید (Escalation Control)",
+  }[type];
 
   const handleSave = async () => {
     if (type !== "topEvent" && !form.label?.trim()) { alert("عنوان نمی‌تواند خالی باشد"); return; }
@@ -90,6 +96,18 @@ export default function NodeInspectorPanel({ type, node, readOnly, onClose, onSa
                   <input type="checkbox" checked={!!form.isCriticalControl} onChange={(e) => setForm({ ...form, isCriticalControl: e.target.checked })} disabled={readOnly} />
                   کنترل بحرانی (Critical Control)
                 </label>
+              </>
+            )}
+
+            {type === "escalationControl" && (
+              <>
+                <label style={styles.label}>مسئول (Owner)</label>
+                <input style={styles.input} value={form.owner || ""} onChange={(e) => setForm({ ...form, owner: e.target.value })} dir="rtl" disabled={readOnly} />
+
+                <label style={styles.label}>وضعیت</label>
+                <select style={styles.input} value={form.status || "green"} onChange={(e) => setForm({ ...form, status: e.target.value })} dir="rtl" disabled={readOnly}>
+                  {BARRIER_STATUS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                </select>
               </>
             )}
 

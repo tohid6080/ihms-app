@@ -4,7 +4,7 @@ import { loadBowtieCanvas } from "./bowtieApi.js";
 import BowTieCanvas from "./BowTieCanvas.jsx";
 
 export default function BowTieEditor({ bowtie, onBack, readOnly }) {
-  const [data, setData] = useState({ threats: [], consequences: [], barriers: [] });
+  const [data, setData] = useState({ threats: [], consequences: [], barriers: [], escalationFactors: [], escalationControls: [] });
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
@@ -28,6 +28,8 @@ export default function BowTieEditor({ bowtie, onBack, readOnly }) {
         threats={data.threats}
         consequences={data.consequences}
         barriers={data.barriers}
+        escalationFactors={data.escalationFactors}
+        escalationControls={data.escalationControls}
         onDataChange={load}
         readOnly={readOnly}
       />

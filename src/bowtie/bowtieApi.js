@@ -125,10 +125,28 @@ export async function loadBowtieCanvas(bowtieId) {
     sb(`bowtie_consequences?bowtie_id=eq.${bowtieId}&select=*&order=order_index.asc`),
     sb(`bowtie_barriers?bowtie_id=eq.${bowtieId}&select=*&order=order_index.asc`),
   ]);
+  const barriers = (sbOk(barrierRows) ? barrierRows : []).map(barrierFromRow);
+  const barrierIds = barriers.map((b) => b.id);
+
+  let escFactors = [];
+  let escControls = [];
+  if (barrierIds.length > 0) {
+    const idList = barrierIds.join(",");
+    const escFactorRows = await sb(`bowtie_escalation_factors?barrier_id=in.(${idList})&select=*&order=order_index.asc`);
+    escFactors = (sbOk(escFactorRows) ? escFactorRows : []).map(escFactorFromRow);
+    const factorIds = escFactors.map((f) => f.id);
+    if (factorIds.length > 0) {
+      const escControlRows = await sb(`bowtie_escalation_controls?escalation_factor_id=in.(${factorIds.join(",")})&select=*&order=order_index.asc`);
+      escControls = (sbOk(escControlRows) ? escControlRows : []).map(escControlFromRow);
+    }
+  }
+
   return {
     threats: (sbOk(threatRows) ? threatRows : []).map(threatFromRow),
     consequences: (sbOk(consRows) ? consRows : []).map(consequenceFromRow),
-    barriers: (sbOk(barrierRows) ? barrierRows : []).map(barrierFromRow),
+    barriers,
+    escalationFactors: escFactors,
+    escalationControls: escControls,
   };
 }
 
@@ -206,4 +224,59 @@ export async function updateBarrierDB(id, patch) {
 }
 export async function deleteBarrierDB(id) {
   await sb(`bowtie_barriers?id=eq.${id}`, { method: "DELETE", prefer: "return=minimal" });
+}
+
+// ==========================================================
+// Phase 4 — Escalation Factors & Escalation Controls
+// ==========================================================
+
+function escFactorFromRow(r) {
+  return { id: r.id, barrierId: r.barrier_id, label: r.label || "", orderIndex: r.order_index || 0, posX: r.pos_x || 0, posY: r.pos_y || 0 };
+}
+function escControlFromRow(r) {
+  return {
+    id: r.id, escalationFactorId: r.escalation_factor_id, label: r.label || "",
+    owner: r.owner || "", status: r.status || "green", orderIndex: r.order_index || 0,
+    posX: r.pos_x || 0, posY: r.pos_y || 0,
+  };
+}
+
+export async function insertEscalationFactor(barrierId, label, orderIndex) {
+  const id = uid("escf");
+  const rows = await sb("bowtie_escalation_factors", { method: "POST", body: JSON.stringify([{ id, barrier_id: barrierId, label, order_index: orderIndex }]) });
+  if (!sbOk(rows)) return { __error: true, message: sbErrMsg(rows) };
+  return escFactorFromRow(rows[0]);
+}
+export async function updateEscalationFactorDB(id, patch) {
+  const dbPatch = {};
+  if ("label" in patch) dbPatch.label = patch.label;
+  if ("posX" in patch) dbPatch.pos_x = patch.posX;
+  if ("posY" in patch) dbPatch.pos_y = patch.posY;
+  const rows = await sb(`bowtie_escalation_factors?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(dbPatch) });
+  if (!sbOk(rows)) return { __error: true, message: sbErrMsg(rows) };
+  return escFactorFromRow(rows[0]);
+}
+export async function deleteEscalationFactorDB(id) {
+  await sb(`bowtie_escalation_factors?id=eq.${id}`, { method: "DELETE", prefer: "return=minimal" });
+}
+
+export async function insertEscalationControl(escalationFactorId, label, orderIndex) {
+  const id = uid("escc");
+  const rows = await sb("bowtie_escalation_controls", { method: "POST", body: JSON.stringify([{ id, escalation_factor_id: escalationFactorId, label, order_index: orderIndex }]) });
+  if (!sbOk(rows)) return { __error: true, message: sbErrMsg(rows) };
+  return escControlFromRow(rows[0]);
+}
+export async function updateEscalationControlDB(id, patch) {
+  const dbPatch = {};
+  if ("label" in patch) dbPatch.label = patch.label;
+  if ("owner" in patch) dbPatch.owner = patch.owner;
+  if ("status" in patch) dbPatch.status = patch.status;
+  if ("posX" in patch) dbPatch.pos_x = patch.posX;
+  if ("posY" in patch) dbPatch.pos_y = patch.posY;
+  const rows = await sb(`bowtie_escalation_controls?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(dbPatch) });
+  if (!sbOk(rows)) return { __error: true, message: sbErrMsg(rows) };
+  return escControlFromRow(rows[0]);
+}
+export async function deleteEscalationControlDB(id) {
+  await sb(`bowtie_escalation_controls?id=eq.${id}`, { method: "DELETE", prefer: "return=minimal" });
 }
