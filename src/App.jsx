@@ -476,33 +476,20 @@ function resizeImageFile(file, maxDim = 1280, quality = 0.72) {
 // ---------- لوگوی سامانه (نشان IHMS با سیلوئت نیروگاه در پس‌زمینه) ----------
 function IhmsLogo({ size = 96 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 200 200" role="img" aria-label="IHMS">
-      <defs>
-        <clipPath id="ihmsCircleClip"><circle cx="100" cy="100" r="96" /></clipPath>
-      </defs>
-      <circle cx="100" cy="100" r="98" fill="#fff" stroke="#0f5132" strokeWidth="4" />
-      <g clipPath="url(#ihmsCircleClip)">
-        <image href="./plant-bg.png" x="0" y="118" width="200" height="82" preserveAspectRatio="xMidYMax slice" opacity="0.32" />
-      </g>
-      <text x="100" y="88" textAnchor="middle" fontSize="32" fontWeight="700" fill="#0f5132" letterSpacing="1" fontFamily="Tahoma, Arial, sans-serif">IHMS</text>
-      <path d="M68 104 C 84 111, 116 111, 132 104" stroke="#7a1332" strokeWidth="2" fill="none" strokeLinecap="round" />
-      <g transform="translate(52,112) scale(0.55)">
-        <path d="M18 0 C30 0 36 8 36 18 C36 30 26 40 18 45 C10 40 0 30 0 18 C0 8 6 0 18 0 Z" fill="#7a1332" />
-        <path d="M9 18 C9 12 13 8 18 8 C23 8 27 12 27 18 L27 22 L9 22 Z" fill="white" />
-        <rect x="6" y="21" width="24" height="4" rx="2" fill="white" />
-      </g>
-      <g transform="translate(88,114) scale(0.5)">
-        <path d="M18 42 C7 33 0 24 0 15 C0 7 6 1 14 1 C18 1 22 4 24 8 C26 4 30 1 34 1 C42 1 48 7 48 15 C48 24 41 33 30 42 L24 47 Z" fill="#0f5132" />
-        <polyline points="4,20 14,20 18,10 22,28 26,16 30,20 44,20" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-      </g>
-      <g transform="translate(126,112) scale(0.55)">
-        <circle cx="18" cy="20" r="20" fill="#7a1332" />
-        <path d="M9 26 C9 14 20 10 27 10 C27 18 22 28 12 28 C10 28 9 27 9 26 Z" fill="white" />
-      </g>
-    </svg>
+    <img
+    src={`${import.meta.env.BASE_URL}logo.png`}
+      alt="IHMS Logo"
+      width={size}
+      height={size}
+      style={{
+        width: size,
+        height: size,
+        objectFit: "contain",
+        display: "block",
+      }}
+    />
   );
 }
-
 function LoginScreen({ onLogin }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
