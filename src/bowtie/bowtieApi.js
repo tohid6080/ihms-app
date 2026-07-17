@@ -150,8 +150,8 @@ export async function loadBowtieCanvas(bowtieId) {
   };
 }
 
-export async function insertThreat(bowtieId, label, orderIndex) {
-  const id = uid("threat");
+export async function insertThreat(bowtieId, label, orderIndex, explicitId) {
+  const id = explicitId || uid("threat");
   const rows = await sb("bowtie_threats", { method: "POST", body: JSON.stringify([{ id, bowtie_id: bowtieId, label, order_index: orderIndex }]) });
   if (!sbOk(rows)) return { __error: true, message: sbErrMsg(rows) };
   return threatFromRow(rows[0]);
@@ -169,8 +169,8 @@ export async function deleteThreatDB(id) {
   await sb(`bowtie_threats?id=eq.${id}`, { method: "DELETE", prefer: "return=minimal" });
 }
 
-export async function insertConsequence(bowtieId, label, orderIndex) {
-  const id = uid("cons");
+export async function insertConsequence(bowtieId, label, orderIndex, explicitId) {
+  const id = explicitId || uid("cons");
   const rows = await sb("bowtie_consequences", { method: "POST", body: JSON.stringify([{ id, bowtie_id: bowtieId, label, order_index: orderIndex }]) });
   if (!sbOk(rows)) return { __error: true, message: sbErrMsg(rows) };
   return consequenceFromRow(rows[0]);
@@ -189,7 +189,7 @@ export async function deleteConsequenceDB(id) {
 }
 
 export async function insertBarrier(rec) {
-  const id = uid("barrier");
+  const id = rec.explicitId || uid("barrier");
   const body = [{
     id,
     bowtie_id: rec.bowtieId,
@@ -241,8 +241,8 @@ function escControlFromRow(r) {
   };
 }
 
-export async function insertEscalationFactor(barrierId, label, orderIndex) {
-  const id = uid("escf");
+export async function insertEscalationFactor(barrierId, label, orderIndex, explicitId) {
+  const id = explicitId || uid("escf");
   const rows = await sb("bowtie_escalation_factors", { method: "POST", body: JSON.stringify([{ id, barrier_id: barrierId, label, order_index: orderIndex }]) });
   if (!sbOk(rows)) return { __error: true, message: sbErrMsg(rows) };
   return escFactorFromRow(rows[0]);
@@ -260,8 +260,8 @@ export async function deleteEscalationFactorDB(id) {
   await sb(`bowtie_escalation_factors?id=eq.${id}`, { method: "DELETE", prefer: "return=minimal" });
 }
 
-export async function insertEscalationControl(escalationFactorId, label, orderIndex) {
-  const id = uid("escc");
+export async function insertEscalationControl(escalationFactorId, label, orderIndex, explicitId) {
+  const id = explicitId || uid("escc");
   const rows = await sb("bowtie_escalation_controls", { method: "POST", body: JSON.stringify([{ id, escalation_factor_id: escalationFactorId, label, order_index: orderIndex }]) });
   if (!sbOk(rows)) return { __error: true, message: sbErrMsg(rows) };
   return escControlFromRow(rows[0]);

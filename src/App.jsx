@@ -490,6 +490,7 @@ function IhmsLogo({ size = 96 }) {
     />
   );
 }
+
 function LoginScreen({ onLogin }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");

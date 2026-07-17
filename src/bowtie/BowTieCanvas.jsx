@@ -1,5 +1,5 @@
-import React, { useState, useRef } from "react";
-import { Plus, ZoomIn, ZoomOut, Maximize2, ShieldAlert } from "lucide-react";
+import React, { useState, useRef, useEffect } from "react";
+import { Plus, ZoomIn, ZoomOut, Maximize2, ShieldAlert, Undo2, Redo2, ImageDown, FileDown, FileSpreadsheet, Check, Loader2 } from "lucide-react";
 import { THEME } from "../shared.js";
 import {
   insertThreat, updateThreatDB, deleteThreatDB,
@@ -9,6 +9,7 @@ import {
   insertEscalationControl, updateEscalationControlDB, deleteEscalationControlDB,
   BARRIER_STATUS,
 } from "./bowtieApi.js";
+import { exportCanvasPng, exportCanvasPdf, exportBowtieExcel } from "./bowtieExport.js";
 import NodeInspectorPanel from "./NodeInspectorPanel.jsx";
 
 /**
@@ -85,6 +86,107 @@ export default function BowTieCanvas({ bowtie, threats, consequences, barriers, 
   const [, forceTick] = useState(0);
   const liveOverridesRef = useRef({});
 
+  // ---------- Phase 5: history (undo/redo) + auto-save indicator ----------
+  const historyRef = useRef({ stack: [], index: -1 });
+  const [, historyTick] = useState(0);
+  const [saveStatus, setSaveStatus] = useState("idle"); // idle | saving | saved
+  const saveTimerRef = useRef(null);
+
+  const flashSaved = () => {
+    setSaveStatus("saved");
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => setSaveStatus("idle"), 1600);
+  };
+
+  const withAutoSave = async (fn) => {
+    setSaveStatus("saving");
+    await fn();
+    onDataChange();
+    flashSaved();
+  };
+
+  const pushHistory = (entry) => {
+    const h = historyRef.current;
+    h.stack = h.stack.slice(0, h.index + 1);
+    h.stack.push(entry);
+    h.index = h.stack.length - 1;
+    historyTick((n) => n + 1);
+  };
+
+  const undo = async () => {
+    if (readOnly) return;
+    const h = historyRef.current;
+    if (h.index < 0) return;
+    const entry = h.stack[h.index];
+    setSaveStatus("saving");
+    await entry.undo();
+    h.index -= 1;
+    historyTick((n) => n + 1);
+    onDataChange();
+    flashSaved();
+  };
+  const redo = async () => {
+    if (readOnly) return;
+    const h = historyRef.current;
+    if (h.index >= h.stack.length - 1) return;
+    const entry = h.stack[h.index + 1];
+    setSaveStatus("saving");
+    await entry.redo();
+    h.index += 1;
+    historyTick((n) => n + 1);
+    onDataChange();
+    flashSaved();
+  };
+  const canUndo = historyRef.current.index >= 0;
+  const canRedo = historyRef.current.index < historyRef.current.stack.length - 1;
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (readOnly) return;
+      const tag = (e.target?.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+      else if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey))) { e.preventDefault(); redo(); }
+      else if ((e.key === "Delete" || e.key === "Backspace") && selected && selected.type !== "topEvent") {
+        e.preventDefault();
+        handleInspectorDelete(selected.type, selected.id);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readOnly, selected]);
+
+  // ---------- subtree capture/restore (for full-fidelity delete undo) ----------
+  const captureFactorSubtree = (factorId) => ({
+    factor: escalationFactors.find((f) => f.id === factorId),
+    controls: escalationControls.filter((c) => c.escalationFactorId === factorId),
+  });
+  const captureBarrierSubtree = (barrierId) => ({
+    barrier: barriers.find((b) => b.id === barrierId),
+    factors: factorsFor(barrierId).map((f) => captureFactorSubtree(f.id)),
+  });
+
+  const restoreFactorSubtree = async (snap) => {
+    const f = snap.factor;
+    await insertEscalationFactor(f.barrierId, f.label, f.orderIndex, f.id);
+    if (f.posX || f.posY) await updateEscalationFactorDB(f.id, { posX: f.posX, posY: f.posY });
+    for (const c of snap.controls) {
+      await insertEscalationControl(c.escalationFactorId, c.label, c.orderIndex, c.id);
+      await updateEscalationControlDB(c.id, { owner: c.owner, status: c.status, posX: c.posX, posY: c.posY });
+    }
+  };
+  const restoreBarrierSubtree = async (snap) => {
+    const b = snap.barrier;
+    await insertBarrier({
+      explicitId: b.id, bowtieId: bowtie.id, side: b.side, threatId: b.threatId, consequenceId: b.consequenceId,
+      orderIndex: b.orderIndex, label: b.label, owner: b.owner, criticality: b.criticality, status: b.status,
+      verificationDate: b.verificationDate, isCriticalControl: b.isCriticalControl,
+    });
+    if (b.posX || b.posY) await updateBarrierDB(b.id, { posX: b.posX, posY: b.posY });
+    for (const fSnap of snap.factors) await restoreFactorSubtree(fSnap);
+  };
+
   const threatsForBowtie = threats;
   const consForBowtie = consequences;
 
@@ -118,7 +220,7 @@ export default function BowTieCanvas({ bowtie, threats, consequences, barriers, 
     if (readOnly) return;
     e.stopPropagation();
     const start = toWorld(e.clientX, e.clientY);
-    dragRef.current = { kind: "node", nodeKind: kind, id: node.id, offX: currentX - start.x, offY: currentY - start.y, moved: false };
+    dragRef.current = { kind: "node", nodeKind: kind, id: node.id, offX: currentX - start.x, offY: currentY - start.y, startX: currentX, startY: currentY, moved: false };
     window.addEventListener("pointermove", onWindowPointerMove);
     window.addEventListener("pointerup", onWindowPointerUp);
   };
@@ -152,12 +254,19 @@ export default function BowTieCanvas({ bowtie, threats, consequences, barriers, 
       if (d.moved) {
         const pos = liveOverridesRef.current[d.id];
         if (pos) {
-          if (d.nodeKind === "threat") await updateThreatDB(d.id, { posX: pos.x, posY: pos.y });
-          else if (d.nodeKind === "consequence") await updateConsequenceDB(d.id, { posX: pos.x, posY: pos.y });
-          else if (d.nodeKind === "barrier") await updateBarrierDB(d.id, { posX: pos.x, posY: pos.y });
-          else if (d.nodeKind === "escalationFactor") await updateEscalationFactorDB(d.id, { posX: pos.x, posY: pos.y });
-          else if (d.nodeKind === "escalationControl") await updateEscalationControlDB(d.id, { posX: pos.x, posY: pos.y });
+          const before = { x: d.startX, y: d.startY };
+          const updater = {
+            threat: updateThreatDB, consequence: updateConsequenceDB, barrier: updateBarrierDB,
+            escalationFactor: updateEscalationFactorDB, escalationControl: updateEscalationControlDB,
+          }[d.nodeKind];
+          setSaveStatus("saving");
+          await updater(d.id, { posX: pos.x, posY: pos.y });
+          pushHistory({
+            undo: () => updater(d.id, { posX: before.x, posY: before.y }),
+            redo: () => updater(d.id, { posX: pos.x, posY: pos.y }),
+          });
           onDataChange();
+          flashSaved();
         }
       } else {
         setSelected({ type: d.nodeKind, id: d.id });
@@ -174,56 +283,119 @@ export default function BowTieCanvas({ bowtie, threats, consequences, barriers, 
   const addThreat = async () => {
     const label = prompt("عنوان تهدید (Threat) جدید:");
     if (!label || !label.trim()) return;
-    await insertThreat(bowtie.id, label.trim(), threatsForBowtie.length);
+    setSaveStatus("saving");
+    const inserted = await insertThreat(bowtie.id, label.trim(), threatsForBowtie.length);
+    if (inserted?.__error) { setSaveStatus("idle"); alert(`خطا: ${inserted.message}`); return; }
+    pushHistory({ undo: () => deleteThreatDB(inserted.id), redo: () => insertThreat(bowtie.id, inserted.label, inserted.orderIndex, inserted.id) });
     onDataChange();
+    flashSaved();
   };
   const addConsequence = async () => {
     const label = prompt("عنوان پیامد (Consequence) جدید:");
     if (!label || !label.trim()) return;
-    await insertConsequence(bowtie.id, label.trim(), consForBowtie.length);
+    setSaveStatus("saving");
+    const inserted = await insertConsequence(bowtie.id, label.trim(), consForBowtie.length);
+    if (inserted?.__error) { setSaveStatus("idle"); alert(`خطا: ${inserted.message}`); return; }
+    pushHistory({ undo: () => deleteConsequenceDB(inserted.id), redo: () => insertConsequence(bowtie.id, inserted.label, inserted.orderIndex, inserted.id) });
     onDataChange();
+    flashSaved();
   };
   const addBarrier = async (side, parentId) => {
     const label = prompt(side === "preventive" ? "عنوان مانع پیشگیرانه (Preventive Barrier):" : "عنوان مانع بازیابی (Recovery Barrier):");
     if (!label || !label.trim()) return;
+    setSaveStatus("saving");
     const count = barriersFor(side, parentId).length;
-    await insertBarrier({
+    const rec = {
       bowtieId: bowtie.id, side, threatId: side === "preventive" ? parentId : null,
       consequenceId: side === "recovery" ? parentId : null, orderIndex: count, label: label.trim(),
-    });
+    };
+    const inserted = await insertBarrier(rec);
+    if (inserted?.__error) { setSaveStatus("idle"); alert(`خطا: ${inserted.message}`); return; }
+    pushHistory({ undo: () => deleteBarrierDB(inserted.id), redo: () => insertBarrier({ ...rec, explicitId: inserted.id }) });
     onDataChange();
+    flashSaved();
   };
   const addEscalationFactor = async (barrierId) => {
     const label = prompt("عنوان عامل تشدیدکننده (Escalation Factor):");
     if (!label || !label.trim()) return;
-    await insertEscalationFactor(barrierId, label.trim(), factorsFor(barrierId).length);
+    setSaveStatus("saving");
+    const orderIndex = factorsFor(barrierId).length;
+    const inserted = await insertEscalationFactor(barrierId, label.trim(), orderIndex);
+    if (inserted?.__error) { setSaveStatus("idle"); alert(`خطا: ${inserted.message}`); return; }
+    pushHistory({ undo: () => deleteEscalationFactorDB(inserted.id), redo: () => insertEscalationFactor(barrierId, inserted.label, orderIndex, inserted.id) });
     onDataChange();
+    flashSaved();
   };
   const addEscalationControl = async (factorId) => {
     const label = prompt("عنوان کنترل تشدید (Escalation Control):");
     if (!label || !label.trim()) return;
-    await insertEscalationControl(factorId, label.trim(), controlsFor(factorId).length);
+    setSaveStatus("saving");
+    const orderIndex = controlsFor(factorId).length;
+    const inserted = await insertEscalationControl(factorId, label.trim(), orderIndex);
+    if (inserted?.__error) { setSaveStatus("idle"); alert(`خطا: ${inserted.message}`); return; }
+    pushHistory({ undo: () => deleteEscalationControlDB(inserted.id), redo: () => insertEscalationControl(factorId, inserted.label, orderIndex, inserted.id) });
     onDataChange();
+    flashSaved();
   };
 
+  const updaterFor = (type) => ({
+    threat: updateThreatDB, consequence: updateConsequenceDB, barrier: updateBarrierDB,
+    escalationFactor: updateEscalationFactorDB, escalationControl: updateEscalationControlDB,
+  }[type]);
+
   const handleInspectorSave = async (type, id, patch) => {
-    if (type === "threat") await updateThreatDB(id, patch);
-    else if (type === "consequence") await updateConsequenceDB(id, patch);
-    else if (type === "barrier") await updateBarrierDB(id, patch);
-    else if (type === "escalationFactor") await updateEscalationFactorDB(id, patch);
-    else if (type === "escalationControl") await updateEscalationControlDB(id, patch);
+    const updater = updaterFor(type);
+    const before = selectedNode ? { ...selectedNode } : null;
+    setSaveStatus("saving");
+    await updater(id, patch);
+    if (before) {
+      const beforePatch = {};
+      Object.keys(patch).forEach((k) => { beforePatch[k] = before[k]; });
+      pushHistory({ undo: () => updater(id, beforePatch), redo: () => updater(id, patch) });
+    }
     onDataChange();
     setSelected(null);
+    flashSaved();
   };
+
   const handleInspectorDelete = async (type, id) => {
     if (!confirm("این المان حذف شود؟")) return;
-    if (type === "threat") await deleteThreatDB(id);
-    else if (type === "consequence") await deleteConsequenceDB(id);
-    else if (type === "barrier") await deleteBarrierDB(id);
-    else if (type === "escalationFactor") await deleteEscalationFactorDB(id);
-    else if (type === "escalationControl") await deleteEscalationControlDB(id);
+    setSaveStatus("saving");
+    if (type === "threat") {
+      const node = threatsForBowtie.find((t) => t.id === id);
+      const barrierSnaps = barriersFor("preventive", id).map((b) => captureBarrierSubtree(b.id));
+      await deleteThreatDB(id);
+      pushHistory({
+        undo: async () => { await insertThreat(bowtie.id, node.label, node.orderIndex, node.id); if (node.posX || node.posY) await updateThreatDB(node.id, { posX: node.posX, posY: node.posY }); for (const s of barrierSnaps) await restoreBarrierSubtree(s); },
+        redo: () => deleteThreatDB(id),
+      });
+    } else if (type === "consequence") {
+      const node = consForBowtie.find((c) => c.id === id);
+      const barrierSnaps = barriersFor("recovery", id).map((b) => captureBarrierSubtree(b.id));
+      await deleteConsequenceDB(id);
+      pushHistory({
+        undo: async () => { await insertConsequence(bowtie.id, node.label, node.orderIndex, node.id); if (node.posX || node.posY) await updateConsequenceDB(node.id, { posX: node.posX, posY: node.posY }); for (const s of barrierSnaps) await restoreBarrierSubtree(s); },
+        redo: () => deleteConsequenceDB(id),
+      });
+    } else if (type === "barrier") {
+      const snap = captureBarrierSubtree(id);
+      await deleteBarrierDB(id);
+      pushHistory({ undo: () => restoreBarrierSubtree(snap), redo: () => deleteBarrierDB(id) });
+    } else if (type === "escalationFactor") {
+      const snap = captureFactorSubtree(id);
+      await deleteEscalationFactorDB(id);
+      pushHistory({ undo: () => restoreFactorSubtree(snap), redo: () => deleteEscalationFactorDB(id) });
+    } else if (type === "escalationControl") {
+      const node = escalationControls.find((c) => c.id === id);
+      await deleteEscalationControlDB(id);
+      pushHistory({
+        undo: async () => { await insertEscalationControl(node.escalationFactorId, node.label, node.orderIndex, node.id); await updateEscalationControlDB(node.id, { owner: node.owner, status: node.status, posX: node.posX, posY: node.posY }); },
+        redo: () => deleteEscalationControlDB(id),
+      });
+    }
     onDataChange();
     setSelected(null);
+    flashSaved();
   };
 
   const selectedNode =
@@ -259,15 +431,30 @@ export default function BowTieCanvas({ bowtie, threats, consequences, barriers, 
 
   return (
     <div style={{ position: "relative", width: "100%", height: "74vh", background: "#f7f9fb", borderRadius: 14, border: `1px solid ${THEME.border}`, overflow: "hidden" }}>
-      <div style={{ position: "absolute", top: 10, insetInlineStart: 10, zIndex: 5, display: "flex", gap: 6, flexWrap: "wrap" }}>
+      <div style={{ position: "absolute", top: 10, insetInlineStart: 10, zIndex: 5, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
         {!readOnly && (
           <>
             <button type="button" onClick={addThreat} style={toolBtnStyle(THEME.teal)}><Plus size={13} /> تهدید</button>
             <button type="button" onClick={addConsequence} style={toolBtnStyle("#c2410c")}><Plus size={13} /> پیامد</button>
+            <div style={{ width: 1, height: 22, background: THEME.border, margin: "0 2px" }} />
+            <button type="button" onClick={undo} disabled={!canUndo} style={{ ...iconBtnStyle, opacity: canUndo ? 1 : 0.4, cursor: canUndo ? "pointer" : "default" }} title="واگرد (Ctrl+Z)"><Undo2 size={15} /></button>
+            <button type="button" onClick={redo} disabled={!canRedo} style={{ ...iconBtnStyle, opacity: canRedo ? 1 : 0.4, cursor: canRedo ? "pointer" : "default" }} title="ازنو (Ctrl+Y)"><Redo2 size={15} /></button>
+            <SaveIndicator status={saveStatus} />
           </>
         )}
       </div>
       <div style={{ position: "absolute", top: 10, insetInlineEnd: 10, zIndex: 5, display: "flex", gap: 6 }}>
+        <button type="button" onClick={() => svgRef.current && exportCanvasPng(svgRef.current, bowtie.title)} style={iconBtnStyle} title="خروجی تصویر PNG"><ImageDown size={15} /></button>
+        <button type="button" onClick={() => svgRef.current && exportCanvasPdf(svgRef.current, bowtie.title)} style={iconBtnStyle} title="خروجی PDF"><FileDown size={15} /></button>
+        <button
+          type="button"
+          onClick={() => exportBowtieExcel(bowtie, threatsForBowtie, consForBowtie, barriers, escalationFactors, escalationControls, bowtie.title)}
+          style={iconBtnStyle}
+          title="خروجی Excel (جدول موانع)"
+        >
+          <FileSpreadsheet size={15} />
+        </button>
+        <div style={{ width: 1, height: 22, background: THEME.border, margin: "0 2px" }} />
         <button type="button" onClick={() => zoomBy(1.15)} style={iconBtnStyle}><ZoomIn size={15} /></button>
         <button type="button" onClick={() => zoomBy(0.87)} style={iconBtnStyle}><ZoomOut size={15} /></button>
         <button type="button" onClick={resetView} style={iconBtnStyle}><Maximize2 size={15} /></button>
@@ -409,6 +596,23 @@ export default function BowTieCanvas({ bowtie, threats, consequences, barriers, 
           onSave={(patch) => handleInspectorSave(selected.type, selected.id, patch)}
           onDelete={selected.type === "topEvent" ? null : () => handleInspectorDelete(selected.type, selected.id)}
         />
+      )}
+    </div>
+  );
+}
+
+function SaveIndicator({ status }) {
+  if (status === "idle") return null;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, color: status === "saving" ? THEME.text3 : "#166534", fontFamily: THEME.font }}>
+      {status === "saving" ? (
+        <>
+          <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />
+          در حال ذخیره...
+          <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+        </>
+      ) : (
+        <><Check size={13} /> ذخیره شد</>
       )}
     </div>
   );
