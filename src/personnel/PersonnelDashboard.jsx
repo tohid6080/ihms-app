@@ -1,0 +1,226 @@
+import React, { useState, useEffect } from "react";
+import { Plus, Search, Users, FileSpreadsheet, FileDown, BarChart3 } from "lucide-react";
+import { styles, THEME } from "../shared.js";
+import { loadPersonnelListOfflineFirst, personnelStatusMeta, checkAndUpdateDeadlines, loadNotifications, loadContractorOptions, PERSONNEL_STATUS } from "./personnelApi.js";
+import { exportPersonnelPdf, exportPersonnelExcel } from "./personnelExport.js";
+import PersonnelForm from "./PersonnelForm.jsx";
+import PersonnelDetail from "./PersonnelDetail.jsx";
+import NotificationPanel from "./NotificationPanel.jsx";
+import PersonnelManagementDashboard from "./PersonnelManagementDashboard.jsx";
+import SyncStatusBadge from "../offline/SyncStatusBadge.jsx";
+
+/**
+ * Entry point for the Personnel Access Management module.
+ * Self-contained internal routing (list ⇄ form ⇄ detail), same pattern as
+ * BowTieDashboard ⇄ BowTieEditor — App.jsx only needs one route to this file.
+ */
+export default function PersonnelDashboard({ onBack, currentUser, role, initialStatusFilter, initialContractorFilter, readOnly }) {
+  const [list, setList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState(initialStatusFilter || "all");
+  const [contractorFilter, setContractorFilter] = useState(initialContractorFilter || "all");
+  const [contractorOptions, setContractorOptions] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [selected, setSelected] = useState(null);
+  const [showManagement, setShowManagement] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [exporting, setExporting] = useState(false);
+
+  const isContractor = role === "CONTRACTOR";
+
+  useEffect(() => {
+    if (!isContractor) loadContractorOptions().then(setContractorOptions);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const loadNotifs = async (scopedList) => {
+    const raw = await loadNotifications(isContractor ? "contractor" : "employer");
+    const filtered = isContractor ? raw.filter((n) => scopedList.some((p) => p.id === n.personnel_id)) : raw;
+    setNotifications(filtered);
+  };
+
+  const load = async () => {
+    const all = await loadPersonnelListOfflineFirst();
+    await checkAndUpdateDeadlines(all);
+    const refreshed = await loadPersonnelListOfflineFirst();
+    setList(refreshed);
+    const scopedList = isContractor && currentUser?.name
+      ? refreshed.filter((p) => (p.contractorName || "").trim().toLowerCase() === (currentUser.name || "").trim().toLowerCase())
+      : refreshed;
+    await loadNotifs(scopedList);
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, []);
+
+  const scoped = isContractor && currentUser?.name
+    ? list.filter((p) => (p.contractorName || "").trim().toLowerCase() === (currentUser.name || "").trim().toLowerCase())
+    : list;
+
+  const filtered = scoped.filter((p) => {
+    if (statusFilter !== "all" && p.status !== statusFilter) return false;
+    if (!isContractor && contractorFilter !== "all" && p.contractorId !== contractorFilter) return false;
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      const hay = `${p.fullName} ${p.nationalCode} ${p.contractorName} ${p.jobTitle}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const handleExportPdf = async () => {
+    setExporting(true);
+    await exportPersonnelPdf(filtered, "لیست پرسنل - IHMS");
+    setExporting(false);
+  };
+  const handleExportExcel = async () => {
+    setExporting(true);
+    await exportPersonnelExcel(filtered, "لیست پرسنل - IHMS");
+    setExporting(false);
+  };
+
+  const counts = {
+    active: scoped.filter((p) => p.status === "active").length,
+    pendingReview: scoped.filter((p) => p.status === "pending_documents" || p.status === "pending_employer_review").length,
+    pendingQualification: scoped.filter((p) => p.status === "pending_qualification").length,
+    pendingHealthVisit: scoped.filter((p) => p.status === "pending_health_visit").length,
+    pendingHealthResult: scoped.filter((p) => p.status === "pending_health_result").length,
+    healthExpired: scoped.filter((p) => p.status === "health_expired").length,
+  };
+
+  const byContractor = {};
+  scoped.forEach((p) => {
+    const key = p.contractorName || "نامشخص";
+    byContractor[key] = (byContractor[key] || 0) + 1;
+  });
+
+  if (loading) return <div style={{ padding: 24, textAlign: "center", color: THEME.text3 }}>در حال بارگذاری...</div>;
+
+  if (showForm && !readOnly) {
+    return <PersonnelForm onBack={() => setShowForm(false)} currentUser={currentUser} onSaved={() => { setShowForm(false); load(); }} />;
+  }
+  if (selected) {
+    return (
+      <PersonnelDetail
+        personnel={selected}
+        role={role}
+        currentUser={currentUser}
+        readOnly={readOnly}
+        onBack={() => { setSelected(null); load(); }}
+        onUpdated={(p) => setSelected(p)}
+      />
+    );
+  }
+  if (showManagement) {
+    return (
+      <PersonnelManagementDashboard
+        personnelList={scoped}
+        contractorOptions={contractorOptions}
+        isContractor={isContractor}
+        onClose={() => setShowManagement(false)}
+      />
+    );
+  }
+
+  return (
+    <div style={{ maxWidth: 720, margin: "0 auto", padding: 24 }}>
+      {onBack && <div style={styles.backLink} onClick={onBack}>← بازگشت به منو</div>}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 4 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <Users size={20} color={THEME.teal} />
+          <h2 style={{ margin: 0, fontSize: 19, color: THEME.navy, fontWeight: 700 }}>مدیریت ورود و تردد پرسنل</h2>
+        </div>
+        <NotificationPanel notifications={notifications} onChanged={() => loadNotifs(scoped)} />
+      </div>
+      <p style={{ color: THEME.text3, fontSize: 12.5, marginTop: 4, marginBottom: 18 }}>ثبت، بررسی مدارک، تأیید صلاحیت و پیگیری طب کار پرسنل پیمانکاران</p>
+
+      <div style={styles.statsRow}>
+        <div style={{ ...styles.statBox, background: "#dcfce7" }}><div style={{ ...styles.statNum, color: "#166534" }}>{counts.active}</div><div style={styles.statLabel}>فعال</div></div>
+        <div style={{ ...styles.statBox, background: "#dbeafe" }}><div style={{ ...styles.statNum, color: "#1d4ed8" }}>{counts.pendingReview}</div><div style={styles.statLabel}>در انتظار تأیید</div></div>
+        <div style={{ ...styles.statBox, background: "#fef3c7" }}><div style={{ ...styles.statNum, color: "#b45309" }}>{counts.pendingQualification}</div><div style={styles.statLabel}>در انتظار صلاحیت</div></div>
+        <div style={{ ...styles.statBox, background: "#fef3c7" }}><div style={{ ...styles.statNum, color: "#b45309" }}>{counts.pendingHealthVisit}</div><div style={styles.statLabel}>در انتظار مراجعه طب کار</div></div>
+        <div style={{ ...styles.statBox, background: "#fef3c7" }}><div style={{ ...styles.statNum, color: "#b45309" }}>{counts.pendingHealthResult}</div><div style={styles.statLabel}>در انتظار نتیجه طب کار</div></div>
+        <div style={{ ...styles.statBox, background: "#fdecec" }}><div style={{ ...styles.statNum, color: THEME.danger }}>{counts.healthExpired}</div><div style={styles.statLabel}>طب کار منقضی</div></div>
+      </div>
+
+      {!isContractor && Object.keys(byContractor).length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <h4 style={{ fontSize: 12.5, color: THEME.text2, marginBottom: 6, fontWeight: 600 }}>آمار هر پیمانکار</h4>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {Object.entries(byContractor).map(([name, c]) => (
+              <span key={name} style={styles.badge}>{name}: {c}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
+        {!readOnly && (
+          <div style={{ ...styles.menuCard, background: THEME.teal, color: "#fff", justifyContent: "center", flex: 1 }} onClick={() => setShowForm(true)}>
+            <Plus size={16} style={{ marginLeft: 6 }} /> ثبت پرسنل جدید
+          </div>
+        )}
+        <div style={{ ...styles.menuCard, background: THEME.navyMid, color: "#fff", justifyContent: "center", flex: 1 }} onClick={() => setShowManagement(true)}>
+          <BarChart3 size={16} style={{ marginLeft: 6 }} /> داشبورد مدیریتی
+        </div>
+      </div>
+
+      <div style={styles.filterBar}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, background: THEME.surface, borderRadius: 9, padding: "7px 11px", border: `1.5px solid ${THEME.border}` }}>
+          <Search size={16} color={THEME.text3} />
+          <input style={{ border: "none", outline: "none", flex: 1, fontSize: 14, fontFamily: THEME.font, background: "transparent" }} placeholder="جستجو (نام، کدملی، پیمانکار، شغل)..." value={search} onChange={(e) => setSearch(e.target.value)} dir="rtl" />
+        </div>
+        <select style={styles.filterSelect} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} dir="rtl">
+          <option value="all">همه وضعیت‌ها</option>
+          {PERSONNEL_STATUS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+        </select>
+        {!isContractor && (
+          <select style={styles.filterSelect} value={contractorFilter} onChange={(e) => setContractorFilter(e.target.value)} dir="rtl">
+            <option value="all">همه پیمانکاران</option>
+            {contractorOptions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        )}
+      </div>
+
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <button
+          type="button"
+          style={{ ...styles.smallButton, flex: 1, background: "#16a34a", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+          onClick={handleExportExcel}
+          disabled={exporting || filtered.length === 0}
+        >
+          <FileSpreadsheet size={15} /> خروجی Excel
+        </button>
+        <button
+          type="button"
+          style={{ ...styles.smallButton, flex: 1, background: THEME.navyMid, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+          onClick={handleExportPdf}
+          disabled={exporting || filtered.length === 0}
+        >
+          <FileDown size={15} /> خروجی PDF
+        </button>
+      </div>
+      {exporting && <p style={{ fontSize: 11.5, color: THEME.text3, marginTop: 6, textAlign: "center" }}>در حال آماده‌سازی گزارش و بارگذاری مدارک...</p>}
+
+      <h3 style={{ marginTop: 20, fontSize: 15.5, color: THEME.navy, fontWeight: 700 }}>پرسنل ({filtered.length})</h3>
+      {filtered.length === 0 && <p style={{ color: THEME.text3 }}>موردی یافت نشد.</p>}
+      {filtered.map((p) => {
+        const sm = personnelStatusMeta(p.status);
+        return (
+          <div key={p.id} style={{ ...styles.card, width: "auto", marginBottom: 10, borderInlineStart: `4px solid ${sm.color}`, cursor: "pointer" }} onClick={() => setSelected(p)}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+              <div>
+                <div style={{ fontWeight: 700, color: THEME.navy, fontSize: 14 }}>{p.fullName}</div>
+                <div style={{ fontSize: 11.5, color: THEME.text3, marginTop: 4 }}>{p.jobTitle} · {p.contractorName}</div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ ...styles.badge, color: sm.color, background: sm.bg }}>{sm.label}</span>
+                {p.syncStatus && p.syncStatus !== "synced" && <SyncStatusBadge status={p.syncStatus} onRetry={() => load()} />}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}

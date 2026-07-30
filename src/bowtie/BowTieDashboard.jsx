@@ -1,23 +1,31 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Trash2, Search, ShieldCheck, GitBranch } from "lucide-react";
+import { Plus, Trash2, Search, ShieldCheck, GitBranch, WifiOff } from "lucide-react";
 import { styles, THEME } from "../shared.js";
 import {
   BOWTIE_STATUSES,
   bowtieStatusMeta,
-  loadBowties,
+  loadBowtiesOfflineFirst,
   insertBowtie,
   updateBowtieDB,
   deleteBowtieDB,
 } from "./bowtieApi.js";
+import { isOnline } from "../offline/networkStatus.js";
+import SyncStatusBadge from "../offline/SyncStatusBadge.jsx";
 import BowTieEditor from "./BowTieEditor.jsx";
 
 /**
- * BowTie Risk Analysis — Dashboard (Phase 2).
+ * BowTie Risk Analysis — Dashboard.
  *
- * Scope: list + KPI counts + create/edit/delete BowTie records (metadata only).
- * The interactive diagram canvas is intentionally NOT built yet (Phase 3).
- * "Open canvas" is a placeholder button so the future entry point is visible
- * without pretending the feature exists yet.
+ * Offline-first for the BowTie *record itself* (create/edit/delete of the
+ * title/hazard/top-event/status metadata) — same as Personnel and Anomaly.
+ *
+ * The interactive Canvas (threats/consequences/barriers/escalation nodes,
+ * drag positions, undo/redo) is NOT offline-capable — that engine has ~15
+ * write paths plus an undo/redo history stack that assumes synchronous
+ * server confirmation, and wiring it through the offline queue safely is
+ * substantially more work than the other two modules. Rather than silently
+ * leave it broken offline, we block entry to the Canvas with a clear
+ * message when there's no connection.
  */
 export default function BowTieDashboard({ onBack, currentUser, readOnly }) {
   const [openBowtie, setOpenBowtie] = useState(null);
@@ -40,7 +48,7 @@ export default function BowTieDashboard({ onBack, currentUser, readOnly }) {
   const [editSaving, setEditSaving] = useState(false);
 
   const load = async () => {
-    setBowties(await loadBowties());
+    setBowties(await loadBowtiesOfflineFirst());
     setLoading(false);
   };
 
@@ -68,6 +76,7 @@ export default function BowTieDashboard({ onBack, currentUser, readOnly }) {
   };
 
   const handleCreate = async () => {
+    if (readOnly) { alert("شما مجوز ایجاد BowTie جدید را ندارید"); return; }
     if (!title.trim() || !hazard.trim() || !topEvent.trim()) {
       setFormError("عنوان، خطر (Hazard) و رویداد اصلی (Top Event) الزامی است");
       return;
@@ -79,7 +88,7 @@ export default function BowTieDashboard({ onBack, currentUser, readOnly }) {
       topEvent: topEvent.trim(),
       site: site.trim(),
       department: department.trim(),
-      createdBy: currentUser?.username || currentUser?.name || "",
+      createdBy: currentUser?.name || currentUser?.username || "",
     });
     setSaving(false);
     if (!inserted || inserted.__error) {
@@ -101,6 +110,7 @@ export default function BowTieDashboard({ onBack, currentUser, readOnly }) {
   };
 
   const saveEdit = async (id) => {
+    if (readOnly) { alert("شما مجوز ویرایش را ندارید"); return; }
     if (!editData.title?.trim() || !editData.hazard?.trim() || !editData.topEvent?.trim()) {
       alert("عنوان، خطر و رویداد اصلی نمی‌توانند خالی باشند");
       return;
@@ -117,6 +127,7 @@ export default function BowTieDashboard({ onBack, currentUser, readOnly }) {
   };
 
   const handleDelete = async (id, t) => {
+    if (readOnly) { alert("شما مجوز حذف را ندارید"); return; }
     if (confirm(`آیا از حذف BowTie «${t}» مطمئن هستید؟ این عمل قابل بازگشت نیست.`)) {
       await deleteBowtieDB(id);
       setBowties(bowties.filter((b) => b.id !== id));
@@ -230,6 +241,7 @@ export default function BowTieDashboard({ onBack, currentUser, readOnly }) {
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                   <span style={{ fontWeight: 700, color: THEME.navy, fontSize: 14.5 }}>{b.title}</span>
                   <span style={{ ...styles.badge, color: sm.color, background: sm.bg }}>{sm.label}</span>
+                  {b.syncStatus && b.syncStatus !== "synced" && <SyncStatusBadge status={b.syncStatus} onRetry={() => load()} />}
                 </div>
                 <div style={{ fontSize: 13, marginTop: 8, color: THEME.text }}>
                   <b style={{ color: THEME.text2 }}>خطر:</b> {b.hazard} &nbsp;·&nbsp; <b style={{ color: THEME.text2 }}>رویداد اصلی:</b> {b.topEvent}
@@ -250,7 +262,7 @@ export default function BowTieDashboard({ onBack, currentUser, readOnly }) {
                     <button
                       type="button"
                       style={{ ...styles.smallButton, background: THEME.navyMid, display: "flex", alignItems: "center", gap: 6, marginTop: 12 }}
-                      onClick={() => setOpenBowtie(b)}
+                      onClick={() => { if (!isOnline()) { alert("باز کردن Canvas نیاز به اتصال اینترنت دارد. لطفاً بعد از اتصال دوباره تلاش کنید."); return; } setOpenBowtie(b); }}
                     >
                       <GitBranch size={14} /> مشاهده Canvas
                     </button>
@@ -289,7 +301,7 @@ export default function BowTieDashboard({ onBack, currentUser, readOnly }) {
                       <button
                         type="button"
                         style={{ ...styles.smallButton, background: THEME.navyMid, display: "flex", alignItems: "center", gap: 6 }}
-                        onClick={() => setOpenBowtie(b)}
+                        onClick={() => { if (!isOnline()) { alert("باز کردن Canvas نیاز به اتصال اینترنت دارد. لطفاً بعد از اتصال دوباره تلاش کنید."); return; } setOpenBowtie(b); }}
                       >
                         <GitBranch size={14} /> باز کردن Canvas
                       </button>

@@ -281,6 +281,7 @@ export default function BowTieCanvas({ bowtie, threats, consequences, barriers, 
   const onWheel = (e) => { e.preventDefault(); zoomBy(e.deltaY < 0 ? 1.08 : 0.93); };
 
   const addThreat = async () => {
+    if (readOnly) { alert("شما مجوز ویرایش این BowTie را ندارید"); return; }
     const label = prompt("عنوان تهدید (Threat) جدید:");
     if (!label || !label.trim()) return;
     setSaveStatus("saving");
@@ -291,6 +292,7 @@ export default function BowTieCanvas({ bowtie, threats, consequences, barriers, 
     flashSaved();
   };
   const addConsequence = async () => {
+    if (readOnly) { alert("شما مجوز ویرایش این BowTie را ندارید"); return; }
     const label = prompt("عنوان پیامد (Consequence) جدید:");
     if (!label || !label.trim()) return;
     setSaveStatus("saving");
@@ -301,6 +303,7 @@ export default function BowTieCanvas({ bowtie, threats, consequences, barriers, 
     flashSaved();
   };
   const addBarrier = async (side, parentId) => {
+    if (readOnly) { alert("شما مجوز ویرایش این BowTie را ندارید"); return; }
     const label = prompt(side === "preventive" ? "عنوان مانع پیشگیرانه (Preventive Barrier):" : "عنوان مانع بازیابی (Recovery Barrier):");
     if (!label || !label.trim()) return;
     setSaveStatus("saving");
@@ -316,6 +319,7 @@ export default function BowTieCanvas({ bowtie, threats, consequences, barriers, 
     flashSaved();
   };
   const addEscalationFactor = async (barrierId) => {
+    if (readOnly) { alert("شما مجوز ویرایش این BowTie را ندارید"); return; }
     const label = prompt("عنوان عامل تشدیدکننده (Escalation Factor):");
     if (!label || !label.trim()) return;
     setSaveStatus("saving");
@@ -327,6 +331,7 @@ export default function BowTieCanvas({ bowtie, threats, consequences, barriers, 
     flashSaved();
   };
   const addEscalationControl = async (factorId) => {
+    if (readOnly) { alert("شما مجوز ویرایش این BowTie را ندارید"); return; }
     const label = prompt("عنوان کنترل تشدید (Escalation Control):");
     if (!label || !label.trim()) return;
     setSaveStatus("saving");
@@ -344,6 +349,7 @@ export default function BowTieCanvas({ bowtie, threats, consequences, barriers, 
   }[type]);
 
   const handleInspectorSave = async (type, id, patch) => {
+    if (readOnly) { alert("شما مجوز ویرایش این BowTie را ندارید"); return; }
     const updater = updaterFor(type);
     const before = selectedNode ? { ...selectedNode } : null;
     setSaveStatus("saving");
@@ -359,6 +365,7 @@ export default function BowTieCanvas({ bowtie, threats, consequences, barriers, 
   };
 
   const handleInspectorDelete = async (type, id) => {
+    if (readOnly) { alert("شما مجوز حذف این المان را ندارید"); return; }
     if (!confirm("این المان حذف شود؟")) return;
     setSaveStatus("saving");
     if (type === "threat") {

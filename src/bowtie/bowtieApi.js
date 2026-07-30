@@ -1,4 +1,7 @@
 import { sb, sbOk, sbErrMsg, uid } from "../shared.js";
+import { offlineWrite } from "../offline/offlineWrite.js";
+import { isOnline } from "../offline/networkStatus.js";
+import { getRecordsByModule, putRecord } from "../offline/offlineDb.js";
 
 /**
  * BowTie Risk Analysis — data access layer.
@@ -34,6 +37,7 @@ function bowtieFromRow(r) {
     createdBy: r.created_by || "",
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+    syncStatus: r.__syncStatus || "synced",
   };
 }
 
@@ -42,10 +46,33 @@ export async function loadBowties() {
   return (sbOk(rows) ? rows : []).map(bowtieFromRow);
 }
 
+/**
+ * Offline-first loader for the BowTie *list/metadata* only (title, hazard,
+ * status, etc.) — same pattern as anomalies/personnel. The canvas itself
+ * (threats/consequences/barriers/escalation nodes) still requires
+ * connectivity; see the note in BowTieCanvas.jsx.
+ */
+export async function loadBowtiesOfflineFirst() {
+  if (isOnline()) {
+    const rows = await sb("bowties?select=*&order=updated_at.desc");
+    if (sbOk(rows)) {
+      for (const r of rows) await putRecord("bowties", r.id, r, "synced");
+      const cached = await getRecordsByModule("bowties");
+      const serverIds = new Set(rows.map((r) => r.id));
+      const localOnly = cached.filter((c) => c.syncStatus !== "synced" && !serverIds.has(c.id) && !c.data?.deleted);
+      return [
+        ...localOnly.map((c) => bowtieFromRow({ ...c.data, __syncStatus: c.syncStatus })),
+        ...rows.map((r) => bowtieFromRow({ ...r, __syncStatus: "synced" })),
+      ];
+    }
+  }
+  const cached = await getRecordsByModule("bowties");
+  return cached.filter((c) => !c.data?.deleted).map((c) => bowtieFromRow({ ...c.data, __syncStatus: c.syncStatus }));
+}
+
 export async function insertBowtie(rec) {
   const id = uid("bowtie");
-  const body = [{
-    id,
+  const dbPayload = {
     title: rec.title,
     hazard: rec.hazard || "",
     top_event: rec.topEvent || "",
@@ -54,10 +81,10 @@ export async function insertBowtie(rec) {
     status: "draft",
     version: 1,
     created_by: rec.createdBy || "",
-  }];
-  const rows = await sb("bowties", { method: "POST", body: JSON.stringify(body) });
-  if (!sbOk(rows)) return { __error: true, message: sbErrMsg(rows) };
-  return bowtieFromRow(rows[0]);
+  };
+  const result = await offlineWrite({ module: "bowties", table: "bowties", action: "insert", id, payload: dbPayload });
+  if (!result.ok) return { __error: true, message: "خطا در ذخیره‌سازی" };
+  return { ...bowtieFromRow(result.record), syncStatus: result.offline ? "pending" : "synced" };
 }
 
 export async function updateBowtieDB(id, patch) {
@@ -69,13 +96,13 @@ export async function updateBowtieDB(id, patch) {
   if ("department" in patch) dbPatch.department = patch.department;
   if ("status" in patch) dbPatch.status = patch.status;
   if ("version" in patch) dbPatch.version = patch.version;
-  const rows = await sb(`bowties?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(dbPatch) });
-  if (!sbOk(rows)) return { __error: true, message: sbErrMsg(rows) };
-  return bowtieFromRow(rows[0]);
+  const result = await offlineWrite({ module: "bowties", table: "bowties", action: "update", id, payload: dbPatch });
+  if (!result.ok) return { __error: true, message: "خطا در ذخیره‌سازی" };
+  return { ...bowtieFromRow(result.record), syncStatus: result.offline ? "pending" : "synced" };
 }
 
 export async function deleteBowtieDB(id) {
-  await sb(`bowties?id=eq.${id}`, { method: "DELETE", prefer: "return=minimal" });
+  await offlineWrite({ module: "bowties", table: "bowties", action: "delete", id, payload: {} });
 }
 
 // ==========================================================

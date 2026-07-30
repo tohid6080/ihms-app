@@ -1,0 +1,10 @@
+{
+  "appId": "com.ihms.app",
+  "appName": "IHMS",
+  "webDir": "dist",
+  "loggingBehavior": "none",
+  "android": {
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": false
+  }
+}

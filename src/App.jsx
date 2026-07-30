@@ -1,7 +1,23 @@
 import React, { useState, useEffect } from "react";
-import { AlertTriangle, Plus, X, ChevronRight, LogOut, Search, Filter, CheckCircle2, Clock, Camera, ImagePlus, Trash2, FileSpreadsheet, FileText, User, Users, ShieldCheck, LayoutGrid } from "lucide-react";
+import { AlertTriangle, Plus, X, ChevronRight, LogOut, Search, Filter, CheckCircle2, Clock, Camera, ImagePlus, Trash2, FileSpreadsheet, FileText, User, Users, ShieldCheck, LayoutGrid, BarChart3, Briefcase, Settings } from "lucide-react";
 import * as XLSX from "xlsx";
 import BowTieDashboard from "./bowtie/BowTieDashboard.jsx";
+import PersonnelForm from "./personnel/PersonnelForm.jsx";
+import PersonnelDashboard from "./personnel/PersonnelDashboard.jsx";
+import HomeDashboard from "./dashboard/HomeDashboard.jsx";
+import PermissionManager from "./permissions/PermissionManager.jsx";
+import { loadPermissionsMap, isModuleVisible, getAccessLevel, initializeNoAccess } from "./permissions/permissionsApi.js";
+import JobPositionManager from "./jobpositions/JobPositionManager.jsx";
+import { loadActiveJobPositions, loadJobPositionTitle } from "./jobpositions/jobPositionsApi.js";
+import NotificationPanel from "./personnel/NotificationPanel.jsx";
+import { loadNotifications, loadPersonnelList } from "./personnel/personnelApi.js";
+import OnlineIndicator from "./offline/OnlineIndicator.jsx";
+import { offlineWrite } from "./offline/offlineWrite.js";
+import { isOnline } from "./offline/networkStatus.js";
+import { getRecordsByModule, putRecord, getQueue } from "./offline/offlineDb.js";
+import SyncStatusBadge from "./offline/SyncStatusBadge.jsx";
+import { retryItemNow } from "./offline/syncEngine.js";
+import { exportWorkbookNativeAware, exportHtmlReportNativeAware } from "./offline/nativeFile.js";
 import { APP_NAME, sb, sbOk, sbErrMsg, uid, todayISO, THEME, styles } from "./shared.js";
 
 /**
@@ -49,9 +65,6 @@ const HSE_MODULES = [
       { key: "anomalyList", label: "لیست آنومالی‌ها" },
     ],
   },
-  { key: "incident", label: "مدیریت حوادث (Incident Management)" },
-  { key: "nearMiss", label: "مدیریت شبه‌حوادث (Near Miss)" },
-  { key: "capa", label: "مدیریت اقدامات اصلاحی و پیشگیرانه (CAPA)" },
   {
     key: "riskAssessment",
     label: "مدیریت ارزیابی ریسک (Risk Assessment)",
@@ -61,15 +74,20 @@ const HSE_MODULES = [
       { key: "bowtieDashboard", label: "BowTie Risk Analysis" },
     ],
   },
-  { key: "hazards", label: "مدیریت عوامل زیان‌آور محیط کار" },
-  { key: "occupationalHealth", label: "مدیریت معاینات طب کار" },
-  { key: "training", label: "مدیریت آموزش‌های HSE" },
-  { key: "permit", label: "مدیریت مجوزهای کار (Permit to Work)" },
-  { key: "ppe", label: "مدیریت تجهیزات حفاظت فردی (PPE)" },
-  { key: "audit", label: "مدیریت ممیزی‌ها (Audit Management)" },
-  { key: "kpi", label: "مدیریت شاخص‌های عملکرد HSE (KPI Dashboard)" },
-  { key: "documents", label: "مدیریت مستندات HSE" },
-  { key: "managerDashboard", label: "داشبورد مدیریتی و گزارش‌های تحلیلی" },
+  {
+    key: "personnelAccess",
+    label: "مدیریت ورود و تردد پرسنل",
+    icon: true,
+    sub: [
+      { key: "personnelDashboard", label: "لیست پرسنل" },
+      { key: "personnelForm", label: "ثبت پرسنل جدید" },
+    ],
+  },
+  {
+    key: "managementDashboard",
+    label: "داشبورد مدیریتی و گزارش‌های تحلیلی",
+    icon: true,
+  },
 ];
 
 // ---------- لایه ذخیره‌سازی (Supabase REST API) ----------
@@ -87,18 +105,20 @@ function contractorFromRow(r) {
     contractDetails: r.contract_details || "",
     username: r.username || "",
     password: r.password || "",
+    jobPositionId: r.job_position_id || "",
+    jobPositionTitle: r.job_positions?.title || "",
     role: "CONTRACTOR",
   };
 }
 
 async function loadContractors() {
-  const rows = await sb("contractors?select=*&order=name.asc");
+  const rows = await sb("contractors?select=*,job_positions(title)&order=name.asc");
   return (sbOk(rows) ? rows : []).map(contractorFromRow);
 }
 async function insertContractor(rec) {
   const rows = await sb("contractors", {
     method: "POST",
-    body: JSON.stringify([{ name: rec.name, start_date: rec.startDate || null, contract_details: rec.contractDetails, username: rec.username, password: rec.password }]),
+    body: JSON.stringify([{ name: rec.name, start_date: rec.startDate || null, contract_details: rec.contractDetails, username: rec.username, password: rec.password, job_position_id: rec.jobPositionId || null }]),
   });
   if (!sbOk(rows)) return { __error: true, message: sbErrMsg(rows) };
   return contractorFromRow(rows[0]);
@@ -110,6 +130,7 @@ async function updateContractorDB(id, patch) {
   if ("contractDetails" in patch) dbPatch.contract_details = patch.contractDetails;
   if ("username" in patch) dbPatch.username = patch.username;
   if ("password" in patch) dbPatch.password = patch.password;
+  if ("jobPositionId" in patch) dbPatch.job_position_id = patch.jobPositionId || null;
   const rows = await sb(`contractors?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(dbPatch) });
   if (!sbOk(rows)) return { __error: true, message: sbErrMsg(rows) };
   return contractorFromRow(rows[0]);
@@ -126,18 +147,20 @@ function employerAccountFromRow(r) {
     username: r.username,
     password: r.password,
     canEdit: r.can_edit !== false,
+    jobPositionId: r.job_position_id || "",
+    jobPositionTitle: r.job_positions?.title || "",
     role: "EMPLOYER",
   };
 }
 
 async function loadEmployerAccounts() {
-  const rows = await sb("employer_accounts?select=*&order=name.asc");
+  const rows = await sb("employer_accounts?select=*,job_positions(title)&order=name.asc");
   return (sbOk(rows) ? rows : []).map(employerAccountFromRow);
 }
 async function insertEmployerAccount(rec) {
   const rows = await sb("employer_accounts", {
     method: "POST",
-    body: JSON.stringify([{ name: rec.name, username: rec.username, password: rec.password, can_edit: rec.canEdit }]),
+    body: JSON.stringify([{ name: rec.name, username: rec.username, password: rec.password, can_edit: rec.canEdit, job_position_id: rec.jobPositionId || null }]),
   });
   if (!sbOk(rows)) return { __error: true, message: sbErrMsg(rows) };
   return employerAccountFromRow(rows[0]);
@@ -148,6 +171,7 @@ async function updateEmployerAccountDB(id, patch) {
   if ("username" in patch) dbPatch.username = patch.username;
   if ("password" in patch) dbPatch.password = patch.password;
   if ("canEdit" in patch) dbPatch.can_edit = patch.canEdit;
+  if ("jobPositionId" in patch) dbPatch.job_position_id = patch.jobPositionId || null;
   const rows = await sb(`employer_accounts?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(dbPatch) });
   if (!sbOk(rows)) return { __error: true, message: sbErrMsg(rows) };
   return employerAccountFromRow(rows[0]);
@@ -181,12 +205,78 @@ function anomalyFromRow(r) {
     contractorAction: r.contractor_action || "",
     reviewNote: r.review_note || "",
     createdAt: r.created_at,
+    syncStatus: r.__syncStatus || "synced",
   };
+}
+
+// نگاشت رکورد اپ به شکل ردیف دیتابیس (برای insert)
+function anomalyRecordToDb(record) {
+  return {
+    id: record.id,
+    tracking_number: record.trackingNumber,
+    project: record.project,
+    contractor: record.contractor,
+    sub_contractor: record.subContractor,
+    area: record.area,
+    date: record.date || null,
+    time: record.time,
+    risk_level: record.riskLevel,
+    category: record.category,
+    format: record.format,
+    description: record.description,
+    corrective_action: record.correctiveAction,
+    obstacles: record.obstacles,
+    follower: record.follower,
+    sender: record.sender,
+    status: record.status,
+    close_date: record.closeDate || null,
+    effectiveness: record.effectiveness,
+    photo_count: record.photoCount,
+  };
+}
+
+// نگاشت patch اپ به شکل patch دیتابیس (برای update)
+function anomalyPatchToDb(patch) {
+  const dbPatch = {};
+  if ("correctiveAction" in patch) dbPatch.corrective_action = patch.correctiveAction;
+  if ("obstacles" in patch) dbPatch.obstacles = patch.obstacles;
+  if ("follower" in patch) dbPatch.follower = patch.follower;
+  if ("status" in patch) dbPatch.status = patch.status;
+  if ("closeDate" in patch) dbPatch.close_date = patch.closeDate || null;
+  if ("effectiveness" in patch) dbPatch.effectiveness = patch.effectiveness;
+  if ("photoCount" in patch) dbPatch.photo_count = patch.photoCount;
+  if ("contractorAction" in patch) dbPatch.contractor_action = patch.contractorAction;
+  if ("reviewNote" in patch) dbPatch.review_note = patch.reviewNote;
+  return dbPatch;
 }
 
 async function loadAnomalies() {
   const rows = await sb("anomalies?select=*&order=created_at.desc");
   return (sbOk(rows) ? rows : []).map(anomalyFromRow);
+}
+
+/**
+ * Offline-first loader: online → fetch from Supabase, refresh the local
+ * cache for next time we're offline, and merge in anything created locally
+ * that hasn't synced yet. Offline → read purely from the local cache.
+ */
+async function loadAnomaliesOfflineFirst() {
+  if (isOnline()) {
+    const rows = await sb("anomalies?select=*&order=created_at.desc");
+    if (sbOk(rows)) {
+      for (const r of rows) await putRecord("anomalies", r.id, r, "synced");
+      const cached = await getRecordsByModule("anomalies");
+      const serverIds = new Set(rows.map((r) => r.id));
+      const localOnly = cached.filter((c) => c.syncStatus !== "synced" && !serverIds.has(c.id) && !c.data?.deleted);
+      return [
+        ...localOnly.map((c) => anomalyFromRow({ ...c.data, __syncStatus: c.syncStatus })),
+        ...rows.map((r) => anomalyFromRow({ ...r, __syncStatus: "synced" })),
+      ];
+    }
+  }
+  // آفلاین یا خطای شبکه → فقط از حافظه‌ی محلی بخوان
+  const cached = await getRecordsByModule("anomalies");
+  return cached.filter((c) => !c.data?.deleted).map((c) => anomalyFromRow({ ...c.data, __syncStatus: c.syncStatus }));
 }
 
 async function insertAnomaly(record) {
@@ -400,13 +490,13 @@ function anomalyExportRows(list) {
   }));
 }
 
-function exportAnomaliesExcel(list, title) {
+async function exportAnomaliesExcel(list, title) {
   const rows = anomalyExportRows(list);
   const ws = XLSX.utils.json_to_sheet(rows);
   ws["!cols"] = [{ wch: 5 }, { wch: 14 }, { wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 8 }, { wch: 14 }, { wch: 36 }, { wch: 30 }, { wch: 12 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Anomalies");
-  XLSX.writeFile(wb, `${title}.xlsx`);
+  await exportWorkbookNativeAware(XLSX, wb, `${title}.xlsx`);
 }
 
 function escapeHtml(s) {
@@ -418,9 +508,7 @@ function escapeHtml(s) {
     .split("'").join("&#39;");
 }
 
-function exportAnomaliesPdf(list, title) {
-  const win = window.open("", "_blank");
-  if (!win) { alert("اجازه‌ی باز شدن پنجره‌ی جدید داده نشد؛ لطفاً popup blocker مرورگر را غیرفعال کنید."); return; }
+async function exportAnomaliesPdf(list, title) {
   const headers = ["ردیف", "شماره پیگیری", "تاریخ", "ناحیه", "پیمانکار", "دسته‌بندی", "سطح ریسک", "وضعیت", "شرح آنومالی", "اقدام پیمانکار", "تاریخ بسته شدن"];
   const bodyRows = anomalyExportRows(list)
     .map((r) => `<tr>${Object.values(r).map((v) => `<td>${escapeHtml(v)}</td>`).join("")}</tr>`)
@@ -440,6 +528,11 @@ function exportAnomaliesPdf(list, title) {
     <p class="meta">${APP_NAME} — تعداد موارد: ${list.length}</p>
     <table><thead><tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead><tbody>${bodyRows}</tbody></table>
   </body></html>`;
+
+  if (await exportHtmlReportNativeAware(html, title)) return;
+
+  const win = window.open("", "_blank");
+  if (!win) { alert("اجازه‌ی باز شدن پنجره‌ی جدید داده نشد؛ لطفاً popup blocker مرورگر را غیرفعال کنید."); return; }
   win.document.write(html);
   win.document.close();
   win.focus();
@@ -473,11 +566,11 @@ function resizeImageFile(file, maxDim = 1280, quality = 0.72) {
 }
 
 // ---------- صفحه ورود ----------
-// ---------- لوگوی سامانه (نشان IHMS با سیلوئت نیروگاه در پس‌زمینه) ----------
+// ---------- لوگوی سامانه (بارگذاری از public/logo.png) ----------
 function IhmsLogo({ size = 96 }) {
   return (
     <img
-    src={`${import.meta.env.BASE_URL}logo.png`}
+      src={`${import.meta.env.BASE_URL}logo.png`}
       alt="IHMS Logo"
       width={size}
       height={size}
@@ -568,16 +661,43 @@ function LoginScreen({ onLogin }) {
 }
 
 // ---------- پروفایل کاربر ----------
+// ---------- آواتار (حروف اول نام) ----------
+function getInitials(name) {
+  if (!name || !name.trim()) return "?";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+function Avatar({ name, size = 40, bg }) {
+  return (
+    <div
+      style={{
+        width: size, height: size, borderRadius: "50%", background: bg || THEME.teal,
+        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+        color: "#fff", fontWeight: 700, fontSize: size * 0.4, fontFamily: THEME.font,
+      }}
+    >
+      {getInitials(name)}
+    </div>
+  );
+}
+
 function ProfileView({ onBack, currentUser, roleLabel }) {
   return (
     <div style={{ maxWidth: 420, margin: "0 auto", padding: 24 }}>
       {onBack && <div style={styles.backLink} onClick={onBack}>← بازگشت به منو</div>}
       <div style={{ ...styles.card, width: "auto" }}>
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
-          <IhmsLogo size={80} />
+          <IhmsLogo size={64} />
         </div>
-        <h3 style={{ textAlign: "center", marginBottom: 4 }}>{currentUser?.username}</h3>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
+          <Avatar name={currentUser?.name} size={64} />
+        </div>
+        <h3 style={{ textAlign: "center", marginBottom: 4 }}>{currentUser?.name || "—"}</h3>
         <p style={{ textAlign: "center", color: "#93a1b0", fontSize: 13, marginTop: 0 }}>{roleLabel}</p>
+        {currentUser?.jobPositionTitle && (
+          <p style={{ textAlign: "center", color: "#0d8f8a", fontSize: 12.5, marginTop: 4, fontWeight: 600 }}>{currentUser.jobPositionTitle}</p>
+        )}
         <p style={{ textAlign: "center", color: "#aaa", fontSize: 11, marginTop: 20, direction: "ltr" }}>{APP_NAME}</p>
       </div>
     </div>
@@ -587,6 +707,7 @@ function ProfileView({ onBack, currentUser, roleLabel }) {
 // ---------- مدیریت یکپارچه پیمانکاران (اطلاعات شرکت + حساب کاربری ورود) ----------
 function ContractorManager({ onBack }) {
   const [contractors, setContractors] = useState([]);
+  const [jobPositions, setJobPositions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
@@ -594,13 +715,16 @@ function ContractorManager({ onBack }) {
   const [contractDetails, setContractDetails] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [jobPositionId, setJobPositionId] = useState("");
   const [formError, setFormError] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({});
 
   useEffect(() => {
     (async () => {
-      setContractors(await loadContractors());
+      const [c, jp] = await Promise.all([loadContractors(), loadActiveJobPositions()]);
+      setContractors(c);
+      setJobPositions(jp);
       setLoading(false);
     })();
   }, []);
@@ -610,23 +734,25 @@ function ContractorManager({ onBack }) {
 
   const handleAdd = async () => {
     const uname = username.trim();
-    if (!name.trim() || !uname || !password) { setFormError("نام پیمانکار، نام کاربری و رمز عبور الزامی است"); return; }
+    if (!name.trim() || !uname || !password || !jobPositionId) { setFormError("نام پیمانکار، عنوان شغلی، نام کاربری و رمز عبور الزامی است"); return; }
     if (usernameTaken(uname, null)) { setFormError("این نام کاربری قبلاً استفاده شده است"); return; }
-    const inserted = await insertContractor({ name: name.trim(), startDate, contractDetails: contractDetails.trim(), username: uname, password });
+    const inserted = await insertContractor({ name: name.trim(), startDate, contractDetails: contractDetails.trim(), username: uname, password, jobPositionId });
     if (!inserted || inserted.__error) { setFormError(`خطا در ذخیره‌سازی: ${inserted?.message || "نامشخص"}`); return; }
+    await initializeNoAccess("contractor", inserted.id);
     setContractors([...contractors, inserted]);
-    setName(""); setStartDate(""); setContractDetails(""); setUsername(""); setPassword(""); setFormError(""); setShowForm(false);
+    setName(""); setStartDate(""); setContractDetails(""); setUsername(""); setPassword(""); setJobPositionId(""); setFormError(""); setShowForm(false);
+    alert("حساب پیمانکار ساخته شد. اکنون از «مدیریت نقش‌ها و دسترسی‌ها» دسترسی ماژول‌های این حساب را تعیین کنید.");
   };
 
   const startEdit = (c) => {
     setEditingId(c.id);
-    setEditData({ name: c.name, startDate: c.startDate, contractDetails: c.contractDetails, username: c.username, password: c.password });
+    setEditData({ name: c.name, startDate: c.startDate, contractDetails: c.contractDetails, username: c.username, password: c.password, jobPositionId: c.jobPositionId });
   };
   const cancelEdit = () => { setEditingId(null); setEditData({}); };
 
   const saveEdit = async (id) => {
     const uname = (editData.username || "").trim();
-    if (!editData.name?.trim() || !uname || !editData.password) { alert("نام پیمانکار، نام کاربری و رمز عبور نمی‌توانند خالی باشند"); return; }
+    if (!editData.name?.trim() || !uname || !editData.password || !editData.jobPositionId) { alert("نام پیمانکار، عنوان شغلی، نام کاربری و رمز عبور نمی‌توانند خالی باشند"); return; }
     if (usernameTaken(uname, id)) { alert("این نام کاربری قبلاً برای پیمانکار دیگری استفاده شده است"); return; }
     const updated = await updateContractorDB(id, { ...editData, name: editData.name.trim(), username: uname });
     if (!updated || updated.__error) { alert(`خطا در ذخیره‌سازی: ${updated?.message || "نامشخص"}`); return; }
@@ -655,6 +781,11 @@ function ContractorManager({ onBack }) {
         <div style={styles.card}>
           <label style={styles.label}>نام پیمانکار</label>
           <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} dir="rtl" placeholder="همین نام در لیست کشویی «پیمانکار» فرم آنومالی نشان داده می‌شود" />
+          <label style={styles.label}>عنوان شغلی</label>
+          <select style={styles.input} value={jobPositionId} onChange={(e) => setJobPositionId(e.target.value)} dir="rtl">
+            <option value="">— انتخاب کنید —</option>
+            {jobPositions.map((jp) => <option key={jp.id} value={jp.id}>{jp.title}</option>)}
+          </select>
           <label style={styles.label}>تاریخ شروع به کار</label>
           <JalaliDateInput value={startDate} onChange={setStartDate} />
           <label style={styles.label}>مشخصات قرارداد</label>
@@ -676,6 +807,11 @@ function ContractorManager({ onBack }) {
           <div key={c.id} style={styles.card}>
             <label style={styles.label}>نام پیمانکار</label>
             <input style={styles.input} value={editData.name} onChange={(e) => setEditData({ ...editData, name: e.target.value })} dir="rtl" />
+            <label style={styles.label}>عنوان شغلی</label>
+            <select style={styles.input} value={editData.jobPositionId || ""} onChange={(e) => setEditData({ ...editData, jobPositionId: e.target.value })} dir="rtl">
+              <option value="">— انتخاب کنید —</option>
+              {jobPositions.map((jp) => <option key={jp.id} value={jp.id}>{jp.title}</option>)}
+            </select>
             <label style={styles.label}>تاریخ شروع به کار</label>
             <JalaliDateInput value={editData.startDate} onChange={(v) => setEditData({ ...editData, startDate: v })} />
             <label style={styles.label}>مشخصات قرارداد</label>
@@ -694,6 +830,7 @@ function ContractorManager({ onBack }) {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
                 <div style={{ fontWeight: "bold", fontSize: 16 }}>{c.name}</div>
+                {c.jobPositionTitle && <div style={{ fontSize: 12.5, color: "#0d8f8a", marginTop: 3, fontWeight: 600 }}>{c.jobPositionTitle}</div>}
                 {c.startDate && <div style={{ fontSize: 13, color: "#666", marginTop: 4 }}>تاریخ شروع: {isoToJalaliDisplay(c.startDate)}</div>}
                 {c.contractDetails && <div style={{ fontSize: 13, color: "#666", marginTop: 4 }}>قرارداد: {c.contractDetails}</div>}
                 <div style={{ fontSize: 13, color: "#0d8f8a", marginTop: 4, direction: "ltr", textAlign: "right" }}>یوزر: {c.username}</div>
@@ -713,19 +850,23 @@ function ContractorManager({ onBack }) {
 // ---------- مدیریت حساب‌های کارفرما/همکاران (فقط ادمین) ----------
 function EmployerAccountManager({ onBack }) {
   const [accounts, setAccounts] = useState([]);
+  const [jobPositions, setJobPositions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [canEdit, setCanEdit] = useState(true);
+  const [jobPositionId, setJobPositionId] = useState("");
   const [formError, setFormError] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({});
 
   useEffect(() => {
     (async () => {
-      setAccounts(await loadEmployerAccounts());
+      const [a, jp] = await Promise.all([loadEmployerAccounts(), loadActiveJobPositions()]);
+      setAccounts(a);
+      setJobPositions(jp);
       setLoading(false);
     })();
   }, []);
@@ -735,20 +876,22 @@ function EmployerAccountManager({ onBack }) {
 
   const handleAdd = async () => {
     const uname = username.trim();
-    if (!name.trim() || !uname || !password) { setFormError("نام، نام کاربری و رمز عبور الزامی است"); return; }
+    if (!name.trim() || !uname || !password || !jobPositionId) { setFormError("نام، عنوان شغلی، نام کاربری و رمز عبور الزامی است"); return; }
     if (usernameTaken(uname, null)) { setFormError("این نام کاربری قبلاً استفاده شده است"); return; }
-    const inserted = await insertEmployerAccount({ name: name.trim(), username: uname, password, canEdit });
+    const inserted = await insertEmployerAccount({ name: name.trim(), username: uname, password, canEdit, jobPositionId });
     if (!inserted || inserted.__error) { setFormError(`خطا در ذخیره‌سازی: ${inserted?.message || "نامشخص"}`); return; }
+    await initializeNoAccess("employer", inserted.id);
     setAccounts([...accounts, inserted]);
-    setName(""); setUsername(""); setPassword(""); setCanEdit(true); setFormError(""); setShowForm(false);
+    setName(""); setUsername(""); setPassword(""); setCanEdit(true); setJobPositionId(""); setFormError(""); setShowForm(false);
+    alert("حساب کارفرما ساخته شد. اکنون از «مدیریت نقش‌ها و دسترسی‌ها» دسترسی ماژول‌های این حساب را تعیین کنید.");
   };
 
-  const startEdit = (a) => { setEditingId(a.id); setEditData({ name: a.name, username: a.username, password: a.password, canEdit: a.canEdit }); };
+  const startEdit = (a) => { setEditingId(a.id); setEditData({ name: a.name, username: a.username, password: a.password, canEdit: a.canEdit, jobPositionId: a.jobPositionId }); };
   const cancelEdit = () => { setEditingId(null); setEditData({}); };
 
   const saveEdit = async (id) => {
     const uname = (editData.username || "").trim();
-    if (!editData.name?.trim() || !uname || !editData.password) { alert("نام، نام کاربری و رمز عبور نمی‌توانند خالی باشند"); return; }
+    if (!editData.name?.trim() || !uname || !editData.password || !editData.jobPositionId) { alert("نام، عنوان شغلی، نام کاربری و رمز عبور نمی‌توانند خالی باشند"); return; }
     if (usernameTaken(uname, id)) { alert("این نام کاربری قبلاً برای حساب دیگری استفاده شده است"); return; }
     const updated = await updateEmployerAccountDB(id, { ...editData, name: editData.name.trim(), username: uname });
     if (!updated || updated.__error) { alert(`خطا در ذخیره‌سازی: ${updated?.message || "نامشخص"}`); return; }
@@ -776,8 +919,13 @@ function EmployerAccountManager({ onBack }) {
 
       {showForm && (
         <div style={styles.card}>
-          <label style={styles.label}>نام / عنوان</label>
+          <label style={styles.label}>نام و نام خانوادگی</label>
           <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} dir="rtl" />
+          <label style={styles.label}>عنوان شغلی</label>
+          <select style={styles.input} value={jobPositionId} onChange={(e) => setJobPositionId(e.target.value)} dir="rtl">
+            <option value="">— انتخاب کنید —</option>
+            {jobPositions.map((jp) => <option key={jp.id} value={jp.id}>{jp.title}</option>)}
+          </select>
           <label style={styles.label}>نام کاربری</label>
           <input style={styles.input} value={username} onChange={(e) => setUsername(e.target.value)} dir="rtl" />
           <label style={styles.label}>رمز عبور</label>
@@ -798,8 +946,13 @@ function EmployerAccountManager({ onBack }) {
       {accounts.map((a) =>
         editingId === a.id ? (
           <div key={a.id} style={styles.card}>
-            <label style={styles.label}>نام / عنوان</label>
+            <label style={styles.label}>نام و نام خانوادگی</label>
             <input style={styles.input} value={editData.name} onChange={(e) => setEditData({ ...editData, name: e.target.value })} dir="rtl" />
+            <label style={styles.label}>عنوان شغلی</label>
+            <select style={styles.input} value={editData.jobPositionId || ""} onChange={(e) => setEditData({ ...editData, jobPositionId: e.target.value })} dir="rtl">
+              <option value="">— انتخاب کنید —</option>
+              {jobPositions.map((jp) => <option key={jp.id} value={jp.id}>{jp.title}</option>)}
+            </select>
             <label style={styles.label}>نام کاربری</label>
             <input style={styles.input} value={editData.username} onChange={(e) => setEditData({ ...editData, username: e.target.value })} dir="rtl" />
             <label style={styles.label}>رمز عبور</label>
@@ -819,6 +972,7 @@ function EmployerAccountManager({ onBack }) {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
                 <div style={{ fontWeight: "bold", fontSize: 16 }}>{a.name}</div>
+                {a.jobPositionTitle && <div style={{ fontSize: 12.5, color: "#0d8f8a", marginTop: 3, fontWeight: 600 }}>{a.jobPositionTitle}</div>}
                 <div style={{ fontSize: 13, color: "#0d8f8a", marginTop: 4, direction: "ltr", textAlign: "right" }}>یوزر: {a.username}</div>
                 <span style={{ ...styles.badge, marginTop: 6, display: "inline-block", color: a.canEdit ? "#166534" : "#92400e", background: a.canEdit ? "#dcfce7" : "#fef3c7" }}>
                   {a.canEdit ? "دسترسی کامل" : "فقط مشاهده"}
@@ -884,7 +1038,7 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
       return;
     }
     setSaving(true);
-    const existing = await loadAnomalies();
+    const existing = await loadAnomaliesOfflineFirst();
     const record = {
       id: uid("anomaly"),
       trackingNumber: trackingNumber.trim() || `A-${String(existing.length + 1).padStart(4, "0")}`,
@@ -901,20 +1055,29 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
       correctiveAction: "",
       obstacles: "",
       follower: follower.trim(),
-      sender: currentUser?.username || "",
+      sender: currentUser?.name || "",
       status: "open",
       closeDate: "",
       effectiveness: "",
       photoCount: photos.length,
     };
-    const result = await insertAnomaly(record);
-    if (!result || result.__error) {
+    const result = await offlineWrite({
+      module: "anomalies", table: "anomalies", action: "insert",
+      id: record.id, payload: anomalyRecordToDb(record),
+    });
+    if (!result.ok) {
       setSaving(false);
       setError(`خطا در ذخیره‌سازی: ${result?.message || "نامشخص"}`);
       return;
     }
     if (photos.length > 0) {
-      await insertAnomalyPhotos(record.id, photos, "report");
+      for (const p of photos) {
+        await offlineWrite({
+          module: "anomalyPhotos", table: "anomaly_photos", action: "insert",
+          id: uid("photo"), includeIdInPayload: false,
+          payload: { anomaly_id: record.id, photo: p, stage: "report" },
+        });
+      }
     }
     setSaving(false);
     onSaved ? onSaved() : onBack && onBack();
@@ -1073,19 +1236,19 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
 }
 
 // ---------- لیست و پیگیری آنومالی‌ها ----------
-function AnomalyList({ onBack, role, currentUser, readOnly }) {
+function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter, initialRiskFilter }) {
   const isAdmin = role === "ADMIN";
   const isReviewer = (role === "EMPLOYER" || isAdmin) && !readOnly;
   const isReadOnlyReviewer = (role === "EMPLOYER" || isAdmin) && !!readOnly;
   const isContractor = role === "CONTRACTOR";
   // ادمین علاوه بر تأیید/رد، می‌تواند مثل پیمانکار هم اقدام اصلاحی ثبت و ارسال کند
-  const canActAsContractor = isContractor || isAdmin;
+  const canActAsContractor = (isContractor || isAdmin) && !readOnly;
   const myContractorName = (currentUser?.name || "").trim().toLowerCase();
 
   const [anomalies, setAnomalies] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [riskFilter, setRiskFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState(initialStatusFilter || "all");
+  const [riskFilter, setRiskFilter] = useState(initialRiskFilter || "all");
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [draft, setDraft] = useState({});
@@ -1102,7 +1265,7 @@ function AnomalyList({ onBack, role, currentUser, readOnly }) {
   const [reviewSaving, setReviewSaving] = useState(false);
 
   const load = async () => {
-    setAnomalies(await loadAnomalies());
+    setAnomalies(await loadAnomaliesOfflineFirst());
     setLoading(false);
   };
 
@@ -1163,9 +1326,9 @@ function AnomalyList({ onBack, role, currentUser, readOnly }) {
     const current = photosMap[anomalyId] || [];
     const updated = current.filter((p) => p.id !== photoId);
     setPhotosMap((prev) => ({ ...prev, [anomalyId]: updated }));
-    await deleteAnomalyPhotoDB(photoId);
-    await updateAnomalyDB(anomalyId, { photoCount: updated.length });
-    setAnomalies(anomalies.map((a) => (a.id === anomalyId ? { ...a, photoCount: updated.length } : a)));
+    await offlineWrite({ module: "anomalyPhotos", table: "anomaly_photos", action: "delete", id: photoId, payload: {} });
+    await offlineWrite({ module: "anomalies", table: "anomalies", action: "update", id: anomalyId, payload: { photo_count: updated.length } });
+    setAnomalies(anomalies.map((a) => (a.id === anomalyId ? { ...a, photoCount: updated.length, syncStatus: "pending" } : a)));
   };
 
   const saveDraft = async (id) => {
@@ -1173,19 +1336,21 @@ function AnomalyList({ onBack, role, currentUser, readOnly }) {
       ...draft,
       closeDate: draft.status === "Closed" ? (draft.closeDate || todayISO()) : "",
     };
-    await updateAnomalyDB(id, patch);
-    setAnomalies(anomalies.map((a) => (a.id === id ? { ...a, ...patch } : a)));
+    await offlineWrite({ module: "anomalies", table: "anomalies", action: "update", id, payload: anomalyPatchToDb(patch) });
+    setAnomalies(anomalies.map((a) => (a.id === id ? { ...a, ...patch, syncStatus: isOnline() ? "synced" : "pending" } : a)));
     setExpandedId(null);
   };
 
   const handleDelete = async (id, trackingNumber) => {
+    if (readOnly) { alert("شما مجوز حذف را ندارید"); return; }
     if (confirm(`آیا از حذف آنومالی «${trackingNumber}» مطمئن هستید؟`)) {
-      await deleteAnomalyDB(id);
+      await offlineWrite({ module: "anomalies", table: "anomalies", action: "delete", id, payload: {} });
       setAnomalies(anomalies.filter((a) => a.id !== id));
     }
   };
 
   const handleActionPickFiles = async (fileList) => {
+    if (!canActAsContractor) { alert("شما مجوز ثبت اقدام اصلاحی را ندارید"); return; }
     const files = Array.from(fileList || []).slice(0, 8 - actionPhotos.length);
     if (files.length === 0) return;
     setActionPhotoBusy(true);
@@ -1200,15 +1365,22 @@ function AnomalyList({ onBack, role, currentUser, readOnly }) {
   const removeActionPhoto = (idx) => setActionPhotos((prev) => prev.filter((_, i) => i !== idx));
 
   const submitForReview = async (a) => {
+    if (!canActAsContractor) { alert("شما مجوز ثبت اقدام اصلاحی را ندارید"); return; }
     if (!actionText.trim()) return;
     setActionSaving(true);
     if (actionPhotos.length > 0) {
-      await insertAnomalyPhotos(a.id, actionPhotos, "fix");
+      for (const p of actionPhotos) {
+        await offlineWrite({
+          module: "anomalyPhotos", table: "anomaly_photos", action: "insert",
+          id: uid("photo"), includeIdInPayload: false,
+          payload: { anomaly_id: a.id, photo: p, stage: "fix" },
+        });
+      }
     }
     const newPhotoCount = a.photoCount + actionPhotos.length;
     const patch = { status: "pending_review", contractorAction: actionText.trim(), photoCount: newPhotoCount };
-    await updateAnomalyDB(a.id, patch);
-    setAnomalies(anomalies.map((x) => (x.id === a.id ? { ...x, ...patch } : x)));
+    await offlineWrite({ module: "anomalies", table: "anomalies", action: "update", id: a.id, payload: anomalyPatchToDb(patch) });
+    setAnomalies(anomalies.map((x) => (x.id === a.id ? { ...x, ...patch, syncStatus: isOnline() ? "synced" : "pending" } : x)));
     setPhotosMap((prev) => ({ ...prev, [a.id]: undefined }));
     setActionSaving(false);
     setExpandedId(null);
@@ -1216,20 +1388,22 @@ function AnomalyList({ onBack, role, currentUser, readOnly }) {
   };
 
   const approveAnomaly = async (a) => {
+    if (!isReviewer) { alert("شما مجوز تأیید را ندارید"); return; }
     setReviewSaving(true);
     const patch = { status: "Closed", closeDate: todayISO() };
-    await updateAnomalyDB(a.id, patch);
-    setAnomalies(anomalies.map((x) => (x.id === a.id ? { ...x, ...patch } : x)));
+    await offlineWrite({ module: "anomalies", table: "anomalies", action: "update", id: a.id, payload: anomalyPatchToDb(patch) });
+    setAnomalies(anomalies.map((x) => (x.id === a.id ? { ...x, ...patch, syncStatus: isOnline() ? "synced" : "pending" } : x)));
     setReviewSaving(false);
     setExpandedId(null);
     resetActionState();
   };
 
   const rejectAnomaly = async (a) => {
+    if (!isReviewer) { alert("شما مجوز رد کردن را ندارید"); return; }
     setReviewSaving(true);
     const patch = { status: "open", reviewNote: rejectNote.trim() };
-    await updateAnomalyDB(a.id, patch);
-    setAnomalies(anomalies.map((x) => (x.id === a.id ? { ...x, ...patch } : x)));
+    await offlineWrite({ module: "anomalies", table: "anomalies", action: "update", id: a.id, payload: anomalyPatchToDb(patch) });
+    setAnomalies(anomalies.map((x) => (x.id === a.id ? { ...x, ...patch, syncStatus: isOnline() ? "synced" : "pending" } : x)));
     setReviewSaving(false);
     setExpandedId(null);
     resetActionState();
@@ -1335,6 +1509,18 @@ function AnomalyList({ onBack, role, currentUser, readOnly }) {
                     <sm.Icon size={12} style={{ display: "inline", marginLeft: 3 }} />{sm.label}
                   </span>
                   {a.category && <span style={styles.badge}>{a.category}</span>}
+                  {a.syncStatus && a.syncStatus !== "synced" && (
+                    <SyncStatusBadge
+                      status={a.syncStatus}
+                      onRetry={async (e) => {
+                        e.stopPropagation();
+                        const queue = await getQueue();
+                        const item = queue.find((q) => q.module === "anomalies" && q.recordId === a.id);
+                        if (item) { await retryItemNow(item.queueId); load(); }
+                        else load();
+                      }}
+                    />
+                  )}
                 </div>
                 <div style={{ fontSize: 14, marginTop: 9, color: THEME.text }}>{a.description}</div>
                 <div style={{ fontSize: 11.5, color: THEME.text3, marginTop: 7, fontWeight: 500 }}>
@@ -1564,9 +1750,40 @@ function AnomalyList({ onBack, role, currentUser, readOnly }) {
 }
 
 // ---------- پنل ادمین ----------
-const MODULE_ICON = { profile: User, manageUsers: Users, anomalyReport: AlertTriangle };
+const MODULE_ICON = { profile: User, manageUsers: Users, anomalyReport: AlertTriangle, personnelAccess: Users, managementDashboard: BarChart3 };
 
 // ---------- ردیف منوی استاندارد (آیکون + عنوان + شورون) ----------
+// ---------- هدر مشترک داشبورد (آواتار + نام + عنوان شغلی + اعلان/تنظیمات/خروج) ----------
+const headerIconBtnStyle = {
+  display: "flex", alignItems: "center", justifyContent: "center", width: 34, height: 34,
+  background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 9, cursor: "pointer",
+};
+
+function DashboardHeader({ panelLabel, currentUser, onLogout, onOpenSettings, notifications, onNotificationsChanged }) {
+  return (
+    <div style={styles.topBar}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <Avatar name={currentUser?.name} size={38} bg="rgba(255,255,255,0.18)" />
+        <div>
+          <div style={styles.appNameTag}>{panelLabel}</div>
+          <div style={{ fontSize: 14.5, fontWeight: 700, color: "#fff" }}>{currentUser?.name || "—"}</div>
+          {currentUser?.jobPositionTitle && (
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", marginTop: 1 }}>{currentUser.jobPositionTitle}</div>
+          )}
+        </div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <OnlineIndicator />
+        {notifications && <NotificationPanel notifications={notifications} onChanged={onNotificationsChanged} />}
+        <button type="button" onClick={onOpenSettings} style={headerIconBtnStyle} title="تنظیمات">
+          <Settings size={16} color="#fff" />
+        </button>
+        <button style={styles.logoutButton} onClick={onLogout}><LogOut size={14} style={{ marginLeft: 6 }} />خروج</button>
+      </div>
+    </div>
+  );
+}
+
 function MenuRow({ icon: IconEl, label, onClick, accent, muted, sub }) {
   return (
     <div
@@ -1606,17 +1823,21 @@ function MenuRow({ icon: IconEl, label, onClick, accent, muted, sub }) {
 
 function AdminDashboard({ onLogout, currentUser }) {
   const [view, setView] = useState("menu");
+  const [navFilter, setNavFilter] = useState(null);
   const anomalyMod = HSE_MODULES.find((m) => m.key === "anomalyReport");
   const riskMod = HSE_MODULES.find((m) => m.key === "riskAssessment");
+  const personnelMod = HSE_MODULES.find((m) => m.key === "personnelAccess");
+  const managementMod = HSE_MODULES.find((m) => m.key === "managementDashboard");
+
+  const handleHomeNavigate = (target) => {
+    setNavFilter(target);
+    if (target.module === "personnel") setView("personnelDashboard");
+    else if (target.module === "anomaly") setView("anomalyList");
+  };
+
   return (
     <div style={styles.dashboardWrapper}>
-      <div style={styles.topBar}>
-        <div>
-          <div style={styles.appNameTag}>{APP_NAME}</div>
-          <h2 style={{ margin: 0 }}>پنل ادمین</h2>
-        </div>
-        <button style={styles.logoutButton} onClick={onLogout}><LogOut size={14} style={{ marginLeft: 6 }} />خروج</button>
-      </div>
+      <DashboardHeader panelLabel="پنل ادمین" currentUser={currentUser} onLogout={onLogout} onOpenSettings={() => setView("profile")} />
 
       {view === "menu" && (
         <div style={styles.menuList}>
@@ -1625,6 +1846,10 @@ function AdminDashboard({ onLogout, currentUser }) {
           <MenuRow icon={ShieldCheck} label="مدیریت پیمانکاران" onClick={() => setView("contractors")} />
           <MenuRow icon={AlertTriangle} label={anomalyMod.label} onClick={() => setView("anomalyReport")} accent sub />
           <MenuRow icon={ShieldCheck} label={riskMod.label} onClick={() => setView("riskAssessment")} accent sub />
+          <MenuRow icon={Users} label={personnelMod.label} onClick={() => setView("personnelAccess")} accent sub />
+          <MenuRow icon={BarChart3} label={managementMod.label} onClick={() => setView("managementDashboard")} accent />
+          <MenuRow icon={ShieldCheck} label="مدیریت نقش‌ها و دسترسی‌ها" onClick={() => setView("permissionManagement")} />
+          <MenuRow icon={Briefcase} label="مدیریت عناوین شغلی" onClick={() => setView("jobPositionManagement")} />
         </div>
       )}
 
@@ -1652,12 +1877,29 @@ function AdminDashboard({ onLogout, currentUser }) {
         </div>
       )}
 
+      {view === "personnelAccess" && (
+        <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
+          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{personnelMod.label}</h3>
+          <div style={styles.menuList2}>
+            {personnelMod.sub.map((s) => (
+              <MenuRow key={s.key} icon={Users} label={s.label} onClick={() => setView(s.key)} accent />
+            ))}
+          </div>
+        </div>
+      )}
+
       {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel="ادمین" />}
       {view === "employers" && <EmployerAccountManager onBack={() => setView("menu")} />}
       {view === "contractors" && <ContractorManager onBack={() => setView("menu")} />}
       {view === "anomalyForm" && <AnomalyForm onBack={() => setView("anomalyReport")} currentUser={currentUser} onSaved={() => setView("anomalyList")} />}
-      {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="ADMIN" currentUser={currentUser} />}
+      {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="ADMIN" currentUser={currentUser} initialStatusFilter={navFilter?.module === "anomaly" ? navFilter.statusFilter : undefined} initialRiskFilter={navFilter?.module === "anomaly" ? navFilter.riskFilter : undefined} />}
       {view === "bowtieDashboard" && <BowTieDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} readOnly={false} />}
+      {view === "personnelForm" && <PersonnelForm onBack={() => setView("personnelAccess")} currentUser={currentUser} onSaved={() => setView("personnelAccess")} />}
+      {view === "personnelDashboard" && <PersonnelDashboard onBack={() => setView("personnelAccess")} currentUser={currentUser} role="ADMIN" initialStatusFilter={navFilter?.module === "personnel" ? navFilter.statusFilter : undefined} initialContractorFilter={navFilter?.module === "personnel" ? navFilter.contractorFilter : undefined} />}
+      {view === "managementDashboard" && <HomeDashboard role="ADMIN" currentUser={currentUser} onNavigate={handleHomeNavigate} onBack={() => setView("menu")} />}
+      {view === "permissionManagement" && <PermissionManager onBack={() => setView("menu")} />}
+      {view === "jobPositionManagement" && <JobPositionManager onBack={() => setView("menu")} />}
     </div>
   );
 }
@@ -1665,32 +1907,53 @@ function AdminDashboard({ onLogout, currentUser }) {
 // ---------- پنل کارفرما ----------
 function EmployerDashboard({ onLogout, currentUser }) {
   const [view, setView] = useState("menu");
+  const [navFilter, setNavFilter] = useState(null);
+  const [permMap, setPermMap] = useState({});
+  const [notifications, setNotifications] = useState([]);
   const canEdit = currentUser?.canEdit !== false;
+
+  useEffect(() => {
+    loadPermissionsMap("employer", currentUser?.id).then(setPermMap);
+  }, [currentUser?.id]);
+
+  const loadNotifs = async () => setNotifications(await loadNotifications("employer"));
+  useEffect(() => { loadNotifs(); }, []);
 
   const openModule = (mod) => {
     if (mod.key === "profile") { setView("profile"); return; }
+    if (!isModuleVisible(permMap, mod.key)) { alert("شما مجوز دسترسی به این بخش را ندارید"); return; }
     if (mod.employerOnly && !canEdit) { alert("این بخش فقط با دسترسی کامل در دسترس است"); return; }
+    if (mod.key === "managementDashboard") { setView("managementDashboard"); return; }
     if (mod.sub) { setView(mod.key); return; }
     alert(`ماژول «${mod.label}» به‌زودی اضافه می‌شود`);
   };
 
+  const handleHomeNavigate = (target) => {
+    setNavFilter(target);
+    if (target.module === "personnel") setView("personnelDashboard");
+    else if (target.module === "anomaly") setView("anomalyList");
+  };
+
   const anomalyMod = HSE_MODULES.find((m) => m.key === "anomalyReport");
-  const anomalySub = anomalyMod.sub.filter((s) => canEdit || !s.employerOnly);
+  const anomalyCanEdit = canEdit && getAccessLevel(permMap, "anomalyReport") !== "view";
+  const anomalySub = anomalyMod.sub.filter((s) => anomalyCanEdit || !s.employerOnly);
   const riskMod = HSE_MODULES.find((m) => m.key === "riskAssessment");
+  const personnelMod = HSE_MODULES.find((m) => m.key === "personnelAccess");
 
   return (
     <div style={styles.dashboardWrapper}>
-      <div style={styles.topBar}>
-        <div>
-          <div style={styles.appNameTag}>{APP_NAME}</div>
-          <h2 style={{ margin: 0 }}>پنل کارفرما {!canEdit && <span style={{ fontSize: 12, opacity: 0.85 }}>(فقط مشاهده)</span>}</h2>
-        </div>
-        <button style={styles.logoutButton} onClick={onLogout}><LogOut size={14} style={{ marginLeft: 6 }} />خروج</button>
-      </div>
+      <DashboardHeader
+        panelLabel={`پنل کارفرما${!canEdit ? " (فقط مشاهده)" : ""}`}
+        currentUser={currentUser}
+        onLogout={onLogout}
+        onOpenSettings={() => setView("profile")}
+        notifications={notifications}
+        onNotificationsChanged={loadNotifs}
+      />
 
       {view === "menu" && (
         <div style={styles.menuList}>
-          {HSE_MODULES.map((mod) => (
+          {HSE_MODULES.filter((mod) => mod.key === "profile" || isModuleVisible(permMap, mod.key)).map((mod) => (
             <MenuRow
               key={mod.key}
               icon={MODULE_ICON[mod.key] || LayoutGrid}
@@ -1728,11 +1991,26 @@ function EmployerDashboard({ onLogout, currentUser }) {
         </div>
       )}
 
+      {view === "personnelAccess" && (
+        <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
+          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{personnelMod.label}</h3>
+          <div style={styles.menuList2}>
+            {personnelMod.sub.map((s) => (
+              <MenuRow key={s.key} icon={Users} label={s.label} onClick={() => setView(s.key)} accent />
+            ))}
+          </div>
+        </div>
+      )}
+
       {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel={canEdit ? "کارفرما" : "کارفرما (فقط مشاهده)"} />}
       {view === "manageUsers" && <ContractorManager onBack={() => setView("menu")} />}
-      {view === "anomalyForm" && <AnomalyForm onBack={() => setView("anomalyReport")} currentUser={currentUser} onSaved={() => setView("anomalyList")} />}
-      {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="EMPLOYER" currentUser={currentUser} readOnly={!canEdit} />}
-      {view === "bowtieDashboard" && <BowTieDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} readOnly={!canEdit} />}
+      {view === "anomalyForm" && anomalyCanEdit && <AnomalyForm onBack={() => setView("anomalyReport")} currentUser={currentUser} onSaved={() => setView("anomalyList")} />}
+      {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="EMPLOYER" currentUser={currentUser} readOnly={!canEdit || getAccessLevel(permMap, "anomalyReport") === "view"} initialStatusFilter={navFilter?.module === "anomaly" ? navFilter.statusFilter : undefined} initialRiskFilter={navFilter?.module === "anomaly" ? navFilter.riskFilter : undefined} />}
+      {view === "bowtieDashboard" && <BowTieDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} readOnly={!canEdit || getAccessLevel(permMap, "riskAssessment") === "view"} />}
+      {view === "personnelForm" && <PersonnelForm onBack={() => setView("personnelAccess")} currentUser={currentUser} onSaved={() => setView("personnelAccess")} />}
+      {view === "personnelDashboard" && <PersonnelDashboard onBack={() => setView("personnelAccess")} currentUser={currentUser} role="EMPLOYER" readOnly={!canEdit || getAccessLevel(permMap, "personnelAccess") === "view"} initialStatusFilter={navFilter?.module === "personnel" ? navFilter.statusFilter : undefined} initialContractorFilter={navFilter?.module === "personnel" ? navFilter.contractorFilter : undefined} />}
+      {view === "managementDashboard" && <HomeDashboard role="EMPLOYER" currentUser={currentUser} onNavigate={handleHomeNavigate} onBack={() => setView("menu")} />}
     </div>
   );
 }
@@ -1740,30 +2018,55 @@ function EmployerDashboard({ onLogout, currentUser }) {
 // ---------- پنل پیمانکار ----------
 function ContractorDashboard({ onLogout, currentUser }) {
   const [view, setView] = useState("menu");
+  const [navFilter, setNavFilter] = useState(null);
+  const [permMap, setPermMap] = useState({});
+  const [notifications, setNotifications] = useState([]);
+
+  useEffect(() => {
+    loadPermissionsMap("contractor", currentUser?.id).then(setPermMap);
+  }, [currentUser?.id]);
+
+  const loadNotifs = async () => {
+    const [raw, personnelList] = await Promise.all([loadNotifications("contractor"), loadPersonnelList()]);
+    const myName = (currentUser?.name || "").trim().toLowerCase();
+    const myPersonnel = personnelList.filter((p) => (p.contractorName || "").trim().toLowerCase() === myName);
+    setNotifications(raw.filter((n) => myPersonnel.some((p) => p.id === n.personnel_id)));
+  };
+  useEffect(() => { loadNotifs(); }, []);
 
   const openModule = (mod) => {
     if (mod.key === "profile") { setView("profile"); return; }
+    if (!isModuleVisible(permMap, mod.key)) { alert("شما مجوز دسترسی به این بخش را ندارید"); return; }
     if (mod.employerOnly) { alert("این بخش فقط برای کارفرما/ادمین در دسترس است"); return; }
+    if (mod.key === "managementDashboard") { setView("managementDashboard"); return; }
     if (mod.sub) { setView(mod.key); return; }
     alert(`ماژول «${mod.label}» به‌زودی اضافه می‌شود`);
   };
 
+  const handleHomeNavigate = (target) => {
+    setNavFilter(target);
+    if (target.module === "personnel") setView("personnelDashboard");
+    else if (target.module === "anomaly") setView("anomalyList");
+  };
+
   const anomalyMod = HSE_MODULES.find((m) => m.key === "anomalyReport");
   const anomalySub = anomalyMod.sub.filter((s) => !s.employerOnly);
+  const personnelMod = HSE_MODULES.find((m) => m.key === "personnelAccess");
 
   return (
     <div style={styles.dashboardWrapper}>
-      <div style={styles.topBar}>
-        <div>
-          <div style={styles.appNameTag}>{APP_NAME}</div>
-          <h2 style={{ margin: 0 }}>پنل پیمانکار</h2>
-        </div>
-        <button style={styles.logoutButton} onClick={onLogout}><LogOut size={14} style={{ marginLeft: 6 }} />خروج</button>
-      </div>
+      <DashboardHeader
+        panelLabel="پنل پیمانکار"
+        currentUser={currentUser}
+        onLogout={onLogout}
+        onOpenSettings={() => setView("profile")}
+        notifications={notifications}
+        onNotificationsChanged={loadNotifs}
+      />
 
       {view === "menu" && (
         <div style={styles.menuList}>
-          {HSE_MODULES.map((mod) => (
+          {HSE_MODULES.filter((mod) => mod.key === "profile" || isModuleVisible(permMap, mod.key)).map((mod) => (
             <MenuRow
               key={mod.key}
               icon={MODULE_ICON[mod.key] || LayoutGrid}
@@ -1789,8 +2092,23 @@ function ContractorDashboard({ onLogout, currentUser }) {
         </div>
       )}
 
+      {view === "personnelAccess" && (
+        <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
+          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{personnelMod.label}</h3>
+          <div style={styles.menuList2}>
+            {personnelMod.sub.map((s) => (
+              <MenuRow key={s.key} icon={Users} label={s.label} onClick={() => setView(s.key)} accent />
+            ))}
+          </div>
+        </div>
+      )}
+
       {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel="پیمانکار" />}
-      {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="CONTRACTOR" currentUser={currentUser} />}
+      {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="CONTRACTOR" currentUser={currentUser} readOnly={getAccessLevel(permMap, "anomalyReport") === "view"} initialStatusFilter={navFilter?.module === "anomaly" ? navFilter.statusFilter : undefined} initialRiskFilter={navFilter?.module === "anomaly" ? navFilter.riskFilter : undefined} />}
+      {view === "personnelForm" && getAccessLevel(permMap, "personnelAccess") !== "view" && <PersonnelForm onBack={() => setView("personnelAccess")} currentUser={currentUser} onSaved={() => setView("personnelAccess")} />}
+      {view === "personnelDashboard" && <PersonnelDashboard onBack={() => setView("personnelAccess")} currentUser={currentUser} role="CONTRACTOR" readOnly={getAccessLevel(permMap, "personnelAccess") === "view"} initialStatusFilter={navFilter?.module === "personnel" ? navFilter.statusFilter : undefined} />}
+      {view === "managementDashboard" && <HomeDashboard role="CONTRACTOR" currentUser={currentUser} onNavigate={handleHomeNavigate} onBack={() => setView("menu")} />}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import { bowtieStatusMeta } from "./bowtieApi.js";
+import { isNativeApp, writeAndShare, exportWorkbookNativeAware, exportHtmlReportNativeAware } from "../offline/nativeFile.js";
 
 /**
  * Export helpers for the BowTie canvas.
@@ -44,6 +45,11 @@ export function exportCanvasPng(svgEl, filename, scale = 2) {
         ctx.scale(scale, scale);
         ctx.drawImage(img, 0, 0, w, h);
         URL.revokeObjectURL(url);
+        if (isNativeApp()) {
+          const dataUrl = canvas.toDataURL("image/png");
+          writeAndShare(dataUrl, `${filename}.png`, "ذخیره یا ارسال تصویر BowTie").then(resolve).catch(reject);
+          return;
+        }
         canvas.toBlob((blob) => {
           const link = document.createElement("a");
           link.href = URL.createObjectURL(blob);
@@ -60,9 +66,7 @@ export function exportCanvasPng(svgEl, filename, scale = 2) {
   });
 }
 
-export function exportCanvasPdf(svgEl, title) {
-  const win = window.open("", "_blank");
-  if (!win) { alert("اجازه‌ی باز شدن پنجره‌ی جدید داده نشد؛ لطفاً popup blocker مرورگر را غیرفعال کنید."); return; }
+export async function exportCanvasPdf(svgEl, title) {
   const bbox = svgEl.getBoundingClientRect();
   const clone = svgEl.cloneNode(true);
   clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
@@ -83,6 +87,11 @@ export function exportCanvasPdf(svgEl, title) {
     <p class="meta">BowTie Risk Analysis — Integrated HSE Management System</p>
     ${svgString}
   </body></html>`;
+
+  if (await exportHtmlReportNativeAware(html, title)) return;
+
+  const win = window.open("", "_blank");
+  if (!win) { alert("اجازه‌ی باز شدن پنجره‌ی جدید داده نشد؛ لطفاً popup blocker مرورگر را غیرفعال کنید."); return; }
   win.document.write(html);
   win.document.close();
   win.focus();
@@ -98,7 +107,7 @@ function escapeHtml(s) {
     .split("'").join("&#39;");
 }
 
-export function exportBowtieExcel(bowtie, threats, consequences, barriers, escalationFactors, escalationControls, filename) {
+export async function exportBowtieExcel(bowtie, threats, consequences, barriers, escalationFactors, escalationControls, filename) {
   const nameOfThreat = (id) => threats.find((t) => t.id === id)?.label || "";
   const nameOfCons = (id) => consequences.find((c) => c.id === id)?.label || "";
 
@@ -148,5 +157,5 @@ export function exportBowtieExcel(bowtie, threats, consequences, barriers, escal
     XLSX.utils.book_append_sheet(wb, escWs, "Escalation");
   }
 
-  XLSX.writeFile(wb, `${filename}.xlsx`);
+  await exportWorkbookNativeAware(XLSX, wb, `${filename}.xlsx`);
 }
