@@ -65,3 +65,32 @@ export async function exportHtmlReportNativeAware(html, fileName) {
     return false;
   }
 }
+
+/**
+ * Downloads an arbitrary URL (a Storage file, in practice) to the user's
+ * device — used by the Archive tool so a file is safely on the admin's
+ * computer/phone BEFORE it gets deleted from Supabase.
+ */
+export async function downloadUrlNativeAware(url, fileName) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`دانلود فایل ناموفق بود (${res.status})`);
+  const blob = await res.blob();
+
+  if (isNativeApp()) {
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    await writeAndShare(base64, fileName, "ذخیره یا ارسال فایل آرشیوشده");
+    return;
+  }
+
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(objectUrl);
+}

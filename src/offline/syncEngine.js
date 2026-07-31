@@ -14,6 +14,7 @@
 import { sb, sbOk } from "../shared.js";
 import { getQueue, updateQueueItem, removeQueueItem, putRecord } from "./offlineDb.js";
 import { isOnline } from "./networkStatus.js";
+import { uploadBase64ToStorage } from "./storageUpload.js";
 
 // module key → { table, idField } — add one line here to support a new module
 export const MODULE_TABLE_MAP = {
@@ -51,6 +52,17 @@ async function applyQueueItem(item) {
   const mapping = MODULE_TABLE_MAP[item.module];
   if (!mapping) return { ok: false, permanent: true, error: `ماژول «${item.module}» برای همگام‌سازی ثبت نشده است` };
   const { table, idField } = mapping;
+
+  // اگر این آیتم یک فایل base64 معلق دارد (موقع آفلاین‌بودن ذخیره شده)،
+  // اول آپلودش کن به Storage و آدرس واقعی را جای base64 در payload بگذار
+  if (item.fileUpload) {
+    try {
+      const url = await uploadBase64ToStorage(item.fileUpload.bucket, item.fileUpload.path, item.fileUpload.base64Data, item.fileUpload.contentType);
+      item = { ...item, payload: { ...item.payload, [item.fileUpload.fieldName]: url } };
+    } catch (e) {
+      return { ok: false, error: `خطا در آپلود فایل: ${String(e?.message || e)}` };
+    }
+  }
 
   if (item.action === "insert") {
     const rows = await sb(table, { method: "POST", body: JSON.stringify([item.payload]) });

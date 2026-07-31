@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { Clock, History, ShieldCheck } from "lucide-react";
+import { Clock, ShieldCheck, UserX } from "lucide-react";
 import { styles, THEME } from "../shared.js";
-import { isoToJalaliDisplay } from "./jalaliDate.jsx";
+import { isoToJalaliDisplay, JalaliDateInput } from "./jalaliDate.jsx";
 import DocUploadField from "./DocUploadField.jsx";
 import DocumentViewerModal from "./DocumentViewerModal.jsx";
 import SyncStatusBadge from "../offline/SyncStatusBadge.jsx";
 import {
   DOC_TYPES, docStatusMeta, personnelStatusMeta,
   loadPersonnelDocuments, upsertDocument, reviewDocumentDB, deleteDocumentDB,
-  updatePersonnelDB, progressPersonnelWorkflow, loadAuditLog,
+  updatePersonnelDB, progressPersonnelWorkflow, checkAndUpdateDeadlines,
+  EMPLOYMENT_STATUS, employmentStatusMeta, setEmploymentStatus,
 } from "./personnelApi.js";
 
 /**
@@ -27,9 +28,11 @@ export default function PersonnelDetail({ personnel: initialPersonnel, role, cur
   const [showRejectFor, setShowRejectFor] = useState(null);
   const [qualNote, setQualNote] = useState(initialPersonnel.qualificationNote || "");
   const [showQualReject, setShowQualReject] = useState(false);
-  const [auditLog, setAuditLog] = useState([]);
-  const [showAudit, setShowAudit] = useState(false);
   const [viewerSrc, setViewerSrc] = useState(null);
+  const [showTerminateForm, setShowTerminateForm] = useState(false);
+  const [terminationDateDraft, setTerminationDateDraft] = useState("");
+  const [terminationError, setTerminationError] = useState("");
+  const [savingEmployment, setSavingEmployment] = useState(false);
 
   const isEmployer = (role === "EMPLOYER" || role === "ADMIN") && !readOnly;
   const isContractor = role === "CONTRACTOR" && !readOnly;
@@ -44,6 +47,26 @@ export default function PersonnelDetail({ personnel: initialPersonnel, role, cur
     setPersonnel(updatedPersonnel);
     setDocuments(updatedDocs);
     onUpdated && onUpdated(updatedPersonnel);
+  };
+
+  const handleConfirmTermination = async () => {
+    if (!terminationDateDraft) { setTerminationError("تاریخ ترک کار / تسویه حساب الزامی است"); return; }
+    setSavingEmployment(true);
+    setTerminationError("");
+    const result = await setEmploymentStatus(personnel.id, "terminated", terminationDateDraft, currentUser?.name || currentUser?.username);
+    setSavingEmployment(false);
+    if (result?.__error) { setTerminationError(result.message); return; }
+    setShowTerminateForm(false);
+    refreshAfterChange({ ...personnel, ...result }, documents);
+  };
+
+  const handleReactivate = async () => {
+    if (!confirm("این پرسنل دوباره به وضعیت «فعال» بازگردانده شود؟")) return;
+    setSavingEmployment(true);
+    const result = await setEmploymentStatus(personnel.id, "active", "", currentUser?.name || currentUser?.username);
+    setSavingEmployment(false);
+    if (result?.__error) { alert(result.message); return; }
+    refreshAfterChange({ ...personnel, ...result }, documents);
   };
 
   const docByType = (t) => documents.find((d) => d.docType === t);
@@ -82,11 +105,6 @@ export default function PersonnelDetail({ personnel: initialPersonnel, role, cur
     refreshAfterChange(finalP, documents);
   };
 
-  const toggleAudit = async () => {
-    if (!showAudit) setAuditLog(await loadAuditLog(personnel.id));
-    setShowAudit((v) => !v);
-  };
-
   const sm = personnelStatusMeta(personnel.status);
   const visibleDocTypes = DOC_TYPES.filter((dt) => !dt.specialOnly || personnel.qualificationRequired);
 
@@ -102,8 +120,11 @@ export default function PersonnelDetail({ personnel: initialPersonnel, role, cur
             <h2 style={{ margin: 0, fontSize: 17, color: THEME.navy, fontWeight: 700 }}>{personnel.fullName}</h2>
             <p style={{ fontSize: 12, color: THEME.text3, margin: "4px 0 0" }}>{personnel.jobTitle} · {personnel.contractorName}</p>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             <span style={{ ...styles.badge, color: sm.color, background: sm.bg, fontSize: 12 }}>{sm.label}</span>
+            <span style={{ ...styles.badge, color: employmentStatusMeta(personnel.employmentStatus).color, background: employmentStatusMeta(personnel.employmentStatus).bg, fontSize: 12 }}>
+              {employmentStatusMeta(personnel.employmentStatus).label}
+            </span>
             {personnel.syncStatus && personnel.syncStatus !== "synced" && <SyncStatusBadge status={personnel.syncStatus} />}
           </div>
         </div>
@@ -112,8 +133,47 @@ export default function PersonnelDetail({ personnel: initialPersonnel, role, cur
           <div>شماره تماس: {personnel.phone}</div>
           <div>تاریخ شروع به کار: {isoToJalaliDisplay(personnel.startDate)}</div>
           {personnel.occHealthExpiry && <div>انقضای طب کار: {isoToJalaliDisplay(personnel.occHealthExpiry)}</div>}
+          {personnel.employmentStatus === "terminated" && personnel.terminationDate && (
+            <div style={{ color: THEME.danger, fontWeight: 600 }}>تاریخ ترک کار / تسویه حساب: {isoToJalaliDisplay(personnel.terminationDate)}</div>
+          )}
         </div>
       </div>
+
+      {isEmployer && (
+        <div style={{ ...styles.card, width: "auto" }}>
+          <h3 style={{ fontSize: 14, color: THEME.navy, margin: "0 0 8px", fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
+            <UserX size={16} color={THEME.text2} /> وضعیت اشتغال
+          </h3>
+
+          {personnel.employmentStatus === "active" && !showTerminateForm && (
+            <button type="button" style={{ ...styles.smallButton, background: THEME.danger }} onClick={() => setShowTerminateForm(true)}>
+              ثبت ترک کار / تسویه حساب
+            </button>
+          )}
+
+          {showTerminateForm && (
+            <div>
+              <label style={styles.label}>تاریخ ترک کار / تسویه حساب</label>
+              <JalaliDateInput value={terminationDateDraft} onChange={setTerminationDateDraft} />
+              {terminationError && <p style={styles.error}>{terminationError}</p>}
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <button type="button" style={{ ...styles.smallButton, background: THEME.danger }} onClick={handleConfirmTermination} disabled={savingEmployment}>
+                  {savingEmployment ? "در حال ثبت..." : "تأیید ترک کار / تسویه حساب"}
+                </button>
+                <button type="button" style={{ ...styles.smallButton, background: THEME.text3 }} onClick={() => { setShowTerminateForm(false); setTerminationError(""); }}>
+                  انصراف
+                </button>
+              </div>
+            </div>
+          )}
+
+          {personnel.employmentStatus === "terminated" && !showTerminateForm && (
+            <button type="button" style={styles.smallButton} onClick={handleReactivate} disabled={savingEmployment}>
+              {savingEmployment ? "در حال ثبت..." : "بازگرداندن به وضعیت فعال"}
+            </button>
+          )}
+        </div>
+      )}
 
       {personnel.qualificationRequired && (
         <div style={{ ...styles.card, width: "auto" }}>
@@ -214,6 +274,9 @@ export default function PersonnelDetail({ personnel: initialPersonnel, role, cur
           <h3 style={{ fontSize: 14, color: THEME.navy, margin: "0 0 8px", fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
             <Clock size={16} /> فرآیند طب کار
           </h3>
+          <p style={{ fontSize: 12, color: THEME.text2, margin: "0 0 8px" }}>
+            تاریخ شروع به کار: <b>{personnel.startDate ? isoToJalaliDisplay(personnel.startDate) : "ثبت نشده"}</b>
+          </p>
           {!personnel.occHealthVisitDeadline && (
             <p style={{ fontSize: 12, color: THEME.text3 }}>پس از تأیید مدارک اولیه، مهلت ۳ روزه مراجعه به طب کار به‌صورت خودکار فعال می‌شود.</p>
           )}
@@ -223,22 +286,20 @@ export default function PersonnelDetail({ personnel: initialPersonnel, role, cur
           {personnel.occHealthResultDeadline && !docByType("health_final_result") && (
             <p style={{ fontSize: 12, color: "#b45309" }}>مهلت بارگذاری نتیجه تا تاریخ {isoToJalaliDisplay(personnel.occHealthResultDeadline)}</p>
           )}
+          {isEmployer && (personnel.occHealthVisitDeadline || personnel.occHealthResultDeadline) && (
+            <button
+              type="button"
+              style={{ ...styles.smallButton, marginTop: 8 }}
+              onClick={async () => {
+                await checkAndUpdateDeadlines([personnel]);
+                alert("بررسی انجام شد. اگر مهلت گذشته بود، اعلان باید همین الان توی زنگوله ظاهر شده باشد.");
+              }}
+            >
+              بررسی مهلت و ارسال اعلان همین الان
+            </button>
+          )}
         </div>
       )}
-
-      <div style={{ marginTop: 8 }}>
-        <div style={styles.backLink} onClick={toggleAudit}><History size={13} style={{ marginLeft: 4 }} />{showAudit ? "بستن سوابق" : "نمایش سوابق (Audit Log)"}</div>
-        {showAudit && (
-          <div style={{ ...styles.card, width: "auto" }}>
-            {auditLog.length === 0 && <p style={{ fontSize: 12, color: THEME.text3 }}>سابقه‌ای ثبت نشده.</p>}
-            {auditLog.map((a) => (
-              <div key={a.id} style={{ fontSize: 11.5, color: THEME.text2, borderBottom: `1px solid ${THEME.border}`, padding: "6px 0" }}>
-                <b>{a.performed_by || "—"}</b> · {a.action} · {a.detail}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
 
       {viewerSrc && <DocumentViewerModal src={viewerSrc} onClose={() => setViewerSrc(null)} />}
     </div>

@@ -98,11 +98,13 @@ export async function deleteRecord(module, id) {
 // ---------- sync queue ----------
 
 // action: "insert" | "update" | "delete"
-export async function enqueueSync({ module, recordId, action, payload }) {
+// fileUpload (اختیاری): { bucket, path, base64Data, contentType, fieldName } — وقتی این
+// آیتم شامل یک فایل base64 است که باید قبل از insert به Storage آپلود شود
+export async function enqueueSync({ module, recordId, action, payload, fileUpload }) {
   const db = await openDb();
   const t = tx(db, ["sync_queue"], "readwrite");
   const item = {
-    module, recordId, action, payload,
+    module, recordId, action, payload, fileUpload: fileUpload || null,
     status: "pending", attempts: 0, lastError: "",
     createdAt: new Date().toISOString(), nextRetryAt: new Date().toISOString(),
   };

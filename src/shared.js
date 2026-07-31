@@ -8,8 +8,8 @@ export const APP_NAME = "Integrated HSE Management System";
 
 // نکته امنیتی: فقط از کلید publishable/anon استفاده می‌شود، هرگز کلید secret را
 // داخل کد سمت مرورگر قرار ندهید چون هرکسی که اپ را باز کند می‌تواند آن را ببیند.
-const SUPABASE_URL = "https://zmmxiyqlwkqjzghbcydi.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_PnB5Mp5wo_EOzJHa7HGwBQ_gqF1gvo0";
+export const SUPABASE_URL = "https://zmmxiyqlwkqjzghbcydi.supabase.co";
+export const SUPABASE_ANON_KEY = "sb_publishable_PnB5Mp5wo_EOzJHa7HGwBQ_gqF1gvo0";
 // استفاده در offline/networkStatus.js برای تست واقعی در دسترس‌بودن (نه فقط navigator.onLine)
 export const SUPABASE_PING_URL = `${SUPABASE_URL}/rest/v1/`;
 

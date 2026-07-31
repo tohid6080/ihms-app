@@ -64,6 +64,41 @@ export function isoToJalaliDisplay(iso) {
   return `${p[0]}/${String(p[1]).padStart(2, "0")}/${String(p[2]).padStart(2, "0")}`;
 }
 
+/**
+ * Same as isoToJalaliDisplay, but also safe for full timestamps
+ * ("2026-07-30T12:34:56.789Z"), not just bare dates ("2026-07-30") —
+ * isoToJalali() would otherwise choke on the "T12:34..." suffix. Use this
+ * for any created_at/updated_at/uploaded_at/reviewed_at style column.
+ */
+export function toJalaliSafe(value) {
+  if (!value) return "";
+  const datePart = String(value).slice(0, 10);
+  return isoToJalaliDisplay(datePart);
+}
+
+// همان toJalaliSafe به‌همراه ساعت محلی، برای جاهایی که ساعت هم لازم است
+// (مثل ثبت زمان دقیق آرشیو).
+export function toJalaliDateTime(value) {
+  if (!value) return "";
+  const jalaliDate = toJalaliSafe(value);
+  if (!jalaliDate) return "";
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return jalaliDate;
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${jalaliDate} - ${hh}:${mm}`;
+}
+
+// برای اسم فایل اکسل آرشیو: "1405-05-10_14-35" (خط‌تیره به‌جای اسلش، چون
+// اسلش در اسم فایل مجاز نیست)
+export function jalaliFileTimestamp() {
+  const now = new Date();
+  const jalaliDate = toJalaliSafe(now.toISOString()).replaceAll("/", "-");
+  const hh = String(now.getHours()).padStart(2, "0");
+  const mm = String(now.getMinutes()).padStart(2, "0");
+  return `${jalaliDate}_${hh}-${mm}`;
+}
+
 const JALALI_MONTHS = ["فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"];
 
 export function JalaliDateInput({ value, onChange, allowEmpty }) {

@@ -38,5 +38,8 @@ export function fileToBase64(file, maxDim = 1600, quality = 0.8) {
 }
 
 export function isPdfDataUrl(dataUrl) {
-  return typeof dataUrl === "string" && dataUrl.startsWith("data:application/pdf");
+  if (typeof dataUrl !== "string") return false;
+  // یا یک data URL کلاسیک (هنوز روی دستگاه، آفلاین و سینک‌نشده)
+  // یا یک آدرس واقعی در Supabase Storage که با پسوند pdf. ذخیره شده
+  return dataUrl.startsWith("data:application/pdf") || dataUrl.toLowerCase().endsWith(".pdf");
 }

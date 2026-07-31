@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Plus, Search, Users, FileSpreadsheet, FileDown, BarChart3 } from "lucide-react";
 import { styles, THEME } from "../shared.js";
-import { loadPersonnelListOfflineFirst, personnelStatusMeta, checkAndUpdateDeadlines, loadNotifications, loadContractorOptions, PERSONNEL_STATUS } from "./personnelApi.js";
+import { loadPersonnelListOfflineFirst, personnelStatusMeta, employmentStatusMeta, checkAndUpdateDeadlines, loadNotifications, loadContractorOptions, PERSONNEL_STATUS } from "./personnelApi.js";
 import { exportPersonnelPdf, exportPersonnelExcel } from "./personnelExport.js";
 import PersonnelForm from "./PersonnelForm.jsx";
 import PersonnelDetail from "./PersonnelDetail.jsx";
@@ -20,6 +20,7 @@ export default function PersonnelDashboard({ onBack, currentUser, role, initialS
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter || "all");
   const [contractorFilter, setContractorFilter] = useState(initialContractorFilter || "all");
+  const [showTerminated, setShowTerminated] = useState(false);
   const [contractorOptions, setContractorOptions] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [selected, setSelected] = useState(null);
@@ -58,6 +59,8 @@ export default function PersonnelDashboard({ onBack, currentUser, role, initialS
     : list;
 
   const filtered = scoped.filter((p) => {
+    if (!showTerminated && p.employmentStatus === "terminated") return false;
+    if (showTerminated && p.employmentStatus !== "terminated") return false;
     if (statusFilter !== "all" && p.status !== statusFilter) return false;
     if (!isContractor && contractorFilter !== "all" && p.contractorId !== contractorFilter) return false;
     if (search.trim()) {
@@ -182,6 +185,16 @@ export default function PersonnelDashboard({ onBack, currentUser, role, initialS
         )}
       </div>
 
+      <div
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10, cursor: "pointer",
+          fontSize: 12, fontWeight: 600, color: showTerminated ? THEME.danger : THEME.teal,
+        }}
+        onClick={() => setShowTerminated((v) => !v)}
+      >
+        {showTerminated ? "بازگشت به لیست پرسنل فعال" : "نمایش پرسنل ترک‌کار / تسویه‌حساب‌شده"}
+      </div>
+
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
         <button
           type="button"
@@ -214,6 +227,11 @@ export default function PersonnelDashboard({ onBack, currentUser, role, initialS
                 <div style={{ fontSize: 11.5, color: THEME.text3, marginTop: 4 }}>{p.jobTitle} · {p.contractorName}</div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                {showTerminated && (
+                  <span style={{ ...styles.badge, color: employmentStatusMeta(p.employmentStatus).color, background: employmentStatusMeta(p.employmentStatus).bg }}>
+                    {employmentStatusMeta(p.employmentStatus).label}
+                  </span>
+                )}
                 <span style={{ ...styles.badge, color: sm.color, background: sm.bg }}>{sm.label}</span>
                 {p.syncStatus && p.syncStatus !== "synced" && <SyncStatusBadge status={p.syncStatus} onRetry={() => load()} />}
               </div>

@@ -1,6 +1,7 @@
 import { sb, sbOk, sbErrMsg, uid, todayISO } from "../shared.js";
-import { offlineWrite } from "../offline/offlineWrite.js";
+import { offlineWrite, offlineWriteFile } from "../offline/offlineWrite.js";
 import { isOnline } from "../offline/networkStatus.js";
+import { checkUploadAllowed } from "../offline/dbSizeMonitor.js";
 import { getRecordsByModule, putRecord } from "../offline/offlineDb.js";
 
 /**
@@ -45,6 +46,35 @@ export const PERSONNEL_STATUS = [
 export function personnelStatusMeta(status) {
   return PERSONNEL_STATUS.find((s) => s.value === status) || PERSONNEL_STATUS[0];
 }
+
+// وضعیت اشتغال — کاملاً مستقل از وضعیت گردش‌کار تأیید بالا (PERSONNEL_STATUS).
+// آن وضعیت مربوط به مراحل تأیید مدارک/صلاحیت/طب‌کار است؛ این یکی فقط می‌گوید
+// آیا فرد الان همکاری می‌کند یا ترک‌کار/تسویه‌حساب شده — با ثبت هیچ‌کدام از
+// سوابق/مدارک/معاینات قبلی‌اش حذف نمی‌شود.
+export const EMPLOYMENT_STATUS = [
+  { value: "active", label: "فعال", color: "#166534", bg: "#dcfce7" },
+  { value: "terminated", label: "ترک کار / تسویه حساب", color: "#5b6b7d", bg: "#eef1f5" },
+];
+export function employmentStatusMeta(value) {
+  return EMPLOYMENT_STATUS.find((s) => s.value === value) || EMPLOYMENT_STATUS[0];
+}
+
+// ثبت ترک‌کار/تسویه‌حساب یا بازگرداندن به فعال — تاریخ فقط برای ترک‌کار الزامی است.
+export async function setEmploymentStatus(id, employmentStatus, terminationDate, performedBy) {
+  if (employmentStatus === "terminated" && !terminationDate) {
+    return { __error: true, message: "تاریخ ترک کار / تسویه حساب الزامی است" };
+  }
+  const patch = { employmentStatus, terminationDate: employmentStatus === "terminated" ? terminationDate : "" };
+  const result = await updatePersonnelDB(id, patch, performedBy);
+  if (result?.__error) return result;
+  if (performedBy) {
+    insertAuditLog(id, employmentStatus === "terminated" ? "terminated" : "edited",
+      employmentStatus === "terminated" ? `ثبت ترک کار / تسویه حساب (تاریخ: ${terminationDate})` : "بازگرداندن به وضعیت اشتغال فعال",
+      performedBy);
+  }
+  return result;
+}
+
 export function docStatusMeta(status) {
   return DOC_STATUS.find((s) => s.value === status) || DOC_STATUS[0];
 }
@@ -87,6 +117,8 @@ function personnelFromRow(r) {
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     syncStatus: r.__syncStatus || "synced",
+    employmentStatus: r.employment_status || "active",
+    terminationDate: r.termination_date || "",
   };
 }
 
@@ -162,6 +194,8 @@ export async function updatePersonnelDB(id, patch, performedBy) {
   if ("occHealthExpiry" in patch) dbPatch.occ_health_expiry = patch.occHealthExpiry || null;
   if ("occHealthVisitDeadline" in patch) dbPatch.occ_health_visit_deadline = patch.occHealthVisitDeadline || null;
   if ("occHealthResultDeadline" in patch) dbPatch.occ_health_result_deadline = patch.occHealthResultDeadline || null;
+  if ("employmentStatus" in patch) dbPatch.employment_status = patch.employmentStatus;
+  if ("terminationDate" in patch) dbPatch.termination_date = patch.terminationDate || null;
   const result = await offlineWrite({ module: "personnel", table: "personnel", action: "update", id, payload: dbPatch });
   if (!result.ok) return { __error: true, message: "خطا در ذخیره‌سازی" };
   if (performedBy) insertAuditLog(id, "edited", `به‌روزرسانی: ${Object.keys(patch).join(", ")}`, performedBy);
@@ -197,6 +231,12 @@ export async function loadPersonnelDocuments(personnelId) {
 
 // replaces any existing document of the same type for this person (upload = replace)
 export async function upsertDocument(personnelId, docType, fileData, fileName, mimeType, performedBy) {
+  if (isOnline()) {
+    const { allowed, storageMb } = await checkUploadAllowed();
+    if (!allowed) {
+      return { __error: true, message: `فضای ذخیره‌سازی پر شده است (${storageMb} مگابایت). لطفاً ابتدا از بخش «آرشیو فایل‌ها» مدارک قدیمی را دانلود و حذف کنید، سپس دوباره تلاش کنید.` };
+    }
+  }
   const existing = await sb(`personnel_documents?personnel_id=eq.${personnelId}&doc_type=eq.${docType}&select=id`);
   if (sbOk(existing) && existing.length > 0) {
     for (const row of existing) {
@@ -204,8 +244,11 @@ export async function upsertDocument(personnelId, docType, fileData, fileName, m
     }
   }
   const id = uid("doc");
-  const dbPayload = { personnel_id: personnelId, doc_type: docType, file_data: fileData, file_name: fileName, mime_type: mimeType, status: "pending" };
-  const result = await offlineWrite({ module: "personnelDocuments", table: "personnel_documents", action: "insert", id, payload: dbPayload });
+  const result = await offlineWriteFile({
+    module: "personnelDocuments", table: "personnel_documents", bucket: "personnel-documents", id,
+    base64Data: fileData, contentType: mimeType, fileFieldName: "file_data",
+    extraFields: { personnel_id: personnelId, doc_type: docType, file_name: fileName, mime_type: mimeType, status: "pending" },
+  });
   if (!result.ok) return { __error: true, message: "خطا در ذخیره‌سازی" };
   insertAuditLog(personnelId, "doc_uploaded", `بارگذاری مدرک: ${docType}`, performedBy);
   return { ...documentFromRow(result.record), syncStatus: result.offline ? "pending" : "synced" };
@@ -226,12 +269,22 @@ export async function deleteDocumentDB(id) {
 
 // ---------- Notifications ----------
 export async function loadNotifications(recipientRole) {
-  const rows = await sb(`personnel_notifications?is_read=eq.false&select=*&order=created_at.desc&limit=50`);
+  // not.is.true به‌جای eq.false: هر ردیفی که صراحتاً is_read=true نشده رو
+  // برمی‌گردونه (چه false باشه چه NULL) — چون قبلاً insertNotification این
+  // ستون رو صریح ست نمی‌کرد و همه‌ی اعلان‌های قدیمی با is_read=NULL ذخیره
+  // شده بودن که با فیلتر eq.false اصلاً دیده نمی‌شدن.
+  const rows = await sb(`personnel_notifications?is_read=not.is.true&select=*&order=created_at.desc&limit=50`);
   const list = sbOk(rows) ? rows : [];
   return list.filter((r) => r.recipient_role === recipientRole || r.recipient_role === "both");
 }
 export async function insertNotification(personnelId, type, message, recipientRole) {
-  await sb("personnel_notifications", { method: "POST", body: JSON.stringify([{ id: undefined, personnel_id: personnelId, type, message, recipient_role: recipientRole }]), prefer: "return=minimal" });
+  await sb("personnel_notifications", { method: "POST", body: JSON.stringify([{ personnel_id: personnelId, type, message, recipient_role: recipientRole, is_read: false }]), prefer: "return=minimal" });
+}
+// همون جدول اعلان‌ها، فقط برای رویدادهای مربوط به آنومالی (نه پرسنل) —
+// anomaly_id به‌جای personnel_id پر می‌شود؛ زنگوله‌ی اعلان‌ها همان‌طور که
+// هست کار می‌کند چون فقط به message نگاه می‌کند، نه به این‌که کدام ستون پر شده.
+export async function insertAnomalyNotification(anomalyId, type, message, recipientRole) {
+  await sb("personnel_notifications", { method: "POST", body: JSON.stringify([{ anomaly_id: anomalyId, type, message, recipient_role: recipientRole, is_read: false }]), prefer: "return=minimal" });
 }
 export async function markNotificationRead(id) {
   await sb(`personnel_notifications?id=eq.${id}`, { method: "PATCH", body: JSON.stringify({ is_read: true }), prefer: "return=minimal" });
@@ -252,13 +305,18 @@ export async function loadAuditLog(personnelId) {
 
 // ---------- Occupational health workflow helpers ----------
 // Called once employer approves initial documents for a "no certificate" person.
-export async function startHealthVisitDeadline(personnelId) {
-  const deadline = addDays(todayISO(), 3);
+// مهلت‌ها از تاریخ واقعی شروع به کار محاسبه می‌شوند، نه تاریخ ثبت توی سیستم —
+// اگه یه پرسنل با تأخیر ثبت بشه (مثلاً امروز ۹ مرداده ولی از ۱ مرداد مشغول
+// بوده)، مهلت باید بلافاصله «گذشته» حساب بشه، نه از همین لحظه دوباره شروع بشه.
+export async function startHealthVisitDeadline(personnelId, startDate) {
+  const base = startDate || todayISO();
+  const deadline = addDays(base, 3);
   await updatePersonnelDB(personnelId, { status: "pending_health_visit", occHealthVisitDeadline: deadline });
 }
 // Called once contractor uploads the visit receipt.
-export async function startHealthResultDeadline(personnelId) {
-  const deadline = addDays(todayISO(), 7);
+export async function startHealthResultDeadline(personnelId, startDate) {
+  const base = startDate || todayISO();
+  const deadline = addDays(base, 7);
   await updatePersonnelDB(personnelId, { status: "pending_health_result", occHealthResultDeadline: deadline });
 }
 // Called once employer approves the final health result.
@@ -275,16 +333,35 @@ export async function finalizeHealthApproval(personnelId, healthDate) {
  */
 export async function checkAndUpdateDeadlines(personnelList) {
   const today = todayISO();
+
+  // فقط اعلان‌های «هنوز خوانده‌نشده» را حساب کن — نه هر اعلانی که تا حالا
+  // برای این نفر/نوع ساخته شده. اگه فقط بر اساس «تا حالا ساخته شده یا نه»
+  // چک می‌کردیم، یه اعلان قدیمی و تست‌شده (حتی اگه از قبل خوانده شده یا
+  // به‌خاطر باگ قبلی is_read اصلاً دیده نشده) برای همیشه جلوی ثبت اعلان
+  // جدید و واقعی رو می‌گرفت.
+  const existingRows = await sb("personnel_notifications?is_read=not.is.true&select=personnel_id,type");
+  const existingKeys = new Set((sbOk(existingRows) ? existingRows : []).map((r) => `${r.personnel_id}:${r.type}`));
+  const alreadyNotified = (personnelId, type) => existingKeys.has(`${personnelId}:${type}`);
+
   for (const p of personnelList) {
     if (p.status === "pending_health_visit" && p.occHealthVisitDeadline && p.occHealthVisitDeadline < today) {
-      await insertNotification(p.id, "health_visit_deadline", `مهلت ۳ روزه مراجعه به طب کار برای ${p.fullName} به پایان رسید.`, "both");
+      if (!alreadyNotified(p.id, "health_visit_deadline")) {
+        await insertNotification(p.id, "health_visit_deadline", `مهلت ۳ روزه مراجعه به طب کار برای ${p.fullName} به پایان رسید.`, "both");
+        existingKeys.add(`${p.id}:health_visit_deadline`);
+      }
     }
     if (p.status === "pending_health_result" && p.occHealthResultDeadline && p.occHealthResultDeadline < today) {
-      await insertNotification(p.id, "health_result_deadline", `مهلت ۷ روزه بارگذاری نتیجه طب کار برای ${p.fullName} به پایان رسید.`, "both");
+      if (!alreadyNotified(p.id, "health_result_deadline")) {
+        await insertNotification(p.id, "health_result_deadline", `مهلت ۷ روزه بارگذاری نتیجه طب کار برای ${p.fullName} به پایان رسید.`, "both");
+        existingKeys.add(`${p.id}:health_result_deadline`);
+      }
     }
     if (p.status === "active" && p.occHealthExpiry && p.occHealthExpiry < today) {
       await updatePersonnelDB(p.id, { status: "health_expired" });
-      await insertNotification(p.id, "health_expired", `اعتبار طب کار ${p.fullName} منقضی شده است.`, "both");
+      if (!alreadyNotified(p.id, "health_expired")) {
+        await insertNotification(p.id, "health_expired", `اعتبار طب کار ${p.fullName} منقضی شده است.`, "both");
+        existingKeys.add(`${p.id}:health_expired`);
+      }
     }
   }
 }
@@ -338,14 +415,14 @@ export async function progressPersonnelWorkflow(personnel, documents, performedB
 
   // ورود تازه به «در انتظار مراجعه به طب کار» → مهلت ۳ روزه را فعال کن
   if (nextStatus === "pending_health_visit" && !personnel.occHealthVisitDeadline) {
-    await startHealthVisitDeadline(personnel.id);
+    await startHealthVisitDeadline(personnel.id, personnel.startDate);
     await insertAuditLog(personnel.id, "notification_sent", "شروع مهلت ۳ روزه مراجعه به طب کار", performedBy);
     return { ...personnel, status: "pending_health_visit" };
   }
 
   // رسید مراجعه بارگذاری شده ولی هنوز مهلت ۷ روزه شروع نشده → شروعش کن
   if (personnel.occHealthPath === "no_certificate" && documents.find((d) => d.docType === "health_visit_receipt") && !personnel.occHealthResultDeadline) {
-    await startHealthResultDeadline(personnel.id);
+    await startHealthResultDeadline(personnel.id, personnel.startDate);
     await insertAuditLog(personnel.id, "notification_sent", "شروع مهلت ۷ روزه بارگذاری نتیجه طب کار", performedBy);
     return { ...personnel, status: "pending_health_result", occHealthResultDeadline: todayISO() };
   }

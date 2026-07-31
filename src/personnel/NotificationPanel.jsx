@@ -1,22 +1,23 @@
 import React, { useState } from "react";
 import { Bell, Check, X } from "lucide-react";
 import { styles, THEME } from "../shared.js";
-import { markNotificationRead } from "./personnelApi.js";
 
 /**
- * Bell + dropdown list for personnel-module notifications
- * (health-visit deadline, health-result deadline, health expiry —
- * inserted by checkAndUpdateDeadlines in personnelApi.js).
+ * Bell + dropdown list for notifications from ANY module — personnel-module
+ * deadlines (health-visit, health-result, health expiry) and anomaly-module
+ * SLA deadlines (Level M 72h, Level L 1 week), merged together by the
+ * parent dashboard. `onMarkRead(notification)` is supplied by the parent so
+ * this component doesn't need to know which table a notification came from.
  */
-export default function NotificationPanel({ notifications, onChanged }) {
+export default function NotificationPanel({ notifications, onChanged, onMarkRead }) {
   const [open, setOpen] = useState(false);
 
-  const handleMarkRead = async (id) => {
-    await markNotificationRead(id);
+  const handleMarkRead = async (n) => {
+    await onMarkRead(n);
     onChanged();
   };
   const handleMarkAllRead = async () => {
-    for (const n of notifications) await markNotificationRead(n.id);
+    for (const n of notifications) await onMarkRead(n);
     onChanged();
   };
 
@@ -68,7 +69,7 @@ export default function NotificationPanel({ notifications, onChanged }) {
             <div key={n.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, borderBottom: `1px solid ${THEME.border}`, padding: "8px 2px" }}>
               <button
                 type="button"
-                onClick={() => handleMarkRead(n.id)}
+                onClick={() => handleMarkRead(n)}
                 title="علامت‌گذاری به‌عنوان خوانده‌شده"
                 style={{ background: THEME.tealSoft, border: "none", borderRadius: "50%", width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
               >

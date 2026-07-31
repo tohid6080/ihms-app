@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { AlertTriangle, Plus, X, ChevronRight, LogOut, Search, Filter, CheckCircle2, Clock, Camera, ImagePlus, Trash2, FileSpreadsheet, FileText, User, Users, ShieldCheck, LayoutGrid, BarChart3, Briefcase, Settings } from "lucide-react";
+import { AlertTriangle, Plus, X, ChevronRight, LogOut, Search, Filter, CheckCircle2, Clock, Camera, ImagePlus, Trash2, FileSpreadsheet, FileText, User, Users, ShieldCheck, LayoutGrid, BarChart3, Briefcase, Settings, Archive } from "lucide-react";
 import * as XLSX from "xlsx";
 import BowTieDashboard from "./bowtie/BowTieDashboard.jsx";
 import PersonnelForm from "./personnel/PersonnelForm.jsx";
@@ -10,9 +10,12 @@ import { loadPermissionsMap, isModuleVisible, getAccessLevel, initializeNoAccess
 import JobPositionManager from "./jobpositions/JobPositionManager.jsx";
 import { loadActiveJobPositions, loadJobPositionTitle } from "./jobpositions/jobPositionsApi.js";
 import NotificationPanel from "./personnel/NotificationPanel.jsx";
-import { loadNotifications, loadPersonnelList } from "./personnel/personnelApi.js";
+import { loadNotifications, loadPersonnelList, checkAndUpdateDeadlines, markNotificationRead } from "./personnel/personnelApi.js";
 import OnlineIndicator from "./offline/OnlineIndicator.jsx";
-import { offlineWrite } from "./offline/offlineWrite.js";
+import { offlineWrite, offlineWriteFile } from "./offline/offlineWrite.js";
+import DbSizeWarningBanner from "./offline/DbSizeWarningBanner.jsx";
+import { checkUploadAllowed } from "./offline/dbSizeMonitor.js";
+import ArchiveManager from "./offline/ArchiveManager.jsx";
 import { isOnline } from "./offline/networkStatus.js";
 import { getRecordsByModule, putRecord, getQueue } from "./offline/offlineDb.js";
 import SyncStatusBadge from "./offline/SyncStatusBadge.jsx";
@@ -277,6 +280,65 @@ async function loadAnomaliesOfflineFirst() {
   // آفلاین یا خطای شبکه → فقط از حافظه‌ی محلی بخوان
   const cached = await getRecordsByModule("anomalies");
   return cached.filter((c) => !c.data?.deleted).map((c) => anomalyFromRow({ ...c.data, __syncStatus: c.syncStatus }));
+}
+
+// ================= اعلان‌های مهلت رفع آنومالی (SLA بر اساس سطح ریسک) =================
+//
+// Level H: بلافاصله توسط سرپرست مربوطه کار تعطیل می‌شود و تا رفع کامل ادامه
+//          کار مجاز نیست — این یک الزام عملیاتی فوری است، نه یک مهلت زمانی
+//          عددی، پس برایش اعلان مهلت ساخته نمی‌شود.
+// Level M: حداکثر ۷۲ ساعت (۳ روز) از تاریخ ثبت برای رفع کامل.
+// Level L: حداکثر یک هفته (۷ روز) از تاریخ ثبت برای رفع کامل.
+//
+// دقیقاً همان الگوی «فقط اعلان‌های خوانده‌نشده را در نظر بگیر» که برای مهلت‌های
+// طب کار پرسنل ساختیم، تا هم از اسپم جلوگیری کند و هم بعد از خوانده‌شدن یک
+// اعلان، اگر مشکل هنوز باز بود، دوباره امکان اطلاع‌رسانی وجود داشته باشد.
+
+async function insertAnomalyNotification(anomalyId, type, message, recipientRole) {
+  await sb("anomaly_notifications", { method: "POST", body: JSON.stringify([{ anomaly_id: anomalyId, type, message, recipient_role: recipientRole, is_read: false }]), prefer: "return=minimal" });
+}
+async function loadAnomalyNotifications(recipientRole) {
+  const rows = await sb(`anomaly_notifications?is_read=not.is.true&select=*&order=created_at.desc&limit=50`);
+  const list = sbOk(rows) ? rows : [];
+  return list.filter((r) => r.recipient_role === recipientRole || r.recipient_role === "both");
+}
+async function markAnomalyNotificationRead(id) {
+  await sb(`anomaly_notifications?id=eq.${id}`, { method: "PATCH", body: JSON.stringify({ is_read: true }), prefer: "return=minimal" });
+}
+
+function addDaysToIso(iso, days) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+async function checkAnomalyDeadlines(anomalies) {
+  const today = todayISO();
+
+  const existingRows = await sb("anomaly_notifications?is_read=not.is.true&select=anomaly_id,type");
+  const existingKeys = new Set((sbOk(existingRows) ? existingRows : []).map((r) => `${r.anomaly_id}:${r.type}`));
+  const alreadyNotified = (id, type) => existingKeys.has(`${id}:${type}`);
+
+  for (const a of anomalies) {
+    if (a.status === "Closed" || !a.date) continue;
+
+    if (a.riskLevel === "Med") {
+      const deadline = addDaysToIso(a.date, 3);
+      if (deadline && deadline < today && !alreadyNotified(a.id, "anomaly_sla_med")) {
+        await insertAnomalyNotification(a.id, "anomaly_sla_med", `مهلت ۷۲ ساعته رفع آنومالی سطح M (${a.trackingNumber}) به پایان رسید و هنوز بسته نشده است.`, "both");
+        existingKeys.add(`${a.id}:anomaly_sla_med`);
+      }
+    }
+    if (a.riskLevel === "Low") {
+      const deadline = addDaysToIso(a.date, 7);
+      if (deadline && deadline < today && !alreadyNotified(a.id, "anomaly_sla_low")) {
+        await insertAnomalyNotification(a.id, "anomaly_sla_low", `مهلت یک‌هفته‌ای رفع آنومالی سطح L (${a.trackingNumber}) به پایان رسید و هنوز بسته نشده است.`, "both");
+        existingKeys.add(`${a.id}:anomaly_sla_low`);
+      }
+    }
+  }
 }
 
 async function insertAnomaly(record) {
@@ -632,7 +694,7 @@ function LoginScreen({ onLogin }) {
         </div>
         <h2 style={{ textAlign: "center", marginBottom: 2, fontSize: 18, direction: "ltr", color: THEME.navy, fontWeight: 700, letterSpacing: "-0.01em" }}>{APP_NAME}</h2>
         <p style={{ textAlign: "center", color: THEME.text3, fontSize: 12.5, marginTop: 4, marginBottom: 22, fontWeight: 500 }}>
-          ورود به سامانه
+          ورود به سامانه مدیریت یکپارچه ایمنی، بهداشت و محیط زیست
         </p>
 
         <label style={styles.label}>نام کاربری</label>
@@ -1011,7 +1073,7 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
   const [photoBusy, setPhotoBusy] = useState(false);
 
   const handlePickFiles = async (fileList) => {
-    const files = Array.from(fileList || []).slice(0, 8 - photos.length);
+    const files = Array.from(fileList || []).slice(0, 2 - photos.length);
     if (files.length === 0) return;
     setPhotoBusy(true);
     try {
@@ -1036,6 +1098,13 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
     if (!area.trim() || !description.trim()) {
       setError("موقعیت/ناحیه و شرح آنومالی الزامی است");
       return;
+    }
+    if (photos.length > 0 && isOnline()) {
+      const { allowed, storageMb } = await checkUploadAllowed();
+      if (!allowed) {
+        setError(`فضای ذخیره‌سازی پر شده است (${storageMb} مگابایت). لطفاً ابتدا از بخش «آرشیو فایل‌ها» عکس‌های قدیمی را دانلود و حذف کنید، یا آنومالی را بدون عکس ثبت کنید.`);
+        return;
+      }
     }
     setSaving(true);
     const existing = await loadAnomaliesOfflineFirst();
@@ -1072,10 +1141,11 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
     }
     if (photos.length > 0) {
       for (const p of photos) {
-        await offlineWrite({
-          module: "anomalyPhotos", table: "anomaly_photos", action: "insert",
+        await offlineWriteFile({
+          module: "anomalyPhotos", table: "anomaly_photos", bucket: "anomaly-photos",
           id: uid("photo"), includeIdInPayload: false,
-          payload: { anomaly_id: record.id, photo: p, stage: "report" },
+          base64Data: p, contentType: "image/jpeg", fileFieldName: "photo",
+          extraFields: { anomaly_id: record.id, stage: "report" },
         });
       }
     }
@@ -1176,12 +1246,12 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
         <label style={styles.label}>شخص پیگیری‌کننده (اختیاری)</label>
         <input style={styles.input} value={follower} onChange={(e) => setFollower(e.target.value)} dir="rtl" />
 
-        <label style={styles.label}>عکس‌های پیوست ({photos.length}/8)</label>
+        <label style={styles.label}>عکس‌های پیوست ({photos.length}/2)</label>
         <div style={{ display: "flex", gap: 8 }}>
           <label
             style={{
               ...styles.smallButton, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 0", position: "relative", overflow: "hidden",
-              opacity: photoBusy || photos.length >= 8 ? 0.5 : 1, pointerEvents: photoBusy || photos.length >= 8 ? "none" : "auto",
+              opacity: photoBusy || photos.length >= 2 ? 0.5 : 1, pointerEvents: photoBusy || photos.length >= 2 ? "none" : "auto",
             }}
           >
             <Camera size={16} /> گرفتن عکس
@@ -1196,7 +1266,7 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
           <label
             style={{
               ...styles.smallButton, flex: 1, background: "#334155", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 0", position: "relative", overflow: "hidden",
-              opacity: photoBusy || photos.length >= 8 ? 0.5 : 1, pointerEvents: photoBusy || photos.length >= 8 ? "none" : "auto",
+              opacity: photoBusy || photos.length >= 2 ? 0.5 : 1, pointerEvents: photoBusy || photos.length >= 2 ? "none" : "auto",
             }}
           >
             <ImagePlus size={16} /> افزودن از گالری
@@ -1351,7 +1421,7 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
 
   const handleActionPickFiles = async (fileList) => {
     if (!canActAsContractor) { alert("شما مجوز ثبت اقدام اصلاحی را ندارید"); return; }
-    const files = Array.from(fileList || []).slice(0, 8 - actionPhotos.length);
+    const files = Array.from(fileList || []).slice(0, 2 - actionPhotos.length);
     if (files.length === 0) return;
     setActionPhotoBusy(true);
     try {
@@ -1367,13 +1437,21 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
   const submitForReview = async (a) => {
     if (!canActAsContractor) { alert("شما مجوز ثبت اقدام اصلاحی را ندارید"); return; }
     if (!actionText.trim()) return;
+    if (actionPhotos.length > 0 && isOnline()) {
+      const { allowed, storageMb } = await checkUploadAllowed();
+      if (!allowed) {
+        alert(`فضای ذخیره‌سازی پر شده است (${storageMb} مگابایت). لطفاً ابتدا از بخش «آرشیو فایل‌ها» عکس‌های قدیمی را حذف کنید، یا اقدام اصلاحی را بدون عکس ثبت کنید.`);
+        return;
+      }
+    }
     setActionSaving(true);
     if (actionPhotos.length > 0) {
       for (const p of actionPhotos) {
-        await offlineWrite({
-          module: "anomalyPhotos", table: "anomaly_photos", action: "insert",
+        await offlineWriteFile({
+          module: "anomalyPhotos", table: "anomaly_photos", bucket: "anomaly-photos",
           id: uid("photo"), includeIdInPayload: false,
-          payload: { anomaly_id: a.id, photo: p, stage: "fix" },
+          base64Data: p, contentType: "image/jpeg", fileFieldName: "photo",
+          extraFields: { anomaly_id: a.id, stage: "fix" },
         });
       }
     }
@@ -1584,13 +1662,13 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
                     <label style={styles.label}>شرح اقدام اصلاحی انجام‌شده</label>
                     <textarea style={{ ...styles.input, minHeight: 70, fontFamily: "inherit" }} value={actionText} onChange={(e) => setActionText(e.target.value)} dir="rtl" placeholder="توضیح دهید چه اقدامی برای رفع این آنومالی انجام دادید" />
 
-                    <label style={styles.label}>عکس اقدام اصلاحی ({actionPhotos.length}/8)</label>
+                    <label style={styles.label}>عکس اقدام اصلاحی ({actionPhotos.length}/2)</label>
                     <div style={{ display: "flex", gap: 8 }}>
-                      <label style={{ ...styles.smallButton, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 0", position: "relative", overflow: "hidden", opacity: actionPhotoBusy || actionPhotos.length >= 8 ? 0.5 : 1, pointerEvents: actionPhotoBusy || actionPhotos.length >= 8 ? "none" : "auto" }}>
+                      <label style={{ ...styles.smallButton, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 0", position: "relative", overflow: "hidden", opacity: actionPhotoBusy || actionPhotos.length >= 2 ? 0.5 : 1, pointerEvents: actionPhotoBusy || actionPhotos.length >= 2 ? "none" : "auto" }}>
                         <Camera size={16} /> گرفتن عکس
                         <input type="file" accept="image/*" capture="environment" style={{ position: "absolute", width: 1, height: 1, opacity: 0, overflow: "hidden", pointerEvents: "none" }} onChange={(e) => { handleActionPickFiles(e.target.files); e.target.value = ""; }} />
                       </label>
-                      <label style={{ ...styles.smallButton, flex: 1, background: "#334155", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 0", position: "relative", overflow: "hidden", opacity: actionPhotoBusy || actionPhotos.length >= 8 ? 0.5 : 1, pointerEvents: actionPhotoBusy || actionPhotos.length >= 8 ? "none" : "auto" }}>
+                      <label style={{ ...styles.smallButton, flex: 1, background: "#334155", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 0", position: "relative", overflow: "hidden", opacity: actionPhotoBusy || actionPhotos.length >= 2 ? 0.5 : 1, pointerEvents: actionPhotoBusy || actionPhotos.length >= 2 ? "none" : "auto" }}>
                         <ImagePlus size={16} /> افزودن از گالری
                         <input type="file" accept="image/*" multiple style={{ position: "absolute", width: 1, height: 1, opacity: 0, overflow: "hidden", pointerEvents: "none" }} onChange={(e) => { handleActionPickFiles(e.target.files); e.target.value = ""; }} />
                       </label>
@@ -1759,7 +1837,7 @@ const headerIconBtnStyle = {
   background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 9, cursor: "pointer",
 };
 
-function DashboardHeader({ panelLabel, currentUser, onLogout, onOpenSettings, notifications, onNotificationsChanged }) {
+function DashboardHeader({ panelLabel, currentUser, onLogout, onOpenSettings, notifications, onNotificationsChanged, onMarkRead }) {
   return (
     <div style={styles.topBar}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -1774,7 +1852,7 @@ function DashboardHeader({ panelLabel, currentUser, onLogout, onOpenSettings, no
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <OnlineIndicator />
-        {notifications && <NotificationPanel notifications={notifications} onChanged={onNotificationsChanged} />}
+        {notifications && <NotificationPanel notifications={notifications} onChanged={onNotificationsChanged} onMarkRead={onMarkRead} />}
         <button type="button" onClick={onOpenSettings} style={headerIconBtnStyle} title="تنظیمات">
           <Settings size={16} color="#fff" />
         </button>
@@ -1829,6 +1907,11 @@ function AdminDashboard({ onLogout, currentUser }) {
   const personnelMod = HSE_MODULES.find((m) => m.key === "personnelAccess");
   const managementMod = HSE_MODULES.find((m) => m.key === "managementDashboard");
 
+  useEffect(() => {
+    loadPersonnelList().then(checkAndUpdateDeadlines);
+    loadAnomaliesOfflineFirst().then(checkAnomalyDeadlines);
+  }, []);
+
   const handleHomeNavigate = (target) => {
     setNavFilter(target);
     if (target.module === "personnel") setView("personnelDashboard");
@@ -1841,6 +1924,7 @@ function AdminDashboard({ onLogout, currentUser }) {
 
       {view === "menu" && (
         <div style={styles.menuList}>
+          <DbSizeWarningBanner />
           <MenuRow icon={User} label="پروفایل من" onClick={() => setView("profile")} />
           <MenuRow icon={Users} label="مدیریت حساب‌های کارفرما/همکاران" onClick={() => setView("employers")} />
           <MenuRow icon={ShieldCheck} label="مدیریت پیمانکاران" onClick={() => setView("contractors")} />
@@ -1850,6 +1934,7 @@ function AdminDashboard({ onLogout, currentUser }) {
           <MenuRow icon={BarChart3} label={managementMod.label} onClick={() => setView("managementDashboard")} accent />
           <MenuRow icon={ShieldCheck} label="مدیریت نقش‌ها و دسترسی‌ها" onClick={() => setView("permissionManagement")} />
           <MenuRow icon={Briefcase} label="مدیریت عناوین شغلی" onClick={() => setView("jobPositionManagement")} />
+          <MenuRow icon={Archive} label="آرشیو فایل‌ها" onClick={() => setView("archiveManagement")} />
         </div>
       )}
 
@@ -1900,6 +1985,7 @@ function AdminDashboard({ onLogout, currentUser }) {
       {view === "managementDashboard" && <HomeDashboard role="ADMIN" currentUser={currentUser} onNavigate={handleHomeNavigate} onBack={() => setView("menu")} />}
       {view === "permissionManagement" && <PermissionManager onBack={() => setView("menu")} />}
       {view === "jobPositionManagement" && <JobPositionManager onBack={() => setView("menu")} />}
+      {view === "archiveManagement" && <ArchiveManager onBack={() => setView("menu")} currentUser={currentUser} />}
     </div>
   );
 }
@@ -1916,7 +2002,21 @@ function EmployerDashboard({ onLogout, currentUser }) {
     loadPermissionsMap("employer", currentUser?.id).then(setPermMap);
   }, [currentUser?.id]);
 
-  const loadNotifs = async () => setNotifications(await loadNotifications("employer"));
+  const loadNotifs = async () => {
+    const [allPersonnel, allAnomalies] = await Promise.all([loadPersonnelList(), loadAnomaliesOfflineFirst()]);
+    await checkAndUpdateDeadlines(allPersonnel);
+    await checkAnomalyDeadlines(allAnomalies);
+    const [personnelNotifs, anomalyNotifs] = await Promise.all([loadNotifications("employer"), loadAnomalyNotifications("employer")]);
+    const merged = [
+      ...personnelNotifs.map((n) => ({ ...n, __source: "personnel" })),
+      ...anomalyNotifs.map((n) => ({ ...n, __source: "anomaly" })),
+    ].sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
+    setNotifications(merged);
+  };
+  const handleMarkNotifRead = async (n) => {
+    if (n.__source === "anomaly") await markAnomalyNotificationRead(n.id);
+    else await markNotificationRead(n.id);
+  };
   useEffect(() => { loadNotifs(); }, []);
 
   const openModule = (mod) => {
@@ -1949,6 +2049,7 @@ function EmployerDashboard({ onLogout, currentUser }) {
         onOpenSettings={() => setView("profile")}
         notifications={notifications}
         onNotificationsChanged={loadNotifs}
+        onMarkRead={handleMarkNotifRead}
       />
 
       {view === "menu" && (
@@ -2027,10 +2128,21 @@ function ContractorDashboard({ onLogout, currentUser }) {
   }, [currentUser?.id]);
 
   const loadNotifs = async () => {
-    const [raw, personnelList] = await Promise.all([loadNotifications("contractor"), loadPersonnelList()]);
+    const [personnelList, allAnomalies] = await Promise.all([loadPersonnelList(), loadAnomaliesOfflineFirst()]);
+    await checkAndUpdateDeadlines(personnelList);
+    await checkAnomalyDeadlines(allAnomalies);
     const myName = (currentUser?.name || "").trim().toLowerCase();
     const myPersonnel = personnelList.filter((p) => (p.contractorName || "").trim().toLowerCase() === myName);
-    setNotifications(raw.filter((n) => myPersonnel.some((p) => p.id === n.personnel_id)));
+    const myAnomalyIds = new Set(allAnomalies.filter((a) => (a.contractor || "").trim().toLowerCase() === myName).map((a) => a.id));
+
+    const [rawPersonnelNotifs, rawAnomalyNotifs] = await Promise.all([loadNotifications("contractor"), loadAnomalyNotifications("contractor")]);
+    const personnelNotifs = rawPersonnelNotifs.filter((n) => myPersonnel.some((p) => p.id === n.personnel_id)).map((n) => ({ ...n, __source: "personnel" }));
+    const anomalyNotifs = rawAnomalyNotifs.filter((n) => myAnomalyIds.has(n.anomaly_id)).map((n) => ({ ...n, __source: "anomaly" }));
+    setNotifications([...personnelNotifs, ...anomalyNotifs].sort((a, b) => (b.created_at || "").localeCompare(a.created_at || "")));
+  };
+  const handleMarkNotifRead = async (n) => {
+    if (n.__source === "anomaly") await markAnomalyNotificationRead(n.id);
+    else await markNotificationRead(n.id);
   };
   useEffect(() => { loadNotifs(); }, []);
 
@@ -2062,6 +2174,7 @@ function ContractorDashboard({ onLogout, currentUser }) {
         onOpenSettings={() => setView("profile")}
         notifications={notifications}
         onNotificationsChanged={loadNotifs}
+        onMarkRead={handleMarkNotifRead}
       />
 
       {view === "menu" && (
