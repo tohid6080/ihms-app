@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { Archive, FileSpreadsheet, Trash2, Users, AlertTriangle, GitBranch, History } from "lucide-react";
+import { Archive, FileSpreadsheet, Trash2, Users, AlertTriangle, GitBranch, History, Truck, Tag } from "lucide-react";
 import * as XLSX from "xlsx";
-import { sb, sbOk, styles, THEME } from "../shared.js";
+import { sb, sbOk, styles, THEME, getCurrentCompanyId } from "../shared.js";
 import { uploadBase64ToStorage, deleteFromStorage, parseStorageUrl } from "./storageUpload.js";
 import { fetchStorageSizeMB } from "./dbSizeMonitor.js";
 import { DOC_TYPES } from "../personnel/personnelApi.js";
 import { loadBowtieCanvas } from "../bowtie/bowtieApi.js";
+import { MACHINERY_DOC_TYPES, MACHINE_TYPES, OWNERSHIP_STATUSES, LICENSE_TYPES, TRAFFIC_STATUSES } from "../machinery/machineryApi.js";
+import { scaffoldStatusMeta } from "../scaffold/scaffoldApi.js";
 import { toJalaliSafe, toJalaliDateTime, jalaliFileTimestamp } from "../personnel/jalaliDate.jsx";
 import { buildArchiveZip, fetchAttachmentBytes, safeFileName } from "./archiveZip.js";
 
@@ -66,7 +68,8 @@ const MODULE_LABELS = { personnel: "پرسنل", anomaly: "آنومالی", bowt
 // ================= Personnel =================
 
 async function loadArchivablePersonnel() {
-  const rows = await sb(`personnel?status=eq.${PERSONNEL_ARCHIVABLE_STATUS}&select=*&order=updated_at.asc`);
+  const companyFilter = getCurrentCompanyId() ? `&company_id=eq.${getCurrentCompanyId()}` : "";
+  const rows = await sb(`personnel?status=eq.${PERSONNEL_ARCHIVABLE_STATUS}&select=*&order=updated_at.asc${companyFilter}`);
   return sbOk(rows) ? rows : [];
 }
 async function loadDocsForPersonnel(personnelIds) {
@@ -187,7 +190,8 @@ async function deletePersonnelArchive(archived, setProgress) {
 // ================= Anomaly =================
 
 async function loadArchivableAnomalies() {
-  const rows = await sb(`anomalies?status=eq.${ANOMALY_ARCHIVABLE_STATUS}&select=*&order=close_date.asc`);
+  const companyFilter = getCurrentCompanyId() ? `&company_id=eq.${getCurrentCompanyId()}` : "";
+  const rows = await sb(`anomalies?status=eq.${ANOMALY_ARCHIVABLE_STATUS}&select=*&order=close_date.asc${companyFilter}`);
   return sbOk(rows) ? rows : [];
 }
 async function loadPhotosForAnomalies(anomalyIds) {
@@ -305,7 +309,8 @@ async function deleteAnomalyArchive(archived, setProgress) {
 // ================= BowTie =================
 
 async function loadArchivableBowties() {
-  const rows = await sb(`bowties?status=in.(${BOWTIE_ARCHIVABLE_STATUSES.join(",")})&select=*&order=updated_at.asc`);
+  const companyFilter = getCurrentCompanyId() ? `&company_id=eq.${getCurrentCompanyId()}` : "";
+  const rows = await sb(`bowties?status=in.(${BOWTIE_ARCHIVABLE_STATUSES.join(",")})&select=*&order=updated_at.asc${companyFilter}`);
   return sbOk(rows) ? rows : [];
 }
 
@@ -406,17 +411,258 @@ async function deleteBowtieArchive(archived, setProgress) {
   }
 }
 
+// ================= ماشین‌آلات =================
+// فقط ماشین‌آلات «تأییدشده» آرشیو می‌شوند — مطابق همان قانون تأیید قبل از
+// آرشیو که برای بقیه‌ی ماژول‌ها اعمال کردیم.
+
+const MACHINERY_ARCHIVABLE_STATUS = "approved";
+
+async function loadArchivableMachinery() {
+  const companyFilter = getCurrentCompanyId() ? `&company_id=eq.${getCurrentCompanyId()}` : "";
+  const rows = await sb(`machinery?approval_status=eq.${MACHINERY_ARCHIVABLE_STATUS}&select=*&order=updated_at.asc${companyFilter}`);
+  return sbOk(rows) ? rows : [];
+}
+async function loadDocsForMachinery(machineryIds) {
+  if (machineryIds.length === 0) return [];
+  const rows = await sb(`machinery_documents?machinery_id=in.(${machineryIds.join(",")})&select=*`);
+  return sbOk(rows) ? rows : [];
+}
+
+async function buildMachineryArchive(setProgress, performedBy) {
+  const machinery = await loadArchivableMachinery();
+  const docs = await loadDocsForMachinery(machinery.map((m) => m.id));
+  const docsByMachine = {};
+  docs.forEach((d) => {
+    if (!docsByMachine[d.machinery_id]) docsByMachine[d.machinery_id] = {};
+    docsByMachine[d.machinery_id][d.doc_type] = d;
+  });
+
+  const docRelativePaths = {};
+  const attachments = [];
+  let totalBytes = 0;
+
+  for (let i = 0; i < docs.length; i++) {
+    const d = docs[i];
+    setProgress(`آماده‌سازی مدارک ماشین‌آلات (${i + 1}/${docs.length})...`);
+    let url = d.file_data;
+    if (isLegacyBase64(d.file_data)) {
+      try {
+        const ext = extFromMime(d.mime_type);
+        url = await uploadBase64ToStorage("machinery-documents", `${d.id}.${ext}`, d.file_data, d.mime_type || "image/jpeg");
+        await sb(`machinery_documents?id=eq.${d.id}`, { method: "PATCH", body: JSON.stringify({ file_data: url }), prefer: "return=minimal" });
+      } catch { url = null; }
+    }
+    if (url) {
+      const bytes = await fetchAttachmentBytes(url);
+      if (bytes) {
+        const machine = machinery.find((m) => m.id === d.machinery_id);
+        const docLabel = MACHINERY_DOC_TYPES.find((t) => t.value === d.doc_type)?.label || d.doc_type;
+        const ext = extFromMime(d.mime_type);
+        const relPath = `files/${safeFileName(machine?.plate_number || machine?.machine_name || d.machinery_id)}-${safeFileName(docLabel)}-${d.id.slice(-6)}.${ext}`;
+        attachments.push({ relativePath: relPath, content: bytes });
+        docRelativePaths[d.id] = relPath;
+        totalBytes += bytes.byteLength || 0;
+      }
+    }
+  }
+
+  setProgress("در حال ساخت فایل اکسل ماشین‌آلات...");
+
+  // ستون‌های ۱ تا ۱۳ دقیقاً مطابق فایل Master List HSE پروژه (ترتیب و عناوین
+  // بدون تغییر)؛ ستون‌های بعدی (نوع ماشین، جانشین راننده، تأیید، مدارک) طبق
+  // درخواست، بدون به‌هم‌زدن ساختار اصلی، به انتهای فایل اضافه شده‌اند.
+  const headers = [
+    "ردیف", "پروژه/ شرکت", "نام ماشین آلات", "شماره پلاک-شاسی(کارت ماشین)", "سال ساخت",
+    "وضعیت مالکیت", "تاریخ بیمه نامه", "تاریخ معاینه فنی یا اخذ سرتیفیکیت", "نام راننده",
+    "نوع گواهینامه(ویژه/پایه یک)", "کد دستگاه", "وضعیت تردد", "رفتار ناایمن",
+    "نوع ماشین‌آلات", "جانشین راننده", "وضعیت تأیید کارفرما", "یادداشت کارفرما",
+    ...MACHINERY_DOC_TYPES.map((t) => t.label),
+    "ثبت‌کننده", "تاریخ ایجاد", "تاریخ آخرین تغییر",
+  ];
+
+  const docsStartCol = 17; // ۰-ایندکس ستون اول مدارک (بعد از ۱۷ ستون قبلی)
+
+  const aoa = [headers, ...machinery.map((m, idx) => [
+    idx + 1, m.project, m.machine_name,
+    `${m.plate_number || "—"} - ${m.chassis_number || "—"}`,
+    m.manufacture_year, OWNERSHIP_STATUSES.find((s) => s.value === m.ownership_status)?.label || m.ownership_status,
+    toJalaliSafe(m.insurance_expiry) || "—", toJalaliSafe(m.inspection_expiry) || "—",
+    m.driver_name, LICENSE_TYPES.find((t) => t.value === m.driver_license_type)?.label || m.driver_license_type,
+    m.device_code, TRAFFIC_STATUSES.find((s) => s.value === m.traffic_status)?.label || m.traffic_status,
+    m.unsafe_behavior || "—",
+    MACHINE_TYPES.find((t) => t.value === m.machine_type)?.label || m.machine_type,
+    m.backup_driver_name || "—", "تأیید شده", m.review_note || "—",
+    ...MACHINERY_DOC_TYPES.map((t) => {
+      const d = docsByMachine[m.id]?.[t.value];
+      return d && docRelativePaths[d.id] ? "مشاهده مدرک" : "—";
+    }),
+    m.created_by || "—", toJalaliDateTime(m.created_at) || "—", toJalaliDateTime(m.updated_at) || "—",
+  ])];
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  machinery.forEach((m, rowIdx) => {
+    MACHINERY_DOC_TYPES.forEach((t, colOffset) => {
+      const d = docsByMachine[m.id]?.[t.value];
+      const relPath = d ? docRelativePaths[d.id] : null;
+      if (relPath) {
+        const cellRef = `${XLSX.utils.encode_col(docsStartCol + colOffset)}${rowIdx + 2}`;
+        if (ws[cellRef]) ws[cellRef].l = { Target: relPath };
+      }
+    });
+  });
+  ws["!cols"] = headers.map(() => ({ wch: 16 }));
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "ماشین‌آلات");
+  const stamp = jalaliFileTimestamp();
+  const excelFileName = `Machinery_Archive_${stamp}.xlsx`;
+  setProgress("در حال ساخت فایل ZIP آرشیو...");
+  await buildArchiveZip({ workbook: wb, excelFileName, attachments, zipFileName: `Machinery_Archive_${stamp}.zip` });
+
+  const fileCount = attachments.length;
+  await logArchiveOperation({ module: "machinery", performedBy, recordCount: machinery.length, fileCount, totalSizeMb: +(totalBytes / 1024 / 1024).toFixed(2) });
+
+  return { recordIds: machinery.map((m) => m.id), docIds: docs.map((d) => d.id) };
+}
+
+async function deleteMachineryArchive(archived, setProgress) {
+  for (const id of archived.docIds) {
+    setProgress("در حال حذف مدارک ماشین‌آلات...");
+    const docRows = await sb(`machinery_documents?id=eq.${id}&select=file_data`);
+    const url = sbOk(docRows) && docRows[0] ? docRows[0].file_data : null;
+    const parsed = url ? parseStorageUrl(url) : null;
+    if (parsed) { try { await deleteFromStorage(parsed.bucket, parsed.path); } catch { /* ادامه بده */ } }
+    await sb(`machinery_documents?id=eq.${id}`, { method: "DELETE", prefer: "return=minimal" });
+  }
+  for (const id of archived.recordIds) {
+    setProgress("در حال حذف ماشین‌آلات...");
+    await sb(`machinery?id=eq.${id}`, { method: "DELETE", prefer: "return=minimal" });
+  }
+}
+
+// ================= داربست =================
+// فقط تگ‌هایی که حداقل یک‌بار واقعاً صادر شده‌اند (issueDate دارند) آرشیو
+// می‌شوند — چه هنوز فعال باشند چه برچیده شده باشند — دقیقاً مطابق سبک فایل
+// «آمار تگ داربست» که هر دو حالت را با هم در یک لیست پیوسته نگه می‌داشت.
+
+async function loadArchivableScaffoldTags() {
+  const companyFilter = getCurrentCompanyId() ? `&company_id=eq.${getCurrentCompanyId()}` : "";
+  const rows = await sb(`scaffold_tags?issue_date=not.is.null&select=*&order=created_at.asc${companyFilter}`);
+  return sbOk(rows) ? rows : [];
+}
+async function loadPhotosForScaffoldTags(tagIds) {
+  if (tagIds.length === 0) return [];
+  const rows = await sb(`scaffold_tag_photos?scaffold_tag_id=in.(${tagIds.join(",")})&select=*`);
+  return sbOk(rows) ? rows : [];
+}
+
+async function buildScaffoldArchive(setProgress, performedBy) {
+  const tags = await loadArchivableScaffoldTags();
+  const photos = await loadPhotosForScaffoldTags(tags.map((t) => t.id));
+  const photosByTag = {};
+  photos.forEach((p) => {
+    if (!photosByTag[p.scaffold_tag_id]) photosByTag[p.scaffold_tag_id] = [];
+    photosByTag[p.scaffold_tag_id].push(p);
+  });
+
+  const photoRelativePaths = {};
+  const attachments = [];
+  let totalBytes = 0;
+  for (let i = 0; i < photos.length; i++) {
+    const p = photos[i];
+    setProgress(`آماده‌سازی عکس‌های داربست (${i + 1}/${photos.length})...`);
+    let url = p.file_data;
+    if (isLegacyBase64(p.file_data)) {
+      try {
+        const ext = extFromMime(p.mime_type);
+        url = await uploadBase64ToStorage("scaffold-photos", `${p.id}.${ext}`, p.file_data, p.mime_type || "image/jpeg");
+        await sb(`scaffold_tag_photos?id=eq.${p.id}`, { method: "PATCH", body: JSON.stringify({ file_data: url }), prefer: "return=minimal" });
+      } catch { url = null; }
+    }
+    if (url) {
+      const bytes = await fetchAttachmentBytes(url);
+      if (bytes) {
+        const tag = tags.find((t) => t.id === p.scaffold_tag_id);
+        const ext = extFromMime(p.mime_type);
+        const relPath = `files/${safeFileName(tag?.tag_number || p.scaffold_tag_id)}-${p.stage}-${p.id.slice(-6)}.${ext}`;
+        attachments.push({ relativePath: relPath, content: bytes });
+        photoRelativePaths[p.id] = relPath;
+        totalBytes += bytes.byteLength || 0;
+      }
+    }
+  }
+
+  setProgress("در حال ساخت فایل اکسل داربست...");
+
+  // ستون‌های ۱ تا ۸ دقیقاً مطابق فایل «آمار تگ داربست» پروژه؛ بقیه به انتها اضافه شده‌اند.
+  const headers = [
+    "ردیف", "شماره تگ", "موقعیت", "نام شرکت", "تاریخ برپایی داربست", "OK/NOT OK", "تاریخ برچیدن داربست", "توضیحات",
+    "وضعیت فعلی", "تاریخ تأیید اولیه", "شرح ایرادات (در صورت وجود)", "عکس‌های محل", "ثبت‌کننده", "تاریخ ایجاد", "تاریخ آخرین تغییر",
+  ];
+  const photoStartCol = 11;
+
+  const aoa = [headers, ...tags.map((t, idx) => {
+    const ph = photosByTag[t.id] || [];
+    return [
+      idx + 1, t.tag_number, t.location, t.contractor_name, toJalaliSafe(t.erection_date) || "—",
+      "OK", toJalaliSafe(t.removal_date) || "—", t.purpose || "—",
+      scaffoldStatusMeta(t.status).label, toJalaliDateTime(t.initial_approved_at) || "—", t.correction_note || "—",
+      ph.length > 0 && photoRelativePaths[ph[0].id] ? "مشاهده عکس" : "—",
+      t.created_by || "—", toJalaliDateTime(t.created_at) || "—", toJalaliDateTime(t.updated_at) || "—",
+    ];
+  })];
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  tags.forEach((t, rowIdx) => {
+    const ph = photosByTag[t.id] || [];
+    if (ph.length > 0 && photoRelativePaths[ph[0].id]) {
+      const cellRef = `${XLSX.utils.encode_col(photoStartCol)}${rowIdx + 2}`;
+      if (ws[cellRef]) ws[cellRef].l = { Target: photoRelativePaths[ph[0].id] };
+    }
+  });
+  ws["!cols"] = headers.map(() => ({ wch: 16 }));
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "تگ داربست");
+  const stamp = jalaliFileTimestamp();
+  const excelFileName = `Scaffold_Archive_${stamp}.xlsx`;
+  setProgress("در حال ساخت فایل ZIP آرشیو...");
+  await buildArchiveZip({ workbook: wb, excelFileName, attachments, zipFileName: `Scaffold_Archive_${stamp}.zip` });
+
+  const fileCount = attachments.length;
+  await logArchiveOperation({ module: "scaffold", performedBy, recordCount: tags.length, fileCount, totalSizeMb: +(totalBytes / 1024 / 1024).toFixed(2) });
+
+  return { recordIds: tags.map((t) => t.id), photoIds: photos.map((p) => p.id) };
+}
+
+async function deleteScaffoldArchive(archived, setProgress) {
+  for (const id of archived.photoIds) {
+    setProgress("در حال حذف عکس‌های داربست...");
+    const photoRows = await sb(`scaffold_tag_photos?id=eq.${id}&select=file_data`);
+    const url = sbOk(photoRows) && photoRows[0] ? photoRows[0].file_data : null;
+    const parsed = url ? parseStorageUrl(url) : null;
+    if (parsed) { try { await deleteFromStorage(parsed.bucket, parsed.path); } catch { /* ادامه بده */ } }
+    await sb(`scaffold_tag_photos?id=eq.${id}`, { method: "DELETE", prefer: "return=minimal" });
+  }
+  for (const id of archived.recordIds) {
+    setProgress("در حال حذف تگ‌های داربست...");
+    await sb(`scaffold_tags?id=eq.${id}`, { method: "DELETE", prefer: "return=minimal" });
+  }
+}
+
 // ================= UI =================
 
 const TABS = [
   { key: "personnel", label: "پرسنل", icon: Users },
   { key: "anomaly", label: "آنومالی", icon: AlertTriangle },
   { key: "bowtie", label: "BowTie", icon: GitBranch },
+  { key: "machinery", label: "ماشین‌آلات", icon: Truck },
+  { key: "scaffold", label: "داربست", icon: Tag },
 ];
 
 export default function ArchiveManager({ onBack, currentUser }) {
   const [tab, setTab] = useState("personnel");
-  const [counts, setCounts] = useState({ personnel: 0, anomaly: 0, bowtie: 0 });
+  const [counts, setCounts] = useState({ personnel: 0, anomaly: 0, bowtie: 0, machinery: 0, scaffold: 0 });
   const [storageMb, setStorageMb] = useState(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -427,10 +673,10 @@ export default function ArchiveManager({ onBack, currentUser }) {
 
   const load = async () => {
     setLoading(true);
-    const [p, a, b, mb, logs] = await Promise.all([
-      loadArchivablePersonnel(), loadArchivableAnomalies(), loadArchivableBowties(), fetchStorageSizeMB(), loadLastArchiveLogs(),
+    const [p, a, b, m, s, mb, logs] = await Promise.all([
+      loadArchivablePersonnel(), loadArchivableAnomalies(), loadArchivableBowties(), loadArchivableMachinery(), loadArchivableScaffoldTags(), fetchStorageSizeMB(), loadLastArchiveLogs(),
     ]);
-    setCounts({ personnel: p.length, anomaly: a.length, bowtie: b.length });
+    setCounts({ personnel: p.length, anomaly: a.length, bowtie: b.length, machinery: m.length, scaffold: s.length });
     setStorageMb(mb);
     setLastLogs(logs);
     setExported(null);
@@ -463,7 +709,9 @@ export default function ArchiveManager({ onBack, currentUser }) {
       let result;
       if (tab === "personnel") result = await buildPersonnelArchive(setProgressText, performedByLabel);
       else if (tab === "anomaly") result = await buildAnomalyArchive(setProgressText, performedByLabel);
-      else result = await buildBowtieArchive(setProgressText, diagramUrls, performedByLabel);
+      else if (tab === "bowtie") result = await buildBowtieArchive(setProgressText, diagramUrls, performedByLabel);
+      else if (tab === "machinery") result = await buildMachineryArchive(setProgressText, performedByLabel);
+      else result = await buildScaffoldArchive(setProgressText, performedByLabel);
       setExported({ module: tab, ...result });
       setLastLogs(await loadLastArchiveLogs());
     } catch (e) {
@@ -482,7 +730,9 @@ export default function ArchiveManager({ onBack, currentUser }) {
     try {
       if (exported.module === "personnel") await deletePersonnelArchive(exported, setProgressText);
       else if (exported.module === "anomaly") await deleteAnomalyArchive(exported, setProgressText);
-      else await deleteBowtieArchive(exported, setProgressText);
+      else if (exported.module === "bowtie") await deleteBowtieArchive(exported, setProgressText);
+      else if (exported.module === "machinery") await deleteMachineryArchive(exported, setProgressText);
+      else await deleteScaffoldArchive(exported, setProgressText);
     } catch (e) {
       alert(`خطا در حذف: ${e?.message || "نامشخص"}`);
     }

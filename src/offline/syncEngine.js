@@ -23,7 +23,11 @@ export const MODULE_TABLE_MAP = {
   anomalies: { table: "anomalies", idField: "id" },
   anomalyPhotos: { table: "anomaly_photos", idField: "id" },
   bowties: { table: "bowties", idField: "id" },
-  // future modules (training, ppe, incident, capa) register here once built
+  machinery: { table: "machinery", idField: "id" },
+  machineryDocuments: { table: "machinery_documents", idField: "id" },
+  scaffoldTags: { table: "scaffold_tags", idField: "id" },
+  scaffoldPhotos: { table: "scaffold_tag_photos", idField: "id" },
+  // future modules register here once built
 };
 
 const MAX_ATTEMPTS = 6;

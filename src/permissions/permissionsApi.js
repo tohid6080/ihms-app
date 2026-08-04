@@ -25,6 +25,8 @@ export const PERMISSION_MODULES = [
   { key: "anomalyReport", label: "مدیریت عدم انطباق‌ها (Anomaly Report)" },
   { key: "riskAssessment", label: "مدیریت ارزیابی ریسک (Risk Assessment)" },
   { key: "personnelAccess", label: "مدیریت ورود و تردد پرسنل" },
+  { key: "machineryManagement", label: "مدیریت ماشین‌آلات و تجهیزات" },
+  { key: "scaffoldManagement", label: "مدیریت داربست" },
   { key: "managementDashboard", label: "داشبورد مدیریتی و گزارش‌های تحلیلی" },
 ];
 

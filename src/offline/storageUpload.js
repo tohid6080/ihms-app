@@ -35,7 +35,12 @@ export async function uploadBase64ToStorage(bucket, path, base64Data, contentTyp
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`خطا در آپلود فایل: ${text || res.status}`);
+    // status ثبت می‌شود تا فراخوان بتواند «سرور واقعاً رد کرد» (مثلاً باکت
+    // وجود ندارد یا policy اجازه نمی‌دهد) را از «قطعی واقعی شبکه» تشخیص
+    // بدهد — این دو باید رفتار کاملاً متفاوتی داشته باشند.
+    const err = new Error(`خطا در آپلود فایل: ${text || res.status}`);
+    err.status = res.status;
+    throw err;
   }
   return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}`;
 }

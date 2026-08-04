@@ -4,12 +4,14 @@
 // کمکی عمومی. جدا نگه‌داشتن این‌ها از App.jsx از وابستگی حلقوی (circular
 // import) بین App.jsx و ماژول‌های فرعی جلوگیری می‌کند.
 
+import { useState, useEffect } from "react";
+
 export const APP_NAME = "Integrated HSE Management System";
 
 // نکته امنیتی: فقط از کلید publishable/anon استفاده می‌شود، هرگز کلید secret را
 // داخل کد سمت مرورگر قرار ندهید چون هرکسی که اپ را باز کند می‌تواند آن را ببیند.
 export const SUPABASE_URL = "https://zmmxiyqlwkqjzghbcydi.supabase.co";
-export const SUPABASE_ANON_KEY = "sb_publishable_PnB5Mp5wo_EOzJHa7HGwBQ_gqF1gvo0";
+export const SUPABASE_ANON_KEY = "sb_publishable_pvobGcp2snOD3oFTX2LVMg_bZx2A9CR";
 // استفاده در offline/networkStatus.js برای تست واقعی در دسترس‌بودن (نه فقط navigator.onLine)
 export const SUPABASE_PING_URL = `${SUPABASE_URL}/rest/v1/`;
 
@@ -37,6 +39,24 @@ export async function sb(path, options = {}) {
     console.error("Supabase fetch failed", e);
     return { __error: true, status: 0, message: String((e && e.message) || e) };
   }
+}
+
+// ---------- فاز ۲: زمینه‌ی «شرکت فعلی» ----------
+// در لحظه‌ی ورود (یا بازیابی نشست از localStorage بعد از رفرش) یک‌بار تنظیم
+// می‌شود. توابع دیتالایر هر ماژول که به شرکت وابسته‌اند (مثلاً personnelApi)
+// این مقدار را می‌خوانند و به کوئری‌هایشان اضافه می‌کنند — به‌جای اینکه
+// company_id به‌صورت پراکنده در ده‌ها فایل دستی همه‌جا پاس داده شود.
+//
+// نکته‌ی امنیتی مهم: این یک فیلتر سطح اپلیکیشنه، نه یک مرز امنیتی واقعی —
+// چون این پروژه از Supabase Auth/RLS واقعی استفاده نمی‌کند (فقط anon key +
+// جدول رمز عبور ساده). یعنی جداسازی واقعی و غیرقابل‌دورزدن بین شرکت‌ها به
+// مهاجرت به Supabase Auth + سیاست‌های RLS نیاز دارد که یک پروژه‌ی جداست.
+let _currentCompanyId = null;
+export function setCurrentCompanyId(id) {
+  _currentCompanyId = id || null;
+}
+export function getCurrentCompanyId() {
+  return _currentCompanyId;
 }
 
 export function sbOk(rows) {
@@ -111,3 +131,31 @@ export const styles = {
   photoViewerImg: { maxWidth: "100%", maxHeight: "90vh", borderRadius: 10 },
   photoViewerClose: { position: "absolute", top: 20, left: 20, background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" },
 };
+
+/**
+ * useState که مقدارش را در localStorage نگه می‌دارد — دقیقاً مثل useState
+ * معمولی استفاده می‌شود، فقط با رفرش کردن صفحه از بین نمی‌رود. برای همین از
+ * این هوک برای «کاربر واردشده» و «صفحه‌ی فعلی هر پنل» استفاده می‌کنیم تا
+ * رفرش کردن، کاربر را از سامانه و از همان صفحه‌ای که بوده بیرون نیندازد.
+ */
+export function usePersistedState(key, initialValue) {
+  const [state, setState] = useState(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw !== null ? JSON.parse(raw) : initialValue;
+    } catch {
+      return initialValue;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      if (state === null || state === undefined) localStorage.removeItem(key);
+      else localStorage.setItem(key, JSON.stringify(state));
+    } catch {
+      // بی‌اهمیت اگر localStorage در دسترس نبود (مثلاً حالت خصوصی مرورگر)
+    }
+  }, [key, state]);
+
+  return [state, setState];
+}

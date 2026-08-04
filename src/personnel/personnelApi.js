@@ -1,4 +1,4 @@
-import { sb, sbOk, sbErrMsg, uid, todayISO } from "../shared.js";
+import { sb, sbOk, sbErrMsg, uid, todayISO, getCurrentCompanyId } from "../shared.js";
 import { offlineWrite, offlineWriteFile } from "../offline/offlineWrite.js";
 import { isOnline } from "../offline/networkStatus.js";
 import { checkUploadAllowed } from "../offline/dbSizeMonitor.js";
@@ -119,18 +119,23 @@ function personnelFromRow(r) {
     syncStatus: r.__syncStatus || "synced",
     employmentStatus: r.employment_status || "active",
     terminationDate: r.termination_date || "",
+    companyId: r.company_id || "",
   };
 }
 
 // لیست پیمانکاران برای منوی کشویی فرم ثبت پرسنل — فقط خواندن از جدول موجود contractors،
 // بدون هیچ وابستگی به bowtieApi.js یا App.jsx (ماژول کاملاً مستقل می‌ماند)
 export async function loadContractorOptions() {
-  const rows = await sb("contractors?select=id,name&order=name.asc");
+  const companyId = getCurrentCompanyId();
+  const filter = companyId ? `&company_id=eq.${companyId}` : "";
+  const rows = await sb(`contractors?select=id,name&order=name.asc${filter}`);
   return sbOk(rows) ? rows.map((r) => ({ id: r.id, name: r.name })) : [];
 }
 
 export async function loadPersonnelList() {
-  const rows = await sb("personnel?select=*&order=created_at.desc");
+  const companyId = getCurrentCompanyId();
+  const filter = companyId ? `&company_id=eq.${companyId}` : "";
+  const rows = await sb(`personnel?select=*&order=created_at.desc${filter}`);
   return (sbOk(rows) ? rows : []).map(personnelFromRow);
 }
 
@@ -139,8 +144,10 @@ export async function loadPersonnelList() {
  * offline → read purely from the local cache. Same pattern as anomalies.
  */
 export async function loadPersonnelListOfflineFirst() {
+  const companyId = getCurrentCompanyId();
+  const filter = companyId ? `&company_id=eq.${companyId}` : "";
   if (isOnline()) {
-    const rows = await sb("personnel?select=*&order=created_at.desc");
+    const rows = await sb(`personnel?select=*&order=created_at.desc${filter}`);
     if (sbOk(rows)) {
       for (const r of rows) await putRecord("personnel", r.id, r, "synced");
       const cached = await getRecordsByModule("personnel");
@@ -171,6 +178,7 @@ export async function insertPersonnel(rec) {
     qualification_required: special,
     qualification_status: special ? "pending" : null,
     created_by: rec.createdBy || "",
+    company_id: getCurrentCompanyId(),
   };
   const result = await offlineWrite({ module: "personnel", table: "personnel", action: "insert", id, payload: dbPayload });
   if (!result.ok) return { __error: true, message: "خطا در ذخیره‌سازی" };
@@ -333,35 +341,14 @@ export async function finalizeHealthApproval(personnelId, healthDate) {
  */
 export async function checkAndUpdateDeadlines(personnelList) {
   const today = todayISO();
-
-  // فقط اعلان‌های «هنوز خوانده‌نشده» را حساب کن — نه هر اعلانی که تا حالا
-  // برای این نفر/نوع ساخته شده. اگه فقط بر اساس «تا حالا ساخته شده یا نه»
-  // چک می‌کردیم، یه اعلان قدیمی و تست‌شده (حتی اگه از قبل خوانده شده یا
-  // به‌خاطر باگ قبلی is_read اصلاً دیده نشده) برای همیشه جلوی ثبت اعلان
-  // جدید و واقعی رو می‌گرفت.
-  const existingRows = await sb("personnel_notifications?is_read=not.is.true&select=personnel_id,type");
-  const existingKeys = new Set((sbOk(existingRows) ? existingRows : []).map((r) => `${r.personnel_id}:${r.type}`));
-  const alreadyNotified = (personnelId, type) => existingKeys.has(`${personnelId}:${type}`);
-
+  // اعلان‌های مهلت ۳/۷ روزه دیگر اینجا ثبت نمی‌شوند — این اطلاعات الان توی
+  // خلاصه‌ی زنده‌ی زنگوله (computeSmartNotifications در App.jsx) نشون داده
+  // می‌شود. فقط انتقال خودکار وضعیت «فعال» به «منقضی» بعد از پایان اعتبار
+  // طب کار همچنان همین‌جا انجام می‌شود — چون این یک تغییر وضعیت واقعیه، نه
+  // صرفاً یک اعلان.
   for (const p of personnelList) {
-    if (p.status === "pending_health_visit" && p.occHealthVisitDeadline && p.occHealthVisitDeadline < today) {
-      if (!alreadyNotified(p.id, "health_visit_deadline")) {
-        await insertNotification(p.id, "health_visit_deadline", `مهلت ۳ روزه مراجعه به طب کار برای ${p.fullName} به پایان رسید.`, "both");
-        existingKeys.add(`${p.id}:health_visit_deadline`);
-      }
-    }
-    if (p.status === "pending_health_result" && p.occHealthResultDeadline && p.occHealthResultDeadline < today) {
-      if (!alreadyNotified(p.id, "health_result_deadline")) {
-        await insertNotification(p.id, "health_result_deadline", `مهلت ۷ روزه بارگذاری نتیجه طب کار برای ${p.fullName} به پایان رسید.`, "both");
-        existingKeys.add(`${p.id}:health_result_deadline`);
-      }
-    }
     if (p.status === "active" && p.occHealthExpiry && p.occHealthExpiry < today) {
       await updatePersonnelDB(p.id, { status: "health_expired" });
-      if (!alreadyNotified(p.id, "health_expired")) {
-        await insertNotification(p.id, "health_expired", `اعتبار طب کار ${p.fullName} منقضی شده است.`, "both");
-        existingKeys.add(`${p.id}:health_expired`);
-      }
     }
   }
 }

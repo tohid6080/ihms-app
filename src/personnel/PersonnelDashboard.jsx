@@ -1,13 +1,19 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Search, Users, FileSpreadsheet, FileDown, BarChart3 } from "lucide-react";
+import { Plus, Users, FileSpreadsheet, FileDown, BarChart3 } from "lucide-react";
 import { styles, THEME } from "../shared.js";
-import { loadPersonnelListOfflineFirst, personnelStatusMeta, employmentStatusMeta, checkAndUpdateDeadlines, loadNotifications, loadContractorOptions, PERSONNEL_STATUS } from "./personnelApi.js";
+import DataView, { StatusPill } from "../shared/DataView.jsx";
+import { loadPersonnelListOfflineFirst, personnelStatusMeta, employmentStatusMeta, checkAndUpdateDeadlines, loadContractorOptions, PERSONNEL_STATUS } from "./personnelApi.js";
 import { exportPersonnelPdf, exportPersonnelExcel } from "./personnelExport.js";
 import PersonnelForm from "./PersonnelForm.jsx";
 import PersonnelDetail from "./PersonnelDetail.jsx";
-import NotificationPanel from "./NotificationPanel.jsx";
 import PersonnelManagementDashboard from "./PersonnelManagementDashboard.jsx";
 import SyncStatusBadge from "../offline/SyncStatusBadge.jsx";
+
+const SORT_OPTIONS = [
+  { value: "name", label: "نام (الفبا)" },
+  { value: "newest", label: "جدیدترین" },
+  { value: "oldest", label: "قدیمی‌ترین" },
+];
 
 /**
  * Entry point for the Personnel Access Management module.
@@ -18,6 +24,7 @@ export default function PersonnelDashboard({ onBack, currentUser, role, initialS
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState("name");
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter || "all");
   const [contractorFilter, setContractorFilter] = useState(initialContractorFilter || "all");
   const [showTerminated, setShowTerminated] = useState(false);
@@ -25,7 +32,6 @@ export default function PersonnelDashboard({ onBack, currentUser, role, initialS
   const [showForm, setShowForm] = useState(false);
   const [selected, setSelected] = useState(null);
   const [showManagement, setShowManagement] = useState(false);
-  const [notifications, setNotifications] = useState([]);
   const [exporting, setExporting] = useState(false);
 
   const isContractor = role === "CONTRACTOR";
@@ -35,21 +41,11 @@ export default function PersonnelDashboard({ onBack, currentUser, role, initialS
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const loadNotifs = async (scopedList) => {
-    const raw = await loadNotifications(isContractor ? "contractor" : "employer");
-    const filtered = isContractor ? raw.filter((n) => scopedList.some((p) => p.id === n.personnel_id)) : raw;
-    setNotifications(filtered);
-  };
-
   const load = async () => {
     const all = await loadPersonnelListOfflineFirst();
-    await checkAndUpdateDeadlines(all);
+    await checkAndUpdateDeadlines(all); // فقط برای انتقال خودکار به «منقضی»
     const refreshed = await loadPersonnelListOfflineFirst();
     setList(refreshed);
-    const scopedList = isContractor && currentUser?.name
-      ? refreshed.filter((p) => (p.contractorName || "").trim().toLowerCase() === (currentUser.name || "").trim().toLowerCase())
-      : refreshed;
-    await loadNotifs(scopedList);
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
@@ -71,14 +67,20 @@ export default function PersonnelDashboard({ onBack, currentUser, role, initialS
     return true;
   });
 
+  const sorted = [...filtered].sort((a, b) => {
+    if (sort === "name") return (a.fullName || "").localeCompare(b.fullName || "", "fa");
+    const at = a.createdAt || "", bt = b.createdAt || "";
+    return sort === "oldest" ? at.localeCompare(bt) : bt.localeCompare(at);
+  });
+
   const handleExportPdf = async () => {
     setExporting(true);
-    await exportPersonnelPdf(filtered, "لیست پرسنل - IHMS");
+    await exportPersonnelPdf(sorted, "لیست پرسنل - IHMS");
     setExporting(false);
   };
   const handleExportExcel = async () => {
     setExporting(true);
-    await exportPersonnelExcel(filtered, "لیست پرسنل - IHMS");
+    await exportPersonnelExcel(sorted, "لیست پرسنل - IHMS");
     setExporting(false);
   };
 
@@ -126,14 +128,13 @@ export default function PersonnelDashboard({ onBack, currentUser, role, initialS
   }
 
   return (
-    <div style={{ maxWidth: 720, margin: "0 auto", padding: 24 }}>
+    <div style={{ maxWidth: 900, margin: "0 auto", padding: 24 }}>
       {onBack && <div style={styles.backLink} onClick={onBack}>← بازگشت به منو</div>}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 4 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <Users size={20} color={THEME.teal} />
           <h2 style={{ margin: 0, fontSize: 19, color: THEME.navy, fontWeight: 700 }}>مدیریت ورود و تردد پرسنل</h2>
         </div>
-        <NotificationPanel notifications={notifications} onChanged={() => loadNotifs(scoped)} />
       </div>
       <p style={{ color: THEME.text3, fontSize: 12.5, marginTop: 4, marginBottom: 18 }}>ثبت، بررسی مدارک، تأیید صلاحیت و پیگیری طب کار پرسنل پیمانکاران</p>
 
@@ -168,26 +169,9 @@ export default function PersonnelDashboard({ onBack, currentUser, role, initialS
         </div>
       </div>
 
-      <div style={styles.filterBar}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, background: THEME.surface, borderRadius: 9, padding: "7px 11px", border: `1.5px solid ${THEME.border}` }}>
-          <Search size={16} color={THEME.text3} />
-          <input style={{ border: "none", outline: "none", flex: 1, fontSize: 14, fontFamily: THEME.font, background: "transparent" }} placeholder="جستجو (نام، کدملی، پیمانکار، شغل)..." value={search} onChange={(e) => setSearch(e.target.value)} dir="rtl" />
-        </div>
-        <select style={styles.filterSelect} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} dir="rtl">
-          <option value="all">همه وضعیت‌ها</option>
-          {PERSONNEL_STATUS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-        </select>
-        {!isContractor && (
-          <select style={styles.filterSelect} value={contractorFilter} onChange={(e) => setContractorFilter(e.target.value)} dir="rtl">
-            <option value="all">همه پیمانکاران</option>
-            {contractorOptions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-        )}
-      </div>
-
       <div
         style={{
-          display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10, cursor: "pointer",
+          display: "inline-flex", alignItems: "center", gap: 6, marginTop: 14, cursor: "pointer",
           fontSize: 12, fontWeight: 600, color: showTerminated ? THEME.danger : THEME.teal,
         }}
         onClick={() => setShowTerminated((v) => !v)}
@@ -195,12 +179,12 @@ export default function PersonnelDashboard({ onBack, currentUser, role, initialS
         {showTerminated ? "بازگشت به لیست پرسنل فعال" : "نمایش پرسنل ترک‌کار / تسویه‌حساب‌شده"}
       </div>
 
-      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+      <div style={{ display: "flex", gap: 8, marginTop: 10, marginBottom: 14 }}>
         <button
           type="button"
           style={{ ...styles.smallButton, flex: 1, background: "#16a34a", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
           onClick={handleExportExcel}
-          disabled={exporting || filtered.length === 0}
+          disabled={exporting || sorted.length === 0}
         >
           <FileSpreadsheet size={15} /> خروجی Excel
         </button>
@@ -208,37 +192,89 @@ export default function PersonnelDashboard({ onBack, currentUser, role, initialS
           type="button"
           style={{ ...styles.smallButton, flex: 1, background: THEME.navyMid, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
           onClick={handleExportPdf}
-          disabled={exporting || filtered.length === 0}
+          disabled={exporting || sorted.length === 0}
         >
           <FileDown size={15} /> خروجی PDF
         </button>
       </div>
-      {exporting && <p style={{ fontSize: 11.5, color: THEME.text3, marginTop: 6, textAlign: "center" }}>در حال آماده‌سازی گزارش و بارگذاری مدارک...</p>}
+      {exporting && <p style={{ fontSize: 11.5, color: THEME.text3, marginBottom: 10, textAlign: "center" }}>در حال آماده‌سازی گزارش و بارگذاری مدارک...</p>}
 
-      <h3 style={{ marginTop: 20, fontSize: 15.5, color: THEME.navy, fontWeight: 700 }}>پرسنل ({filtered.length})</h3>
-      {filtered.length === 0 && <p style={{ color: THEME.text3 }}>موردی یافت نشد.</p>}
-      {filtered.map((p) => {
-        const sm = personnelStatusMeta(p.status);
-        return (
-          <div key={p.id} style={{ ...styles.card, width: "auto", marginBottom: 10, borderInlineStart: `4px solid ${sm.color}`, cursor: "pointer" }} onClick={() => setSelected(p)}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+      <DataView
+        items={sorted}
+        getId={(p) => p.id}
+        searchQuery={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="جستجو (نام، کدملی، پیمانکار، شغل)..."
+        sortOptions={SORT_OPTIONS}
+        sortValue={sort}
+        onSortChange={setSort}
+        filterSlot={
+          <>
+            <select style={styles.filterSelect} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} dir="rtl">
+              <option value="all">همه وضعیت‌ها</option>
+              {PERSONNEL_STATUS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+            </select>
+            {!isContractor && (
+              <select style={styles.filterSelect} value={contractorFilter} onChange={(e) => setContractorFilter(e.target.value)} dir="rtl">
+                <option value="all">همه پیمانکاران</option>
+                {contractorOptions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            )}
+          </>
+        }
+        emptyMessage="موردی یافت نشد"
+        columns={[
+          {
+            key: "name", label: "نام",
+            render: (p) => (
               <div>
-                <div style={{ fontWeight: 700, color: THEME.navy, fontSize: 14 }}>{p.fullName}</div>
-                <div style={{ fontSize: 11.5, color: THEME.text3, marginTop: 4 }}>{p.jobTitle} · {p.contractorName}</div>
+                <div style={{ fontWeight: 600 }}>{p.fullName}</div>
+                <div style={{ fontSize: 11, color: THEME.text3 }}>{p.jobTitle}</div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                {showTerminated && (
-                  <span style={{ ...styles.badge, color: employmentStatusMeta(p.employmentStatus).color, background: employmentStatusMeta(p.employmentStatus).bg }}>
-                    {employmentStatusMeta(p.employmentStatus).label}
-                  </span>
-                )}
-                <span style={{ ...styles.badge, color: sm.color, background: sm.bg }}>{sm.label}</span>
-                {p.syncStatus && p.syncStatus !== "synced" && <SyncStatusBadge status={p.syncStatus} onRetry={() => load()} />}
+            ),
+          },
+          ...(!isContractor ? [{ key: "contractor", label: "پیمانکار", render: (p) => p.contractorName || "—" }] : []),
+          { key: "national", label: "کد ملی", render: (p) => p.nationalCode || "—" },
+          {
+            key: "status", label: "وضعیت",
+            render: (p) => {
+              const sm = personnelStatusMeta(p.status);
+              return (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  {showTerminated && (
+                    <StatusPill label={employmentStatusMeta(p.employmentStatus).label} color={employmentStatusMeta(p.employmentStatus).color} bg={employmentStatusMeta(p.employmentStatus).bg} />
+                  )}
+                  <StatusPill label={sm.label} color={sm.color} bg={sm.bg} />
+                  {p.syncStatus && p.syncStatus !== "synced" && <SyncStatusBadge status={p.syncStatus} onRetry={() => load()} />}
+                </div>
+              );
+            },
+          },
+        ]}
+        renderRowActions={(p) => (
+          <button type="button" style={styles.smallButton} onClick={() => setSelected(p)}>مشاهده</button>
+        )}
+        renderCard={(p) => {
+          const sm = personnelStatusMeta(p.status);
+          return (
+            <div style={{ ...styles.card, width: "auto", margin: 0, borderInlineStart: `4px solid ${sm.color}`, cursor: "pointer", height: "100%" }} onClick={() => setSelected(p)}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+                <div>
+                  <div style={{ fontWeight: 700, color: THEME.navy, fontSize: 14 }}>{p.fullName}</div>
+                  <div style={{ fontSize: 11.5, color: THEME.text3, marginTop: 4 }}>{p.jobTitle} · {p.contractorName}</div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  {showTerminated && (
+                    <StatusPill label={employmentStatusMeta(p.employmentStatus).label} color={employmentStatusMeta(p.employmentStatus).color} bg={employmentStatusMeta(p.employmentStatus).bg} />
+                  )}
+                  <StatusPill label={sm.label} color={sm.color} bg={sm.bg} />
+                  {p.syncStatus && p.syncStatus !== "synced" && <SyncStatusBadge status={p.syncStatus} onRetry={() => load()} />}
+                </div>
               </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        }}
+      />
     </div>
   );
 }

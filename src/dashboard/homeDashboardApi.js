@@ -31,3 +31,18 @@ export async function loadDashboardContractors() {
   const rows = await sb("contractors?select=*&order=name.asc");
   return sbOk(rows) ? rows : [];
 }
+
+export async function loadDashboardMachinery() {
+  const rows = await sb("machinery?select=id,contractor_id,contractor_name,machine_name,machine_type,approval_status,insurance_expiry,inspection_expiry,created_at");
+  return sbOk(rows) ? rows : [];
+}
+
+export async function loadDashboardScaffold() {
+  const rows = await sb("scaffold_tags?select=id,contractor_id,contractor_name,tag_number,status,issue_date,created_at");
+  return sbOk(rows) ? rows : [];
+}
+
+export async function loadDashboardBowties() {
+  const rows = await sb("bowties?select=id,status,site,department,created_at");
+  return sbOk(rows) ? rows : [];
+}

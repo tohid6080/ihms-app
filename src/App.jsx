@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { AlertTriangle, Plus, X, ChevronRight, LogOut, Search, Filter, CheckCircle2, Clock, Camera, ImagePlus, Trash2, FileSpreadsheet, FileText, User, Users, ShieldCheck, LayoutGrid, BarChart3, Briefcase, Settings, Archive } from "lucide-react";
+import { AlertTriangle, Plus, X, ChevronRight, LogOut, CheckCircle2, Clock, Camera, ImagePlus, Trash2, FileSpreadsheet, FileText, User, Users, ShieldCheck, LayoutGrid, BarChart3, Briefcase, Settings, Archive, Truck, Tag } from "lucide-react";
 import * as XLSX from "xlsx";
 import BowTieDashboard from "./bowtie/BowTieDashboard.jsx";
 import PersonnelForm from "./personnel/PersonnelForm.jsx";
@@ -16,12 +16,19 @@ import { offlineWrite, offlineWriteFile } from "./offline/offlineWrite.js";
 import DbSizeWarningBanner from "./offline/DbSizeWarningBanner.jsx";
 import { checkUploadAllowed } from "./offline/dbSizeMonitor.js";
 import ArchiveManager from "./offline/ArchiveManager.jsx";
+import SuperAdminLogin from "./superadmin/SuperAdminLogin.jsx";
+import SuperAdminPanel from "./superadmin/SuperAdminPanel.jsx";
+import DataView, { StatusPill } from "./shared/DataView.jsx";
+import MachineryDashboard from "./machinery/MachineryDashboard.jsx";
+import { loadMachineryListOfflineFirst } from "./machinery/machineryApi.js";
+import ScaffoldDashboard from "./scaffold/ScaffoldDashboard.jsx";
+import ScaffoldTagCodeManager from "./scaffold/ScaffoldTagCodeManager.jsx";
 import { isOnline } from "./offline/networkStatus.js";
 import { getRecordsByModule, putRecord, getQueue } from "./offline/offlineDb.js";
 import SyncStatusBadge from "./offline/SyncStatusBadge.jsx";
 import { retryItemNow } from "./offline/syncEngine.js";
 import { exportWorkbookNativeAware, exportHtmlReportNativeAware } from "./offline/nativeFile.js";
-import { APP_NAME, sb, sbOk, sbErrMsg, uid, todayISO, THEME, styles } from "./shared.js";
+import { APP_NAME, sb, sbOk, sbErrMsg, uid, todayISO, THEME, styles, usePersistedState, setCurrentCompanyId, getCurrentCompanyId } from "./shared.js";
 
 /**
  * اپلیکیشن کارفرما / پیمانکار / ادمین + ماژول ثبت و پیگیری آنومالی HSE
@@ -87,6 +94,22 @@ const HSE_MODULES = [
     ],
   },
   {
+    key: "machineryManagement",
+    label: "مدیریت ماشین‌آلات و تجهیزات",
+    icon: true,
+    sub: [
+      { key: "machineryDashboard", label: "لیست ماشین‌آلات" },
+    ],
+  },
+  {
+    key: "scaffoldManagement",
+    label: "مدیریت داربست",
+    icon: true,
+    sub: [
+      { key: "scaffoldDashboard", label: "لیست تگ داربست" },
+    ],
+  },
+  {
     key: "managementDashboard",
     label: "داشبورد مدیریتی و گزارش‌های تحلیلی",
     icon: true,
@@ -111,17 +134,20 @@ function contractorFromRow(r) {
     jobPositionId: r.job_position_id || "",
     jobPositionTitle: r.job_positions?.title || "",
     role: "CONTRACTOR",
+    companyId: r.company_id || "",
   };
 }
 
 async function loadContractors() {
-  const rows = await sb("contractors?select=*,job_positions(title)&order=name.asc");
+  const companyId = getCurrentCompanyId();
+  const filter = companyId ? `&company_id=eq.${companyId}` : "";
+  const rows = await sb(`contractors?select=*,job_positions(title)&order=name.asc${filter}`);
   return (sbOk(rows) ? rows : []).map(contractorFromRow);
 }
 async function insertContractor(rec) {
   const rows = await sb("contractors", {
     method: "POST",
-    body: JSON.stringify([{ name: rec.name, start_date: rec.startDate || null, contract_details: rec.contractDetails, username: rec.username, password: rec.password, job_position_id: rec.jobPositionId || null }]),
+    body: JSON.stringify([{ name: rec.name, start_date: rec.startDate || null, contract_details: rec.contractDetails, username: rec.username, password: rec.password, job_position_id: rec.jobPositionId || null, company_id: getCurrentCompanyId() }]),
   });
   if (!sbOk(rows)) return { __error: true, message: sbErrMsg(rows) };
   return contractorFromRow(rows[0]);
@@ -152,18 +178,21 @@ function employerAccountFromRow(r) {
     canEdit: r.can_edit !== false,
     jobPositionId: r.job_position_id || "",
     jobPositionTitle: r.job_positions?.title || "",
-    role: "EMPLOYER",
+    role: r.role === "admin" ? "ADMIN" : "EMPLOYER",
+    companyId: r.company_id || "",
   };
 }
 
 async function loadEmployerAccounts() {
-  const rows = await sb("employer_accounts?select=*,job_positions(title)&order=name.asc");
+  const companyId = getCurrentCompanyId();
+  const filter = companyId ? `&company_id=eq.${companyId}` : "";
+  const rows = await sb(`employer_accounts?select=*,job_positions(title)&order=name.asc${filter}`);
   return (sbOk(rows) ? rows : []).map(employerAccountFromRow);
 }
 async function insertEmployerAccount(rec) {
   const rows = await sb("employer_accounts", {
     method: "POST",
-    body: JSON.stringify([{ name: rec.name, username: rec.username, password: rec.password, can_edit: rec.canEdit, job_position_id: rec.jobPositionId || null }]),
+    body: JSON.stringify([{ name: rec.name, username: rec.username, password: rec.password, can_edit: rec.canEdit, job_position_id: rec.jobPositionId || null, company_id: getCurrentCompanyId(), role: "employer" }]),
   });
   if (!sbOk(rows)) return { __error: true, message: sbErrMsg(rows) };
   return employerAccountFromRow(rows[0]);
@@ -254,7 +283,9 @@ function anomalyPatchToDb(patch) {
 }
 
 async function loadAnomalies() {
-  const rows = await sb("anomalies?select=*&order=created_at.desc");
+  const companyId = getCurrentCompanyId();
+  const filter = companyId ? `&company_id=eq.${companyId}` : "";
+  const rows = await sb(`anomalies?select=*&order=created_at.desc${filter}`);
   return (sbOk(rows) ? rows : []).map(anomalyFromRow);
 }
 
@@ -264,8 +295,10 @@ async function loadAnomalies() {
  * that hasn't synced yet. Offline → read purely from the local cache.
  */
 async function loadAnomaliesOfflineFirst() {
+  const companyId = getCurrentCompanyId();
+  const filter = companyId ? `&company_id=eq.${companyId}` : "";
   if (isOnline()) {
-    const rows = await sb("anomalies?select=*&order=created_at.desc");
+    const rows = await sb(`anomalies?select=*&order=created_at.desc${filter}`);
     if (sbOk(rows)) {
       for (const r of rows) await putRecord("anomalies", r.id, r, "synced");
       const cached = await getRecordsByModule("anomalies");
@@ -282,64 +315,151 @@ async function loadAnomaliesOfflineFirst() {
   return cached.filter((c) => !c.data?.deleted).map((c) => anomalyFromRow({ ...c.data, __syncStatus: c.syncStatus }));
 }
 
-// ================= اعلان‌های مهلت رفع آنومالی (SLA بر اساس سطح ریسک) =================
-//
-// Level H: بلافاصله توسط سرپرست مربوطه کار تعطیل می‌شود و تا رفع کامل ادامه
-//          کار مجاز نیست — این یک الزام عملیاتی فوری است، نه یک مهلت زمانی
-//          عددی، پس برایش اعلان مهلت ساخته نمی‌شود.
-// Level M: حداکثر ۷۲ ساعت (۳ روز) از تاریخ ثبت برای رفع کامل.
-// Level L: حداکثر یک هفته (۷ روز) از تاریخ ثبت برای رفع کامل.
-//
-// دقیقاً همان الگوی «فقط اعلان‌های خوانده‌نشده را در نظر بگیر» که برای مهلت‌های
-// طب کار پرسنل ساختیم، تا هم از اسپم جلوگیری کند و هم بعد از خوانده‌شدن یک
-// اعلان، اگر مشکل هنوز باز بود، دوباره امکان اطلاع‌رسانی وجود داشته باشد.
 
-async function insertAnomalyNotification(anomalyId, type, message, recipientRole) {
-  await sb("anomaly_notifications", { method: "POST", body: JSON.stringify([{ anomaly_id: anomalyId, type, message, recipient_role: recipientRole, is_read: false }]), prefer: "return=minimal" });
-}
-async function loadAnomalyNotifications(recipientRole) {
-  const rows = await sb(`anomaly_notifications?is_read=not.is.true&select=*&order=created_at.desc&limit=50`);
-  const list = sbOk(rows) ? rows : [];
-  return list.filter((r) => r.recipient_role === recipientRole || r.recipient_role === "both");
-}
-async function markAnomalyNotificationRead(id) {
-  await sb(`anomaly_notifications?id=eq.${id}`, { method: "PATCH", body: JSON.stringify({ is_read: true }), prefer: "return=minimal" });
-}
 
-function addDaysToIso(iso, days) {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return null;
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-}
+/**
+ * Smart, live-computed notifications — NOT stored anywhere, recalculated
+ * fresh every time from current personnel/anomaly data. Unlike the SLA
+ * deadline notifications above (discrete events that need explicit
+ * dismissal), these are just current counts: as soon as the underlying
+ * condition changes (an anomaly gets closed, a document gets uploaded),
+ * the number changes or the line disappears on its own — nothing to mark
+ * read, nothing to clean up.
+ *
+ * `scopeContractorName`: pass the contractor's own name for a
+ * contractor-scoped summary (3 items max). Omit it for the employer view,
+ * which gets one line per (contractor, category) — matching how a real
+ * manager wants to see it broken down.
+ */
+function computeSmartNotifications(personnelList, anomaliesList, scopeContractorName) {
+  const norm = (s) => (s || "").trim().toLowerCase();
+  const displayName = (s) => (s || "").trim(); // برای نمایش، بدون lowercase (فارسی رو تغییر نمی‌ده، ولی برای وضوح جداست)
+  const scopeNorm = scopeContractorName ? norm(scopeContractorName) : null;
 
-async function checkAnomalyDeadlines(anomalies) {
-  const today = todayISO();
+  const contractorNames = scopeContractorName
+    ? [{ norm: scopeNorm, display: displayName(scopeContractorName) }]
+    : Object.values(
+        [...anomaliesList.map((a) => a.contractor), ...personnelList.map((p) => p.contractorName)]
+          .filter(Boolean)
+          .reduce((acc, raw) => {
+            const key = norm(raw);
+            if (key && !acc[key]) acc[key] = { norm: key, display: displayName(raw) };
+            return acc;
+          }, {})
+      ).sort((a, b) => a.display.localeCompare(b.display, "fa"));
 
-  const existingRows = await sb("anomaly_notifications?is_read=not.is.true&select=anomaly_id,type");
-  const existingKeys = new Set((sbOk(existingRows) ? existingRows : []).map((r) => `${r.anomaly_id}:${r.type}`));
-  const alreadyNotified = (id, type) => existingKeys.has(`${id}:${type}`);
+  const items = [];
+  for (const { norm: name, display } of contractorNames) {
+    const openAnomalies = anomaliesList.filter((a) => norm(a.contractor) === name && a.status !== "Closed").length;
+    const contractorPersonnel = personnelList.filter((p) => norm(p.contractorName) === name);
+    const needVisit = contractorPersonnel.filter((p) => p.status === "pending_health_visit").length;
+    const needResult = contractorPersonnel.filter((p) => p.status === "pending_health_result").length;
+    // فیلتر پرسنل بر اساس contractorId واقعیه، نه اسم — شناسه رو از یکی از
+    // رکوردهای همین پیمانکار برمی‌داریم (هر رکوردی که داشته باشد کافی است).
+    const contractorId = contractorPersonnel.find((p) => p.contractorId)?.contractorId || null;
 
-  for (const a of anomalies) {
-    if (a.status === "Closed" || !a.date) continue;
-
-    if (a.riskLevel === "Med") {
-      const deadline = addDaysToIso(a.date, 3);
-      if (deadline && deadline < today && !alreadyNotified(a.id, "anomaly_sla_med")) {
-        await insertAnomalyNotification(a.id, "anomaly_sla_med", `مهلت ۷۲ ساعته رفع آنومالی سطح M (${a.trackingNumber}) به پایان رسید و هنوز بسته نشده است.`, "both");
-        existingKeys.add(`${a.id}:anomaly_sla_med`);
-      }
+    if (openAnomalies > 0) {
+      items.push({
+        key: `smart-${name}-anomaly`,
+        label: scopeContractorName ? `${openAnomalies} آنومالی باز دارید` : `شرکت ${display}: ${openAnomalies} آنومالی باز دارد`,
+        target: { module: "anomaly", statusFilter: "not_closed", contractorFilter: display },
+      });
     }
-    if (a.riskLevel === "Low") {
-      const deadline = addDaysToIso(a.date, 7);
-      if (deadline && deadline < today && !alreadyNotified(a.id, "anomaly_sla_low")) {
-        await insertAnomalyNotification(a.id, "anomaly_sla_low", `مهلت یک‌هفته‌ای رفع آنومالی سطح L (${a.trackingNumber}) به پایان رسید و هنوز بسته نشده است.`, "both");
-        existingKeys.add(`${a.id}:anomaly_sla_low`);
+    if (needVisit > 0) {
+      items.push({
+        key: `smart-${name}-visit`,
+        label: scopeContractorName ? `${needVisit} نفر نیاز به مراجعه به طب کار دارند` : `شرکت ${display}: ${needVisit} نفر نیاز به مراجعه به طب کار دارند`,
+        target: { module: "personnel", statusFilter: "pending_health_visit", contractorFilter: contractorId || "all" },
+      });
+    }
+    if (needResult > 0) {
+      items.push({
+        key: `smart-${name}-result`,
+        label: scopeContractorName ? `${needResult} نفر نتیجه/مدارک طب کار را هنوز بارگذاری نکرده‌اند` : `شرکت ${display}: ${needResult} نفر نتیجه طب کار را هنوز بارگذاری نکرده‌اند`,
+        target: { module: "personnel", statusFilter: "pending_health_result", contractorFilter: contractorId || "all" },
+      });
+    }
+  }
+  return items;
+}
+
+/**
+ * Same live-computed philosophy for the Machinery module — no stored
+ * events, just current counts recalculated fresh every time. For the
+ * employer, "pending review" and "expiring documents" are the two things
+ * that actually need attention; for the contractor, expiring documents and
+ * anything sent back (rejected/needs_correction) matter.
+ */
+function computeMachinerySmartItems(machineryList, scopeContractorName) {
+  const norm = (s) => (s || "").trim().toLowerCase();
+  const displayName = (s) => (s || "").trim();
+
+  const contractorNames = scopeContractorName
+    ? [{ norm: norm(scopeContractorName), display: displayName(scopeContractorName) }]
+    : Object.values(
+        machineryList.map((m) => m.contractorName).filter(Boolean).reduce((acc, raw) => {
+          const key = norm(raw);
+          if (key && !acc[key]) acc[key] = { norm: key, display: displayName(raw) };
+          return acc;
+        }, {})
+      ).sort((a, b) => a.display.localeCompare(b.display, "fa"));
+
+  const items = [];
+  for (const { norm: name, display } of contractorNames) {
+    const mine = machineryList.filter((m) => norm(m.contractorName) === name);
+    const contractorId = mine.find((m) => m.contractorId)?.contractorId || null;
+
+    const pendingReview = mine.filter((m) => m.approvalStatus === "pending").length;
+    const needsAttention = mine.filter((m) => m.approvalStatus === "rejected" || m.approvalStatus === "needs_correction").length;
+    const expiring = mine.filter((m) => {
+      const insD = daysUntilIso(m.insuranceExpiry);
+      const inspD = daysUntilIso(m.inspectionExpiry);
+      return (insD !== null && insD <= MACHINERY_EXPIRY_WARNING_DAYS) || (inspD !== null && inspD <= MACHINERY_EXPIRY_WARNING_DAYS);
+    }).length;
+
+    if (scopeContractorName) {
+      if (expiring > 0) {
+        items.push({
+          key: `machine-${name}-expiring`,
+          label: `${expiring} ماشین با بیمه/معاینه فنی منقضی یا نزدیک به انقضا`,
+          target: { module: "machinery", approvalFilter: "all" },
+        });
+      }
+      if (needsAttention > 0) {
+        items.push({
+          key: `machine-${name}-attention`,
+          label: `${needsAttention} ماشین رد شده یا نیاز به اصلاح دارد`,
+          target: { module: "machinery", approvalFilter: "needs_correction" },
+        });
+      }
+    } else {
+      if (pendingReview > 0) {
+        items.push({
+          key: `machine-${name}-pending`,
+          label: `شرکت ${display}: ${pendingReview} درخواست ثبت ماشین‌آلات در انتظار بررسی`,
+          target: { module: "machinery", approvalFilter: "pending", contractorFilter: contractorId || "all" },
+        });
+      }
+      if (expiring > 0) {
+        items.push({
+          key: `machine-${name}-expiring`,
+          label: `شرکت ${display}: ${expiring} ماشین با بیمه/معاینه فنی منقضی یا نزدیک به انقضا`,
+          target: { module: "machinery", approvalFilter: "all", contractorFilter: contractorId || "all" },
+        });
       }
     }
   }
+  return items;
 }
+
+function daysUntilIso(iso) {
+  if (!iso) return null;
+  const target = new Date(iso);
+  if (isNaN(target.getTime())) return null;
+  const today = new Date(todayISO());
+  return Math.round((target - today) / (1000 * 60 * 60 * 24));
+}
+const MACHINERY_EXPIRY_WARNING_DAYS = 30;
 
 async function insertAnomaly(record) {
   const body = [{
@@ -363,6 +483,7 @@ async function insertAnomaly(record) {
     close_date: record.closeDate || null,
     effectiveness: record.effectiveness,
     photo_count: record.photoCount,
+    company_id: getCurrentCompanyId(),
   }];
   const rows = await sb("anomalies", { method: "POST", body: JSON.stringify(body) });
   if (!sbOk(rows)) return { __error: true, message: sbErrMsg(rows) };
@@ -655,32 +776,39 @@ function LoginScreen({ onLogin }) {
   const handleSubmit = async () => {
     setLoading(true);
 
-    // ابتدا حساب‌های ثابت ادمین/کارفرما بررسی می‌شوند (بدون نیاز به storage)
-    const seedMatch = SEED_USERS.find((u) => u.username === username.trim() && u.password === password);
-    if (seedMatch) {
-      setLoading(false);
-      setError("");
-      onLogin({ ...seedMatch, canEdit: true, name: seedMatch.role === "EMPLOYER" ? "کارفرما (حساب اصلی)" : seedMatch.username });
-      return;
-    }
-
-    // سپس حساب‌های کارفرما/همکاران که ادمین ایجاد کرده بررسی می‌شوند
+    // اول حساب‌های واقعی (کارفرما/ادمین) که به یک شرکت واقعی متعلق‌اند بررسی
+    // می‌شوند — including admin و karfarma که بعد از مهاجرت فاز ۲ دیگر
+    // ردیف واقعی دارند، نه فقط مقدار هاردکد بدون company_id.
     const employerAccounts = await loadEmployerAccounts();
     const employerMatch = employerAccounts.find((u) => u.username === username.trim() && u.password === password);
     if (employerMatch) {
       setLoading(false);
       setError("");
+      setCurrentCompanyId(employerMatch.companyId);
       onLogin(employerMatch);
       return;
     }
 
-    // سپس حساب‌های پیمانکار که در دیتابیس ذخیره شده‌اند بررسی می‌شوند
+    // سپس حساب‌های پیمانکار
     const contractors = await loadContractors();
     const found = contractors.find((u) => u.username && u.username === username.trim() && u.password === password);
-    setLoading(false);
     if (found) {
+      setLoading(false);
       setError("");
+      setCurrentCompanyId(found.companyId);
       onLogin(found);
+      return;
+    }
+
+    // fallback ایمنی — فقط اگر SQL مهاجرت هنوز اجرا نشده؛ بدون company_id
+    // واقعی، بخش‌های شرکت‌محور داده‌ای نشان نمی‌دهند تا وقتی مهاجرت انجام شود.
+    const seedMatch = SEED_USERS.find((u) => u.username === username.trim() && u.password === password);
+    setLoading(false);
+    if (seedMatch) {
+      console.warn("ورود از طریق حساب موقت SEED_USERS — لطفاً SQL مهاجرت فاز ۲ را اجرا کنید.");
+      setError("");
+      setCurrentCompanyId(null);
+      onLogin({ ...seedMatch, canEdit: true, name: seedMatch.role === "EMPLOYER" ? "کارفرما (حساب اصلی)" : seedMatch.username });
     } else {
       setError("نام کاربری یا رمز عبور اشتباه است");
     }
@@ -1306,7 +1434,7 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
 }
 
 // ---------- لیست و پیگیری آنومالی‌ها ----------
-function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter, initialRiskFilter }) {
+function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter, initialRiskFilter, initialContractorFilter }) {
   const isAdmin = role === "ADMIN";
   const isReviewer = (role === "EMPLOYER" || isAdmin) && !readOnly;
   const isReadOnlyReviewer = (role === "EMPLOYER" || isAdmin) && !!readOnly;
@@ -1319,7 +1447,9 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter || "all");
   const [riskFilter, setRiskFilter] = useState(initialRiskFilter || "all");
+  const [contractorFilter, setContractorFilter] = useState(initialContractorFilter || "all");
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState("newest");
   const [expandedId, setExpandedId] = useState(null);
   const [draft, setDraft] = useState({});
   const [photosMap, setPhotosMap] = useState({});
@@ -1346,8 +1476,10 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
     : anomalies;
 
   const filtered = scoped.filter((a) => {
-    if (statusFilter !== "all" && a.status !== statusFilter) return false;
+    if (statusFilter === "not_closed" && a.status === "Closed") return false;
+    else if (statusFilter !== "all" && statusFilter !== "not_closed" && a.status !== statusFilter) return false;
     if (riskFilter !== "all" && a.riskLevel !== riskFilter) return false;
+    if (!isContractor && contractorFilter !== "all" && (a.contractor || "").trim().toLowerCase() !== contractorFilter.trim().toLowerCase()) return false;
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       const hay = `${a.trackingNumber} ${a.contractor} ${a.area} ${a.description} ${a.category}`.toLowerCase();
@@ -1362,6 +1494,22 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
     review: scoped.filter((a) => a.status === "pending_review").length,
     closed: scoped.filter((a) => a.status === "Closed").length,
     high: scoped.filter((a) => a.riskLevel === "High" && a.status !== "Closed").length,
+  };
+
+  const sorted = [...filtered].sort((a, b) => {
+    if (sort === "risk") {
+      const order = { High: 0, Med: 1, Low: 2 };
+      return (order[a.riskLevel] ?? 1) - (order[b.riskLevel] ?? 1);
+    }
+    const at = a.date || a.createdAt || "", bt = b.date || b.createdAt || "";
+    return sort === "oldest" ? at.localeCompare(bt) : bt.localeCompare(at);
+  });
+
+  const handleBulkDelete = async (ids) => {
+    if (readOnly) { alert("شما مجوز حذف را ندارید"); return; }
+    if (!confirm(`${ids.length} مورد حذف شود؟`)) return;
+    for (const id of ids) await offlineWrite({ module: "anomalies", table: "anomalies", action: "delete", id, payload: {} });
+    setAnomalies(anomalies.filter((a) => !ids.includes(a.id)));
   };
 
   const resetActionState = () => {
@@ -1497,7 +1645,7 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
   if (loading) return <div style={{ padding: 24, textAlign: "center", color: "#93a1b0" }}>در حال بارگذاری...</div>;
 
   return (
-    <div style={{ maxWidth: 720, margin: "0 auto", padding: 24 }}>
+    <div style={{ maxWidth: 900, margin: "0 auto", padding: 24 }}>
       {onBack && <div style={styles.backLink} onClick={onBack}>← بازگشت به منو</div>}
 
       <div style={styles.statsRow}>
@@ -1523,297 +1671,345 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
         </div>
       </div>
 
-      <div style={styles.filterBar}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, background: "#fff", borderRadius: 8, padding: "6px 10px", border: "1px solid #ddd" }}>
-          <Search size={16} color="#93a1b0" />
-          <input
-            style={{ border: "none", outline: "none", flex: 1, fontSize: 14 }}
-            placeholder="جستجو (شماره، پیمانکار، ناحیه، شرح)..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            dir="rtl"
-          />
-        </div>
-        <select style={styles.filterSelect} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} dir="rtl">
-          <option value="all">همه وضعیت‌ها</option>
-          <option value="open">باز</option>
-          <option value="pending_review">در انتظار تأیید</option>
-          <option value="Closed">بسته</option>
-        </select>
-        <select style={styles.filterSelect} value={riskFilter} onChange={(e) => setRiskFilter(e.target.value)} dir="rtl">
-          <option value="all">همه سطوح ریسک</option>
-          {RISK_LEVELS.map((r) => <option key={r.value} value={r.value}>{r.value}</option>)}
-        </select>
-      </div>
-
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
         <button
           type="button"
           style={{ ...styles.smallButton, flex: 1, background: "#16a34a", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
-          onClick={() => exportAnomaliesExcel(filtered, isContractor ? `آنومالی‌های ${currentUser?.name || "پیمانکار"}` : "لیست آنومالی‌ها")}
-          disabled={filtered.length === 0}
+          onClick={() => exportAnomaliesExcel(sorted, isContractor ? `آنومالی‌های ${currentUser?.name || "پیمانکار"}` : "لیست آنومالی‌ها")}
+          disabled={sorted.length === 0}
         >
           <FileSpreadsheet size={15} /> خروجی Excel
         </button>
         <button
           type="button"
           style={{ ...styles.smallButton, flex: 1, background: "#334155", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
-          onClick={() => exportAnomaliesPdf(filtered, isContractor ? `آنومالی‌های ${currentUser?.name || "پیمانکار"}` : "لیست آنومالی‌ها")}
-          disabled={filtered.length === 0}
+          onClick={() => exportAnomaliesPdf(sorted, isContractor ? `آنومالی‌های ${currentUser?.name || "پیمانکار"}` : "لیست آنومالی‌ها")}
+          disabled={sorted.length === 0}
         >
           <FileText size={15} /> خروجی PDF
         </button>
       </div>
 
-      <h3 style={{ marginTop: 22, fontSize: 15.5, color: THEME.navy, fontWeight: 700 }}>موارد ثبت‌شده ({filtered.length})</h3>
+      <h3 style={{ marginTop: 22, fontSize: 15.5, color: THEME.navy, fontWeight: 700 }}>موارد ثبت‌شده ({sorted.length})</h3>
 
-      {filtered.length === 0 && <p style={{ color: THEME.text3 }}>موردی یافت نشد.</p>}
+      <DataView
+        items={sorted}
+        getId={(a) => a.id}
+        searchQuery={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="جستجو (شماره، پیمانکار، ناحیه، شرح)..."
+        sortOptions={[{ value: "newest", label: "جدیدترین" }, { value: "oldest", label: "قدیمی‌ترین" }, { value: "risk", label: "سطح ریسک" }]}
+        sortValue={sort}
+        onSortChange={setSort}
+        filterSlot={
+          <>
+            <select style={styles.filterSelect} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} dir="rtl">
+              <option value="all">همه وضعیت‌ها</option>
+              <option value="not_closed">هنوز بسته نشده (باز + در انتظار تأیید)</option>
+              <option value="open">باز</option>
+              <option value="pending_review">در انتظار تأیید</option>
+              <option value="Closed">بسته</option>
+            </select>
+            <select style={styles.filterSelect} value={riskFilter} onChange={(e) => setRiskFilter(e.target.value)} dir="rtl">
+              <option value="all">همه سطوح ریسک</option>
+              {RISK_LEVELS.map((r) => <option key={r.value} value={r.value}>{r.value}</option>)}
+            </select>
+          </>
+        }
+        bulkActions={isReviewer && !readOnly ? [{ label: "حذف گروهی", danger: true, onClick: handleBulkDelete }] : null}
+        emptyMessage="موردی یافت نشد"
+        columns={[
+          {
+            key: "tracking", label: "شماره / ریسک",
+            render: (a) => (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <span style={{ fontWeight: 700, color: THEME.navy }}>{a.trackingNumber}</span>
+                <StatusPill label={a.riskLevel} color={riskMeta(a.riskLevel).color} bg={riskMeta(a.riskLevel).bg} />
+                {a.syncStatus && a.syncStatus !== "synced" && (
+                  <SyncStatusBadge
+                    status={a.syncStatus}
+                    onRetry={async (e) => {
+                      e.stopPropagation();
+                      const queue = await getQueue();
+                      const item = queue.find((q) => q.module === "anomalies" && q.recordId === a.id);
+                      if (item) { await retryItemNow(item.queueId); load(); }
+                      else load();
+                    }}
+                  />
+                )}
+              </div>
+            ),
+          },
+          { key: "desc", label: "شرح", render: (a) => <span style={{ display: "block", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.description}</span> },
+          {
+            key: "meta", label: "ناحیه / پیمانکار",
+            render: (a) => <span style={{ fontSize: 11.5, color: THEME.text3 }}>{a.area} {a.contractor && `· ${a.contractor}`} {a.date && `· ${isoToJalaliDisplay(a.date)}`}</span>,
+          },
+          {
+            key: "status", label: "وضعیت",
+            render: (a) => {
+              const sm = statusMeta(a.status);
+              return <StatusPill label={sm.label} color={sm.color} bg={sm.bg} />;
+            },
+          },
+        ]}
+        renderRowActions={(a) => (
+          <button type="button" style={styles.smallButton} onClick={() => startExpand(a)}>
+            {expandedId === a.id ? "بستن" : "مشاهده"}
+          </button>
+        )}
+        renderCard={(a) => {
+          const rm = riskMeta(a.riskLevel);
+          const sm = statusMeta(a.status);
+          const isOpenCard = expandedId === a.id;
+          return (
+            <div style={{ ...styles.card, width: "auto", margin: 0, borderInlineStart: `4px solid ${rm.color}`, padding: "18px 20px", height: "100%" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", cursor: "pointer" }} onClick={() => startExpand(a)}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <span style={{ fontWeight: 700, color: THEME.navy, fontSize: 14.5 }}>{a.trackingNumber}</span>
+                    <StatusPill label={a.riskLevel} color={rm.color} bg={rm.bg} />
+                    <span style={{ ...styles.badge, color: sm.color, background: sm.bg }}>
+                      <sm.Icon size={12} style={{ display: "inline", marginLeft: 3 }} />{sm.label}
+                    </span>
+                    {a.category && <span style={styles.badge}>{a.category}</span>}
+                    {a.syncStatus && a.syncStatus !== "synced" && (
+                      <SyncStatusBadge
+                        status={a.syncStatus}
+                        onRetry={async (e) => {
+                          e.stopPropagation();
+                          const queue = await getQueue();
+                          const item = queue.find((q) => q.module === "anomalies" && q.recordId === a.id);
+                          if (item) { await retryItemNow(item.queueId); load(); }
+                          else load();
+                        }}
+                      />
+                    )}
+                  </div>
+                  <div style={{ fontSize: 14, marginTop: 9, color: THEME.text }}>{a.description}</div>
+                  <div style={{ fontSize: 11.5, color: THEME.text3, marginTop: 7, fontWeight: 500 }}>
+                    {a.area} {a.contractor && `· ${a.contractor}`} {a.date && `· ${isoToJalaliDisplay(a.date)}`} {a.sender && `· ثبت توسط ${a.sender}`}
+                  </div>
+                </div>
+                <ChevronRight size={18} color={THEME.text3} style={{ transform: isOpenCard ? "rotate(-90deg)" : "none", transition: "transform .15s", flexShrink: 0, marginRight: 6 }} />
+              </div>
+            </div>
+          );
+        }}
+      />
 
-      {filtered.map((a) => {
-        const rm = riskMeta(a.riskLevel);
-        const sm = statusMeta(a.status);
-        const isOpenCard = expandedId === a.id;
+      {expandedId && (() => {
+        const a = sorted.find((x) => x.id === expandedId);
+        if (!a) return null;
         const photos = photosMap[a.id] || [];
         const reportPhotos = photos.filter((p) => p.stage !== "fix");
         const fixPhotos = photos.filter((p) => p.stage === "fix");
         return (
-          <div key={a.id} style={{ ...styles.card, width: "auto", marginBottom: 12, borderInlineStart: `4px solid ${rm.color}`, padding: "20px 22px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", cursor: "pointer" }} onClick={() => startExpand(a)}>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                  <span style={{ fontWeight: 700, color: THEME.navy, fontSize: 14.5 }}>{a.trackingNumber}</span>
-                  <span style={{ ...styles.badge, color: rm.color, background: rm.bg }}>{a.riskLevel}</span>
-                  <span style={{ ...styles.badge, color: sm.color, background: sm.bg }}>
-                    <sm.Icon size={12} style={{ display: "inline", marginLeft: 3 }} />{sm.label}
-                  </span>
-                  {a.category && <span style={styles.badge}>{a.category}</span>}
-                  {a.syncStatus && a.syncStatus !== "synced" && (
-                    <SyncStatusBadge
-                      status={a.syncStatus}
-                      onRetry={async (e) => {
-                        e.stopPropagation();
-                        const queue = await getQueue();
-                        const item = queue.find((q) => q.module === "anomalies" && q.recordId === a.id);
-                        if (item) { await retryItemNow(item.queueId); load(); }
-                        else load();
-                      }}
-                    />
-                  )}
-                </div>
-                <div style={{ fontSize: 14, marginTop: 9, color: THEME.text }}>{a.description}</div>
-                <div style={{ fontSize: 11.5, color: THEME.text3, marginTop: 7, fontWeight: 500 }}>
-                  {a.area} {a.contractor && `· ${a.contractor}`} {a.date && `· ${isoToJalaliDisplay(a.date)}`} {a.sender && `· ثبت توسط ${a.sender}`}
-                </div>
+          <div style={{ ...styles.card, width: "auto", marginTop: 14, padding: "20px 22px" }}>
+            <h3 style={{ margin: "0 0 12px", fontSize: 14.5, color: THEME.navy, fontWeight: 700 }}>{a.trackingNumber}</h3>
+
+            {a.reviewNote && a.status === "open" && (
+              <div style={{ background: "#fee2e2", color: "#991b1b", padding: 10, borderRadius: 8, fontSize: 13, marginBottom: 14 }}>
+                <b>بازگشت توسط کارفرما:</b> {a.reviewNote}
               </div>
-              <ChevronRight size={18} color={THEME.text3} style={{ transform: isOpenCard ? "rotate(-90deg)" : "none", transition: "transform .15s", flexShrink: 0, marginRight: 6 }} />
-            </div>
+            )}
 
-            {isOpenCard && (
-              <div style={{ marginTop: 16, borderTop: `1px solid ${THEME.border}`, paddingTop: 16 }}>
-                {a.reviewNote && a.status === "open" && (
-                  <div style={{ background: "#fee2e2", color: "#991b1b", padding: 10, borderRadius: 8, fontSize: 13, marginBottom: 14 }}>
-                    <b>بازگشت توسط کارفرما:</b> {a.reviewNote}
-                  </div>
-                )}
-
-                {a.photoCount > 0 && (
-                  <div style={{ marginBottom: 16 }}>
-                    {photosLoading && !photosMap[a.id] ? (
-                      <p style={{ fontSize: 12, color: "#93a1b0" }}>در حال بارگذاری عکس‌ها...</p>
-                    ) : (
+            {a.photoCount > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                {photosLoading && !photosMap[a.id] ? (
+                  <p style={{ fontSize: 12, color: "#93a1b0" }}>در حال بارگذاری عکس‌ها...</p>
+                ) : (
+                  <>
+                    {reportPhotos.length > 0 && (
                       <>
-                        {reportPhotos.length > 0 && (
-                          <>
-                            <label style={styles.label}>عکس‌های گزارش اولیه (کارفرما)</label>
-                            <div style={styles.photoGrid}>
-                              {reportPhotos.map((p, idx) => (
-                                <div key={p.id} style={styles.photoThumbWrap}>
-                                  <img src={p.photo} alt={`گزارش ${idx + 1}`} style={styles.photoThumb} onClick={() => setViewerSrc(p.photo)} />
-                                  {isReviewer && (
-                                    <button type="button" style={styles.photoRemoveBtn} onClick={() => removeExistingPhoto(a.id, p.id)}>
-                                      <Trash2 size={12} color="#fff" />
-                                    </button>
-                                  )}
-                                </div>
-                              ))}
+                        <label style={styles.label}>عکس‌های گزارش اولیه (کارفرما)</label>
+                        <div style={styles.photoGrid}>
+                          {reportPhotos.map((p, idx) => (
+                            <div key={p.id} style={styles.photoThumbWrap}>
+                              <img src={p.photo} alt={`گزارش ${idx + 1}`} style={styles.photoThumb} onClick={() => setViewerSrc(p.photo)} />
+                              {isReviewer && (
+                                <button type="button" style={styles.photoRemoveBtn} onClick={() => removeExistingPhoto(a.id, p.id)}>
+                                  <Trash2 size={12} color="#fff" />
+                                </button>
+                              )}
                             </div>
-                          </>
-                        )}
-                        {fixPhotos.length > 0 && (
-                          <>
-                            <label style={styles.label}>عکس‌های اقدام اصلاحی (پیمانکار)</label>
-                            <div style={styles.photoGrid}>
-                              {fixPhotos.map((p, idx) => (
-                                <div key={p.id} style={styles.photoThumbWrap}>
-                                  <img src={p.photo} alt={`اقدام ${idx + 1}`} style={styles.photoThumb} onClick={() => setViewerSrc(p.photo)} />
-                                </div>
-                              ))}
-                            </div>
-                          </>
-                        )}
+                          ))}
+                        </div>
                       </>
                     )}
+                    {fixPhotos.length > 0 && (
+                      <>
+                        <label style={styles.label}>عکس‌های اقدام اصلاحی (پیمانکار)</label>
+                        <div style={styles.photoGrid}>
+                          {fixPhotos.map((p, idx) => (
+                            <div key={p.id} style={styles.photoThumbWrap}>
+                              <img src={p.photo} alt={`اقدام ${idx + 1}`} style={styles.photoThumb} onClick={() => setViewerSrc(p.photo)} />
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* ---- پیمانکار / ادمین: ثبت اقدام اصلاحی ---- */}
+            {canActAsContractor && a.status === "open" && (
+              <div>
+                <label style={styles.label}>شرح اقدام اصلاحی انجام‌شده</label>
+                <textarea style={{ ...styles.input, minHeight: 70, fontFamily: "inherit" }} value={actionText} onChange={(e) => setActionText(e.target.value)} dir="rtl" placeholder="توضیح دهید چه اقدامی برای رفع این آنومالی انجام دادید" />
+
+                <label style={styles.label}>عکس اقدام اصلاحی ({actionPhotos.length}/2)</label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <label style={{ ...styles.smallButton, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 0", position: "relative", overflow: "hidden", opacity: actionPhotoBusy || actionPhotos.length >= 2 ? 0.5 : 1, pointerEvents: actionPhotoBusy || actionPhotos.length >= 2 ? "none" : "auto" }}>
+                    <Camera size={16} /> گرفتن عکس
+                    <input type="file" accept="image/*" capture="environment" style={{ position: "absolute", width: 1, height: 1, opacity: 0, overflow: "hidden", pointerEvents: "none" }} onChange={(e) => { handleActionPickFiles(e.target.files); e.target.value = ""; }} />
+                  </label>
+                  <label style={{ ...styles.smallButton, flex: 1, background: "#334155", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 0", position: "relative", overflow: "hidden", opacity: actionPhotoBusy || actionPhotos.length >= 2 ? 0.5 : 1, pointerEvents: actionPhotoBusy || actionPhotos.length >= 2 ? "none" : "auto" }}>
+                    <ImagePlus size={16} /> افزودن از گالری
+                    <input type="file" accept="image/*" multiple style={{ position: "absolute", width: 1, height: 1, opacity: 0, overflow: "hidden", pointerEvents: "none" }} onChange={(e) => { handleActionPickFiles(e.target.files); e.target.value = ""; }} />
+                  </label>
+                </div>
+                {actionPhotoBusy && <p style={{ fontSize: 12, color: "#93a1b0", marginTop: 8 }}>در حال پردازش عکس...</p>}
+                {actionPhotos.length > 0 && (
+                  <div style={styles.photoGrid}>
+                    {actionPhotos.map((src, idx) => (
+                      <div key={idx} style={styles.photoThumbWrap}>
+                        <img src={src} alt={`اقدام ${idx + 1}`} style={styles.photoThumb} />
+                        <button type="button" style={styles.photoRemoveBtn} onClick={() => removeActionPhoto(idx)}>
+                          <X size={12} color="#fff" />
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
 
-                {/* ---- پیمانکار / ادمین: ثبت اقدام اصلاحی ---- */}
-                {canActAsContractor && a.status === "open" && (
-                  <div>
-                    <label style={styles.label}>شرح اقدام اصلاحی انجام‌شده</label>
-                    <textarea style={{ ...styles.input, minHeight: 70, fontFamily: "inherit" }} value={actionText} onChange={(e) => setActionText(e.target.value)} dir="rtl" placeholder="توضیح دهید چه اقدامی برای رفع این آنومالی انجام دادید" />
+                <button type="button" style={styles.button} onClick={() => submitForReview(a)} disabled={actionSaving || !actionText.trim()}>
+                  {actionSaving ? "در حال ارسال..." : isAdmin ? "ثبت اقدام و ارسال برای تأیید" : "ارسال برای تأیید کارفرما"}
+                </button>
+              </div>
+            )}
+            {isContractor && a.status === "pending_review" && (
+              <div style={{ fontSize: 13, color: "#1d4ed8", background: "#dbeafe", padding: 10, borderRadius: 8 }}>
+                اقدام شما ثبت شد و در انتظار بررسی و تأیید کارفرماست.
+                {a.contractorAction && <div style={{ marginTop: 6, color: "#333" }}><b>شرح اقدام شما:</b> {a.contractorAction}</div>}
+              </div>
+            )}
+            {isContractor && a.status === "Closed" && (
+              <div style={{ fontSize: 13, color: "#555", lineHeight: 1.9 }}>
+                {a.contractorAction && <div><b>اقدام اصلاحی شما:</b> {a.contractorAction}</div>}
+                <div><b>وضعیت:</b> تأیید و بسته شد توسط کارفرما</div>
+                {a.closeDate && <div><b>تاریخ بسته شدن:</b> {isoToJalaliDisplay(a.closeDate)}</div>}
+              </div>
+            )}
 
-                    <label style={styles.label}>عکس اقدام اصلاحی ({actionPhotos.length}/2)</label>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <label style={{ ...styles.smallButton, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 0", position: "relative", overflow: "hidden", opacity: actionPhotoBusy || actionPhotos.length >= 2 ? 0.5 : 1, pointerEvents: actionPhotoBusy || actionPhotos.length >= 2 ? "none" : "auto" }}>
-                        <Camera size={16} /> گرفتن عکس
-                        <input type="file" accept="image/*" capture="environment" style={{ position: "absolute", width: 1, height: 1, opacity: 0, overflow: "hidden", pointerEvents: "none" }} onChange={(e) => { handleActionPickFiles(e.target.files); e.target.value = ""; }} />
-                      </label>
-                      <label style={{ ...styles.smallButton, flex: 1, background: "#334155", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 0", position: "relative", overflow: "hidden", opacity: actionPhotoBusy || actionPhotos.length >= 2 ? 0.5 : 1, pointerEvents: actionPhotoBusy || actionPhotos.length >= 2 ? "none" : "auto" }}>
-                        <ImagePlus size={16} /> افزودن از گالری
-                        <input type="file" accept="image/*" multiple style={{ position: "absolute", width: 1, height: 1, opacity: 0, overflow: "hidden", pointerEvents: "none" }} onChange={(e) => { handleActionPickFiles(e.target.files); e.target.value = ""; }} />
-                      </label>
-                    </div>
-                    {actionPhotoBusy && <p style={{ fontSize: 12, color: "#93a1b0", marginTop: 8 }}>در حال پردازش عکس...</p>}
-                    {actionPhotos.length > 0 && (
-                      <div style={styles.photoGrid}>
-                        {actionPhotos.map((src, idx) => (
-                          <div key={idx} style={styles.photoThumbWrap}>
-                            <img src={src} alt={`اقدام ${idx + 1}`} style={styles.photoThumb} />
-                            <button type="button" style={styles.photoRemoveBtn} onClick={() => removeActionPhoto(idx)}>
-                              <X size={12} color="#fff" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    <button type="button" style={styles.button} onClick={() => submitForReview(a)} disabled={actionSaving || !actionText.trim()}>
-                      {actionSaving ? "در حال ارسال..." : isAdmin ? "ثبت اقدام و ارسال برای تأیید" : "ارسال برای تأیید کارفرما"}
+            {/* ---- کارفرما/ادمین: بررسی و تأیید ---- */}
+            {isReviewer && a.status === "pending_review" && (
+              <div>
+                {a.contractorAction && (
+                  <div style={{ fontSize: 13, background: "#f8fafc", padding: 10, borderRadius: 8, marginBottom: 12 }}>
+                    <b>شرح اقدام پیمانکار:</b> {a.contractorAction}
+                  </div>
+                )}
+                {!showRejectBox ? (
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button type="button" style={styles.button} onClick={() => approveAnomaly(a)} disabled={reviewSaving}>
+                      {reviewSaving ? "در حال ثبت..." : "تأیید و بستن"}
+                    </button>
+                    <button type="button" style={{ ...styles.smallButton, background: "#c92a2a" }} onClick={() => setShowRejectBox(true)}>
+                      رد و بازگشت
                     </button>
                   </div>
-                )}
-                {isContractor && a.status === "pending_review" && (
-                  <div style={{ fontSize: 13, color: "#1d4ed8", background: "#dbeafe", padding: 10, borderRadius: 8 }}>
-                    اقدام شما ثبت شد و در انتظار بررسی و تأیید کارفرماست.
-                    {a.contractorAction && <div style={{ marginTop: 6, color: "#333" }}><b>شرح اقدام شما:</b> {a.contractorAction}</div>}
-                  </div>
-                )}
-                {isContractor && a.status === "Closed" && (
-                  <div style={{ fontSize: 13, color: "#555", lineHeight: 1.9 }}>
-                    {a.contractorAction && <div><b>اقدام اصلاحی شما:</b> {a.contractorAction}</div>}
-                    <div><b>وضعیت:</b> تأیید و بسته شد توسط کارفرما</div>
-                    {a.closeDate && <div><b>تاریخ بسته شدن:</b> {isoToJalaliDisplay(a.closeDate)}</div>}
-                  </div>
-                )}
-
-                {/* ---- کارفرما/ادمین: بررسی و تأیید ---- */}
-                {isReviewer && a.status === "pending_review" && (
-                  <div>
-                    {a.contractorAction && (
-                      <div style={{ fontSize: 13, background: "#f8fafc", padding: 10, borderRadius: 8, marginBottom: 12 }}>
-                        <b>شرح اقدام پیمانکار:</b> {a.contractorAction}
-                      </div>
-                    )}
-                    {!showRejectBox ? (
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button type="button" style={styles.button} onClick={() => approveAnomaly(a)} disabled={reviewSaving}>
-                          {reviewSaving ? "در حال ثبت..." : "تأیید و بستن"}
-                        </button>
-                        <button type="button" style={{ ...styles.smallButton, background: "#c92a2a" }} onClick={() => setShowRejectBox(true)}>
-                          رد و بازگشت
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <label style={styles.label}>دلیل بازگشت (برای پیمانکار نمایش داده می‌شود)</label>
-                        <textarea style={{ ...styles.input, minHeight: 60, fontFamily: "inherit" }} value={rejectNote} onChange={(e) => setRejectNote(e.target.value)} dir="rtl" />
-                        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                          <button type="button" style={{ ...styles.button, background: "#c92a2a" }} onClick={() => rejectAnomaly(a)} disabled={reviewSaving}>
-                            {reviewSaving ? "در حال ثبت..." : "تأیید بازگشت"}
-                          </button>
-                          <button type="button" style={{ ...styles.smallButton, background: "#5b6b7d" }} onClick={() => setShowRejectBox(false)}>انصراف</button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-                {isReviewer && a.status === "Closed" && (
-                  <div style={{ fontSize: 13, color: "#555", lineHeight: 1.9 }}>
-                    {a.contractorAction && <div><b>اقدام پیمانکار:</b> {a.contractorAction}</div>}
-                    {a.closeDate && <div><b>تاریخ بسته شدن:</b> {isoToJalaliDisplay(a.closeDate)}</div>}
-                    {a.effectiveness && <div><b>اثربخشی:</b> {a.effectiveness}</div>}
-                  </div>
-                )}
-                {isReviewer && a.status === "open" && (
-                  <div>
-                    <div style={styles.backLink} onClick={() => setShowManualEdit((v) => !v)}>
-                      {showManualEdit ? "بستن ویرایش دستی" : "ویرایش دستی (اختیاری)"}
+                ) : (
+                  <>
+                    <label style={styles.label}>دلیل بازگشت (برای پیمانکار نمایش داده می‌شود)</label>
+                    <textarea style={{ ...styles.input, minHeight: 60, fontFamily: "inherit" }} value={rejectNote} onChange={(e) => setRejectNote(e.target.value)} dir="rtl" />
+                    <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                      <button type="button" style={{ ...styles.button, background: "#c92a2a" }} onClick={() => rejectAnomaly(a)} disabled={reviewSaving}>
+                        {reviewSaving ? "در حال ثبت..." : "تأیید بازگشت"}
+                      </button>
+                      <button type="button" style={{ ...styles.smallButton, background: "#5b6b7d" }} onClick={() => setShowRejectBox(false)}>انصراف</button>
                     </div>
-                    {showManualEdit && (
-                      <>
-                        <label style={styles.label}>اقدام اصلاحی</label>
-                        <textarea style={{ ...styles.input, minHeight: 60, fontFamily: "inherit" }} value={draft.correctiveAction} onChange={(e) => setDraft({ ...draft, correctiveAction: e.target.value })} dir="rtl" />
+                  </>
+                )}
+              </div>
+            )}
+            {isReviewer && a.status === "Closed" && (
+              <div style={{ fontSize: 13, color: "#555", lineHeight: 1.9 }}>
+                {a.contractorAction && <div><b>اقدام پیمانکار:</b> {a.contractorAction}</div>}
+                {a.closeDate && <div><b>تاریخ بسته شدن:</b> {isoToJalaliDisplay(a.closeDate)}</div>}
+                {a.effectiveness && <div><b>اثربخشی:</b> {a.effectiveness}</div>}
+              </div>
+            )}
+            {isReviewer && a.status === "open" && (
+              <div>
+                <div style={styles.backLink} onClick={() => setShowManualEdit((v) => !v)}>
+                  {showManualEdit ? "بستن ویرایش دستی" : "ویرایش دستی (اختیاری)"}
+                </div>
+                {showManualEdit && (
+                  <>
+                    <label style={styles.label}>اقدام اصلاحی</label>
+                    <textarea style={{ ...styles.input, minHeight: 60, fontFamily: "inherit" }} value={draft.correctiveAction} onChange={(e) => setDraft({ ...draft, correctiveAction: e.target.value })} dir="rtl" />
 
-                        <label style={styles.label}>موانع و مشکلات</label>
-                        <textarea style={{ ...styles.input, minHeight: 60, fontFamily: "inherit" }} value={draft.obstacles} onChange={(e) => setDraft({ ...draft, obstacles: e.target.value })} dir="rtl" />
+                    <label style={styles.label}>موانع و مشکلات</label>
+                    <textarea style={{ ...styles.input, minHeight: 60, fontFamily: "inherit" }} value={draft.obstacles} onChange={(e) => setDraft({ ...draft, obstacles: e.target.value })} dir="rtl" />
 
-                        <div style={styles.formGrid}>
-                          <div>
-                            <label style={styles.label}>شخص پیگیر</label>
-                            <input style={styles.input} value={draft.follower} onChange={(e) => setDraft({ ...draft, follower: e.target.value })} dir="rtl" />
-                          </div>
-                          <div>
-                            <label style={styles.label}>وضعیت</label>
-                            <select style={styles.input} value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value })} dir="rtl">
-                              <option value="open">باز</option>
-                              <option value="pending_review">در انتظار تأیید</option>
-                              <option value="Closed">بسته (Closed)</option>
-                            </select>
-                          </div>
+                    <div style={styles.formGrid}>
+                      <div>
+                        <label style={styles.label}>شخص پیگیر</label>
+                        <input style={styles.input} value={draft.follower} onChange={(e) => setDraft({ ...draft, follower: e.target.value })} dir="rtl" />
+                      </div>
+                      <div>
+                        <label style={styles.label}>وضعیت</label>
+                        <select style={styles.input} value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value })} dir="rtl">
+                          <option value="open">باز</option>
+                          <option value="pending_review">در انتظار تأیید</option>
+                          <option value="Closed">بسته (Closed)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {draft.status === "Closed" && (
+                      <div style={styles.formGrid}>
+                        <div>
+                          <label style={styles.label}>تاریخ بسته شدن</label>
+                          <JalaliDateInput value={draft.closeDate} onChange={(v) => setDraft({ ...draft, closeDate: v })} />
                         </div>
-
-                        {draft.status === "Closed" && (
-                          <div style={styles.formGrid}>
-                            <div>
-                              <label style={styles.label}>تاریخ بسته شدن</label>
-                              <JalaliDateInput value={draft.closeDate} onChange={(v) => setDraft({ ...draft, closeDate: v })} />
-                            </div>
-                            <div>
-                              <label style={styles.label}>اثربخشی</label>
-                              <input style={styles.input} value={draft.effectiveness} onChange={(e) => setDraft({ ...draft, effectiveness: e.target.value })} dir="rtl" />
-                            </div>
-                          </div>
-                        )}
-
-                        <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-                          <button type="button" style={styles.button} onClick={() => saveDraft(a.id)}>ذخیره تغییرات</button>
+                        <div>
+                          <label style={styles.label}>اثربخشی</label>
+                          <input style={styles.input} value={draft.effectiveness} onChange={(e) => setDraft({ ...draft, effectiveness: e.target.value })} dir="rtl" />
                         </div>
-                      </>
+                      </div>
                     )}
-                  </div>
+
+                    <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+                      <button type="button" style={styles.button} onClick={() => saveDraft(a.id)}>ذخیره تغییرات</button>
+                    </div>
+                  </>
                 )}
-                {isReviewer && a.status !== "pending_review" && (
-                  <div style={{ marginTop: 16 }}>
-                    <button type="button" style={{ ...styles.smallButton, background: "#c92a2a" }} onClick={() => handleDelete(a.id, a.trackingNumber)}>حذف آنومالی</button>
-                  </div>
-                )}
-                {isReadOnlyReviewer && (
-                  <div style={{ fontSize: 13, color: "#555", lineHeight: 1.9 }}>
-                    <div style={{ background: "#f1f5f9", color: "#334155", padding: "4px 10px", borderRadius: 999, display: "inline-block", fontSize: 11, marginBottom: 8 }}>دسترسی فقط مشاهده</div>
-                    {a.correctiveAction && <div><b>اقدام اصلاحی:</b> {a.correctiveAction}</div>}
-                    {a.contractorAction && <div><b>اقدام پیمانکار:</b> {a.contractorAction}</div>}
-                    {a.obstacles && <div><b>موانع و مشکلات:</b> {a.obstacles}</div>}
-                    {a.follower && <div><b>شخص پیگیر:</b> {a.follower}</div>}
-                    {a.reviewNote && <div><b>یادداشت بازگشت:</b> {a.reviewNote}</div>}
-                    {a.status === "Closed" && a.closeDate && <div><b>تاریخ بسته شدن:</b> {isoToJalaliDisplay(a.closeDate)}</div>}
-                    {a.effectiveness && <div><b>اثربخشی:</b> {a.effectiveness}</div>}
-                  </div>
-                )}
+              </div>
+            )}
+            {isReviewer && a.status !== "pending_review" && (
+              <div style={{ marginTop: 16 }}>
+                <button type="button" style={{ ...styles.smallButton, background: "#c92a2a" }} onClick={() => handleDelete(a.id, a.trackingNumber)}>حذف آنومالی</button>
+              </div>
+            )}
+            {isReadOnlyReviewer && (
+              <div style={{ fontSize: 13, color: "#555", lineHeight: 1.9 }}>
+                <div style={{ background: "#f1f5f9", color: "#334155", padding: "4px 10px", borderRadius: 999, display: "inline-block", fontSize: 11, marginBottom: 8 }}>دسترسی فقط مشاهده</div>
+                {a.correctiveAction && <div><b>اقدام اصلاحی:</b> {a.correctiveAction}</div>}
+                {a.contractorAction && <div><b>اقدام پیمانکار:</b> {a.contractorAction}</div>}
+                {a.obstacles && <div><b>موانع و مشکلات:</b> {a.obstacles}</div>}
+                {a.follower && <div><b>شخص پیگیر:</b> {a.follower}</div>}
+                {a.reviewNote && <div><b>یادداشت بازگشت:</b> {a.reviewNote}</div>}
+                {a.status === "Closed" && a.closeDate && <div><b>تاریخ بسته شدن:</b> {isoToJalaliDisplay(a.closeDate)}</div>}
+                {a.effectiveness && <div><b>اثربخشی:</b> {a.effectiveness}</div>}
               </div>
             )}
           </div>
         );
-      })}
+      })()}
 
       {viewerSrc && (
         <div style={styles.photoViewerOverlay} onClick={() => setViewerSrc(null)}>
@@ -1837,7 +2033,7 @@ const headerIconBtnStyle = {
   background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 9, cursor: "pointer",
 };
 
-function DashboardHeader({ panelLabel, currentUser, onLogout, onOpenSettings, notifications, onNotificationsChanged, onMarkRead }) {
+function DashboardHeader({ panelLabel, currentUser, onLogout, onOpenSettings, smartItems, onNavigate }) {
   return (
     <div style={styles.topBar}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -1852,7 +2048,7 @@ function DashboardHeader({ panelLabel, currentUser, onLogout, onOpenSettings, no
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <OnlineIndicator />
-        {notifications && <NotificationPanel notifications={notifications} onChanged={onNotificationsChanged} onMarkRead={onMarkRead} />}
+        {smartItems && <NotificationPanel smartItems={smartItems} onNavigate={onNavigate} />}
         <button type="button" onClick={onOpenSettings} style={headerIconBtnStyle} title="تنظیمات">
           <Settings size={16} color="#fff" />
         </button>
@@ -1900,22 +2096,25 @@ function MenuRow({ icon: IconEl, label, onClick, accent, muted, sub }) {
 }
 
 function AdminDashboard({ onLogout, currentUser }) {
-  const [view, setView] = useState("menu");
+  const [view, setView] = usePersistedState("ihms_view_admin", "menu");
   const [navFilter, setNavFilter] = useState(null);
   const anomalyMod = HSE_MODULES.find((m) => m.key === "anomalyReport");
   const riskMod = HSE_MODULES.find((m) => m.key === "riskAssessment");
   const personnelMod = HSE_MODULES.find((m) => m.key === "personnelAccess");
+  const machineryMod = HSE_MODULES.find((m) => m.key === "machineryManagement");
+  const scaffoldMod = HSE_MODULES.find((m) => m.key === "scaffoldManagement");
   const managementMod = HSE_MODULES.find((m) => m.key === "managementDashboard");
 
   useEffect(() => {
-    loadPersonnelList().then(checkAndUpdateDeadlines);
-    loadAnomaliesOfflineFirst().then(checkAnomalyDeadlines);
+    loadPersonnelList().then(checkAndUpdateDeadlines); // فقط برای انتقال خودکار به «منقضی»
   }, []);
 
   const handleHomeNavigate = (target) => {
     setNavFilter(target);
     if (target.module === "personnel") setView("personnelDashboard");
     else if (target.module === "anomaly") setView("anomalyList");
+    else if (target.module === "machinery") setView("machineryDashboard");
+    else if (target.module === "scaffold") setView("scaffoldDashboard");
   };
 
   return (
@@ -1931,10 +2130,13 @@ function AdminDashboard({ onLogout, currentUser }) {
           <MenuRow icon={AlertTriangle} label={anomalyMod.label} onClick={() => setView("anomalyReport")} accent sub />
           <MenuRow icon={ShieldCheck} label={riskMod.label} onClick={() => setView("riskAssessment")} accent sub />
           <MenuRow icon={Users} label={personnelMod.label} onClick={() => setView("personnelAccess")} accent sub />
+          <MenuRow icon={Truck} label={machineryMod.label} onClick={() => setView("machineryManagement")} accent sub />
+          <MenuRow icon={Tag} label={scaffoldMod.label} onClick={() => setView("scaffoldManagement")} accent sub />
           <MenuRow icon={BarChart3} label={managementMod.label} onClick={() => setView("managementDashboard")} accent />
           <MenuRow icon={ShieldCheck} label="مدیریت نقش‌ها و دسترسی‌ها" onClick={() => setView("permissionManagement")} />
           <MenuRow icon={Briefcase} label="مدیریت عناوین شغلی" onClick={() => setView("jobPositionManagement")} />
           <MenuRow icon={Archive} label="آرشیو فایل‌ها" onClick={() => setView("archiveManagement")} />
+          <MenuRow icon={Tag} label="کد تگ داربست پیمانکاران" onClick={() => setView("scaffoldCodeManagement")} />
         </div>
       )}
 
@@ -1974,14 +2176,41 @@ function AdminDashboard({ onLogout, currentUser }) {
         </div>
       )}
 
+      {view === "machineryManagement" && (
+        <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
+          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{machineryMod.label}</h3>
+          <div style={styles.menuList2}>
+            {machineryMod.sub.map((s) => (
+              <MenuRow key={s.key} icon={Truck} label={s.label} onClick={() => setView(s.key)} accent />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {view === "scaffoldManagement" && (
+        <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
+          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{scaffoldMod.label}</h3>
+          <div style={styles.menuList2}>
+            {scaffoldMod.sub.map((s) => (
+              <MenuRow key={s.key} icon={Tag} label={s.label} onClick={() => setView(s.key)} accent />
+            ))}
+          </div>
+        </div>
+      )}
+
       {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel="ادمین" />}
       {view === "employers" && <EmployerAccountManager onBack={() => setView("menu")} />}
       {view === "contractors" && <ContractorManager onBack={() => setView("menu")} />}
       {view === "anomalyForm" && <AnomalyForm onBack={() => setView("anomalyReport")} currentUser={currentUser} onSaved={() => setView("anomalyList")} />}
-      {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="ADMIN" currentUser={currentUser} initialStatusFilter={navFilter?.module === "anomaly" ? navFilter.statusFilter : undefined} initialRiskFilter={navFilter?.module === "anomaly" ? navFilter.riskFilter : undefined} />}
+      {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="ADMIN" currentUser={currentUser} initialStatusFilter={navFilter?.module === "anomaly" ? navFilter.statusFilter : undefined} initialRiskFilter={navFilter?.module === "anomaly" ? navFilter.riskFilter : undefined} initialContractorFilter={navFilter?.module === "anomaly" ? navFilter.contractorFilter : undefined} />}
       {view === "bowtieDashboard" && <BowTieDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} readOnly={false} />}
       {view === "personnelForm" && <PersonnelForm onBack={() => setView("personnelAccess")} currentUser={currentUser} onSaved={() => setView("personnelAccess")} />}
       {view === "personnelDashboard" && <PersonnelDashboard onBack={() => setView("personnelAccess")} currentUser={currentUser} role="ADMIN" initialStatusFilter={navFilter?.module === "personnel" ? navFilter.statusFilter : undefined} initialContractorFilter={navFilter?.module === "personnel" ? navFilter.contractorFilter : undefined} />}
+      {view === "machineryDashboard" && <MachineryDashboard onBack={() => setView("machineryManagement")} currentUser={currentUser} role="ADMIN" initialApprovalFilter={navFilter?.module === "machinery" ? navFilter.approvalFilter : undefined} initialContractorFilter={navFilter?.module === "machinery" ? navFilter.contractorFilter : undefined} />}
+      {view === "scaffoldDashboard" && <ScaffoldDashboard onBack={() => setView("scaffoldManagement")} currentUser={currentUser} role="ADMIN" initialStatusFilter={navFilter?.module === "scaffold" ? navFilter.statusFilter : undefined} initialContractorFilter={navFilter?.module === "scaffold" ? navFilter.contractorFilter : undefined} />}
+      {view === "scaffoldCodeManagement" && <ScaffoldTagCodeManager onBack={() => setView("menu")} />}
       {view === "managementDashboard" && <HomeDashboard role="ADMIN" currentUser={currentUser} onNavigate={handleHomeNavigate} onBack={() => setView("menu")} />}
       {view === "permissionManagement" && <PermissionManager onBack={() => setView("menu")} />}
       {view === "jobPositionManagement" && <JobPositionManager onBack={() => setView("menu")} />}
@@ -1992,10 +2221,10 @@ function AdminDashboard({ onLogout, currentUser }) {
 
 // ---------- پنل کارفرما ----------
 function EmployerDashboard({ onLogout, currentUser }) {
-  const [view, setView] = useState("menu");
+  const [view, setView] = usePersistedState("ihms_view_employer", "menu");
   const [navFilter, setNavFilter] = useState(null);
   const [permMap, setPermMap] = useState({});
-  const [notifications, setNotifications] = useState([]);
+  const [smartItems, setSmartItems] = useState([]);
   const canEdit = currentUser?.canEdit !== false;
 
   useEffect(() => {
@@ -2003,19 +2232,13 @@ function EmployerDashboard({ onLogout, currentUser }) {
   }, [currentUser?.id]);
 
   const loadNotifs = async () => {
-    const [allPersonnel, allAnomalies] = await Promise.all([loadPersonnelList(), loadAnomaliesOfflineFirst()]);
-    await checkAndUpdateDeadlines(allPersonnel);
-    await checkAnomalyDeadlines(allAnomalies);
-    const [personnelNotifs, anomalyNotifs] = await Promise.all([loadNotifications("employer"), loadAnomalyNotifications("employer")]);
-    const merged = [
-      ...personnelNotifs.map((n) => ({ ...n, __source: "personnel" })),
-      ...anomalyNotifs.map((n) => ({ ...n, __source: "anomaly" })),
-    ].sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
-    setNotifications(merged);
-  };
-  const handleMarkNotifRead = async (n) => {
-    if (n.__source === "anomaly") await markAnomalyNotificationRead(n.id);
-    else await markNotificationRead(n.id);
+    const [allPersonnel, allAnomalies, allMachinery] = await Promise.all([loadPersonnelList(), loadAnomaliesOfflineFirst(), loadMachineryListOfflineFirst()]);
+    await checkAndUpdateDeadlines(allPersonnel); // فقط برای انتقال خودکار به «منقضی» — دیگر اعلان ثبت نمی‌کند
+    setSmartItems([
+      ...computeSmartNotifications(allPersonnel, allAnomalies), // بدون scopeContractorName → تجمیعی به‌ازای هر پیمانکار
+      ...computeMachinerySmartItems(allMachinery),
+      // داربست عمداً اینجا نیست — طبق خواسته‌ی کاربر، این ماژول توی زنگوله اعلان نمی‌شود
+    ]);
   };
   useEffect(() => { loadNotifs(); }, []);
 
@@ -2032,6 +2255,8 @@ function EmployerDashboard({ onLogout, currentUser }) {
     setNavFilter(target);
     if (target.module === "personnel") setView("personnelDashboard");
     else if (target.module === "anomaly") setView("anomalyList");
+    else if (target.module === "machinery") setView("machineryDashboard");
+    else if (target.module === "scaffold") setView("scaffoldDashboard");
   };
 
   const anomalyMod = HSE_MODULES.find((m) => m.key === "anomalyReport");
@@ -2039,6 +2264,8 @@ function EmployerDashboard({ onLogout, currentUser }) {
   const anomalySub = anomalyMod.sub.filter((s) => anomalyCanEdit || !s.employerOnly);
   const riskMod = HSE_MODULES.find((m) => m.key === "riskAssessment");
   const personnelMod = HSE_MODULES.find((m) => m.key === "personnelAccess");
+  const machineryMod = HSE_MODULES.find((m) => m.key === "machineryManagement");
+  const scaffoldMod = HSE_MODULES.find((m) => m.key === "scaffoldManagement");
 
   return (
     <div style={styles.dashboardWrapper}>
@@ -2047,9 +2274,8 @@ function EmployerDashboard({ onLogout, currentUser }) {
         currentUser={currentUser}
         onLogout={onLogout}
         onOpenSettings={() => setView("profile")}
-        notifications={notifications}
-        onNotificationsChanged={loadNotifs}
-        onMarkRead={handleMarkNotifRead}
+        smartItems={smartItems}
+        onNavigate={handleHomeNavigate}
       />
 
       {view === "menu" && (
@@ -2104,13 +2330,39 @@ function EmployerDashboard({ onLogout, currentUser }) {
         </div>
       )}
 
+      {view === "machineryManagement" && (
+        <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
+          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{machineryMod.label}</h3>
+          <div style={styles.menuList2}>
+            {machineryMod.sub.map((s) => (
+              <MenuRow key={s.key} icon={Truck} label={s.label} onClick={() => setView(s.key)} accent />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {view === "scaffoldManagement" && (
+        <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
+          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{scaffoldMod.label}</h3>
+          <div style={styles.menuList2}>
+            {scaffoldMod.sub.map((s) => (
+              <MenuRow key={s.key} icon={Tag} label={s.label} onClick={() => setView(s.key)} accent />
+            ))}
+          </div>
+        </div>
+      )}
+
       {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel={canEdit ? "کارفرما" : "کارفرما (فقط مشاهده)"} />}
       {view === "manageUsers" && <ContractorManager onBack={() => setView("menu")} />}
       {view === "anomalyForm" && anomalyCanEdit && <AnomalyForm onBack={() => setView("anomalyReport")} currentUser={currentUser} onSaved={() => setView("anomalyList")} />}
-      {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="EMPLOYER" currentUser={currentUser} readOnly={!canEdit || getAccessLevel(permMap, "anomalyReport") === "view"} initialStatusFilter={navFilter?.module === "anomaly" ? navFilter.statusFilter : undefined} initialRiskFilter={navFilter?.module === "anomaly" ? navFilter.riskFilter : undefined} />}
+      {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="EMPLOYER" currentUser={currentUser} readOnly={!canEdit || getAccessLevel(permMap, "anomalyReport") === "view"} initialStatusFilter={navFilter?.module === "anomaly" ? navFilter.statusFilter : undefined} initialRiskFilter={navFilter?.module === "anomaly" ? navFilter.riskFilter : undefined} initialContractorFilter={navFilter?.module === "anomaly" ? navFilter.contractorFilter : undefined} />}
       {view === "bowtieDashboard" && <BowTieDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} readOnly={!canEdit || getAccessLevel(permMap, "riskAssessment") === "view"} />}
       {view === "personnelForm" && <PersonnelForm onBack={() => setView("personnelAccess")} currentUser={currentUser} onSaved={() => setView("personnelAccess")} />}
       {view === "personnelDashboard" && <PersonnelDashboard onBack={() => setView("personnelAccess")} currentUser={currentUser} role="EMPLOYER" readOnly={!canEdit || getAccessLevel(permMap, "personnelAccess") === "view"} initialStatusFilter={navFilter?.module === "personnel" ? navFilter.statusFilter : undefined} initialContractorFilter={navFilter?.module === "personnel" ? navFilter.contractorFilter : undefined} />}
+      {view === "machineryDashboard" && <MachineryDashboard onBack={() => setView("machineryManagement")} currentUser={currentUser} role="EMPLOYER" readOnly={!canEdit || getAccessLevel(permMap, "machineryManagement") === "view"} initialApprovalFilter={navFilter?.module === "machinery" ? navFilter.approvalFilter : undefined} initialContractorFilter={navFilter?.module === "machinery" ? navFilter.contractorFilter : undefined} />}
+      {view === "scaffoldDashboard" && <ScaffoldDashboard onBack={() => setView("scaffoldManagement")} currentUser={currentUser} role="EMPLOYER" readOnly={!canEdit || getAccessLevel(permMap, "scaffoldManagement") === "view"} initialStatusFilter={navFilter?.module === "scaffold" ? navFilter.statusFilter : undefined} initialContractorFilter={navFilter?.module === "scaffold" ? navFilter.contractorFilter : undefined} />}
       {view === "managementDashboard" && <HomeDashboard role="EMPLOYER" currentUser={currentUser} onNavigate={handleHomeNavigate} onBack={() => setView("menu")} />}
     </div>
   );
@@ -2118,31 +2370,23 @@ function EmployerDashboard({ onLogout, currentUser }) {
 
 // ---------- پنل پیمانکار ----------
 function ContractorDashboard({ onLogout, currentUser }) {
-  const [view, setView] = useState("menu");
+  const [view, setView] = usePersistedState("ihms_view_contractor", "menu");
   const [navFilter, setNavFilter] = useState(null);
   const [permMap, setPermMap] = useState({});
-  const [notifications, setNotifications] = useState([]);
+  const [smartItems, setSmartItems] = useState([]);
 
   useEffect(() => {
     loadPermissionsMap("contractor", currentUser?.id).then(setPermMap);
   }, [currentUser?.id]);
 
   const loadNotifs = async () => {
-    const [personnelList, allAnomalies] = await Promise.all([loadPersonnelList(), loadAnomaliesOfflineFirst()]);
-    await checkAndUpdateDeadlines(personnelList);
-    await checkAnomalyDeadlines(allAnomalies);
-    const myName = (currentUser?.name || "").trim().toLowerCase();
-    const myPersonnel = personnelList.filter((p) => (p.contractorName || "").trim().toLowerCase() === myName);
-    const myAnomalyIds = new Set(allAnomalies.filter((a) => (a.contractor || "").trim().toLowerCase() === myName).map((a) => a.id));
-
-    const [rawPersonnelNotifs, rawAnomalyNotifs] = await Promise.all([loadNotifications("contractor"), loadAnomalyNotifications("contractor")]);
-    const personnelNotifs = rawPersonnelNotifs.filter((n) => myPersonnel.some((p) => p.id === n.personnel_id)).map((n) => ({ ...n, __source: "personnel" }));
-    const anomalyNotifs = rawAnomalyNotifs.filter((n) => myAnomalyIds.has(n.anomaly_id)).map((n) => ({ ...n, __source: "anomaly" }));
-    setNotifications([...personnelNotifs, ...anomalyNotifs].sort((a, b) => (b.created_at || "").localeCompare(a.created_at || "")));
-  };
-  const handleMarkNotifRead = async (n) => {
-    if (n.__source === "anomaly") await markAnomalyNotificationRead(n.id);
-    else await markNotificationRead(n.id);
+    const [personnelList, allAnomalies, allMachinery] = await Promise.all([loadPersonnelList(), loadAnomaliesOfflineFirst(), loadMachineryListOfflineFirst()]);
+    await checkAndUpdateDeadlines(personnelList); // فقط برای انتقال خودکار به «منقضی» — دیگر اعلان ثبت نمی‌کند
+    setSmartItems([
+      ...computeSmartNotifications(personnelList, allAnomalies, currentUser?.name),
+      ...computeMachinerySmartItems(allMachinery, currentUser?.name),
+      // داربست عمداً اینجا نیست — طبق خواسته‌ی کاربر، این ماژول توی زنگوله اعلان نمی‌شود
+    ]);
   };
   useEffect(() => { loadNotifs(); }, []);
 
@@ -2159,11 +2403,15 @@ function ContractorDashboard({ onLogout, currentUser }) {
     setNavFilter(target);
     if (target.module === "personnel") setView("personnelDashboard");
     else if (target.module === "anomaly") setView("anomalyList");
+    else if (target.module === "machinery") setView("machineryDashboard");
+    else if (target.module === "scaffold") setView("scaffoldDashboard");
   };
 
   const anomalyMod = HSE_MODULES.find((m) => m.key === "anomalyReport");
   const anomalySub = anomalyMod.sub.filter((s) => !s.employerOnly);
   const personnelMod = HSE_MODULES.find((m) => m.key === "personnelAccess");
+  const machineryMod = HSE_MODULES.find((m) => m.key === "machineryManagement");
+  const scaffoldMod = HSE_MODULES.find((m) => m.key === "scaffoldManagement");
 
   return (
     <div style={styles.dashboardWrapper}>
@@ -2172,9 +2420,8 @@ function ContractorDashboard({ onLogout, currentUser }) {
         currentUser={currentUser}
         onLogout={onLogout}
         onOpenSettings={() => setView("profile")}
-        notifications={notifications}
-        onNotificationsChanged={loadNotifs}
-        onMarkRead={handleMarkNotifRead}
+        smartItems={smartItems}
+        onNavigate={handleHomeNavigate}
       />
 
       {view === "menu" && (
@@ -2217,10 +2464,36 @@ function ContractorDashboard({ onLogout, currentUser }) {
         </div>
       )}
 
+      {view === "machineryManagement" && (
+        <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
+          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{machineryMod.label}</h3>
+          <div style={styles.menuList2}>
+            {machineryMod.sub.map((s) => (
+              <MenuRow key={s.key} icon={Truck} label={s.label} onClick={() => setView(s.key)} accent />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {view === "scaffoldManagement" && (
+        <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
+          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{scaffoldMod.label}</h3>
+          <div style={styles.menuList2}>
+            {scaffoldMod.sub.map((s) => (
+              <MenuRow key={s.key} icon={Tag} label={s.label} onClick={() => setView(s.key)} accent />
+            ))}
+          </div>
+        </div>
+      )}
+
       {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel="پیمانکار" />}
       {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="CONTRACTOR" currentUser={currentUser} readOnly={getAccessLevel(permMap, "anomalyReport") === "view"} initialStatusFilter={navFilter?.module === "anomaly" ? navFilter.statusFilter : undefined} initialRiskFilter={navFilter?.module === "anomaly" ? navFilter.riskFilter : undefined} />}
       {view === "personnelForm" && getAccessLevel(permMap, "personnelAccess") !== "view" && <PersonnelForm onBack={() => setView("personnelAccess")} currentUser={currentUser} onSaved={() => setView("personnelAccess")} />}
       {view === "personnelDashboard" && <PersonnelDashboard onBack={() => setView("personnelAccess")} currentUser={currentUser} role="CONTRACTOR" readOnly={getAccessLevel(permMap, "personnelAccess") === "view"} initialStatusFilter={navFilter?.module === "personnel" ? navFilter.statusFilter : undefined} />}
+      {view === "machineryDashboard" && <MachineryDashboard onBack={() => setView("machineryManagement")} currentUser={currentUser} role="CONTRACTOR" readOnly={getAccessLevel(permMap, "machineryManagement") === "view"} initialApprovalFilter={navFilter?.module === "machinery" ? navFilter.approvalFilter : undefined} />}
+      {view === "scaffoldDashboard" && <ScaffoldDashboard onBack={() => setView("scaffoldManagement")} currentUser={currentUser} role="CONTRACTOR" readOnly={getAccessLevel(permMap, "scaffoldManagement") === "view"} initialStatusFilter={navFilter?.module === "scaffold" ? navFilter.statusFilter : undefined} />}
       {view === "managementDashboard" && <HomeDashboard role="CONTRACTOR" currentUser={currentUser} onNavigate={handleHomeNavigate} onBack={() => setView("menu")} />}
     </div>
   );
@@ -2256,7 +2529,15 @@ class ErrorBoundary extends React.Component {
 
 // ---------- کامپوننت اصلی ----------
 function AppInner() {
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser] = usePersistedState("ihms_current_user", null);
+
+  // متغیر ماژولی «شرکت فعلی» با رفرش صفحه پاک می‌شود؛ ولی currentUser از
+  // localStorage بازیابی می‌شود، پس همین‌جا دوباره تنظیمش می‌کنیم. همچنین
+  // موقع خروج باید صفر شود، وگرنه ورود بعدی (حتی برای شرکت دیگر) با زمینه‌ی
+  // شرکت قبلی فیلتر می‌شود و شکست می‌خورد.
+  useEffect(() => {
+    setCurrentCompanyId(currentUser ? currentUser.companyId || null : null);
+  }, [currentUser]);
 
   if (!currentUser) return <LoginScreen onLogin={setCurrentUser} />;
   if (currentUser.role === "ADMIN") return <AdminDashboard onLogout={() => setCurrentUser(null)} currentUser={currentUser} />;
@@ -2264,11 +2545,23 @@ function AppInner() {
   return <ContractorDashboard onLogout={() => setCurrentUser(null)} currentUser={currentUser} />;
 }
 
+// مسیر Super Admin کاملاً جدا از درخت بالاست — هیچ حساب کارفرما/پیمانکار/ادمین
+// معمولی هرگز این کامپوننت‌ها را نمی‌بیند، چون فقط با آدرس مخفی #super-admin
+// (نه از طریق هیچ دکمه یا لینکی در رابط کاربری عادی) قابل‌دسترسیه، و کلید
+// نشست‌ش هم جدا از ihms_current_user است.
+function SuperAdminRoot() {
+  const [admin, setAdmin] = usePersistedState("ihms_super_admin", null);
+  if (!admin) return <SuperAdminLogin onLogin={setAdmin} />;
+  return <SuperAdminPanel currentAdmin={admin} onLogout={() => setAdmin(null)} />;
+}
+
 export default function App() {
+  const isSuperAdminRoute = typeof window !== "undefined" && window.location.hash === "#super-admin";
   return (
     <ErrorBoundary>
-      <AppInner />
+      {isSuperAdminRoute ? <SuperAdminRoot /> : <AppInner />}
     </ErrorBoundary>
   );
 }
+
 

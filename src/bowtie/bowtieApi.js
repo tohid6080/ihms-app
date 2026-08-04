@@ -1,4 +1,4 @@
-import { sb, sbOk, sbErrMsg, uid } from "../shared.js";
+import { sb, sbOk, sbErrMsg, uid, getCurrentCompanyId } from "../shared.js";
 import { offlineWrite } from "../offline/offlineWrite.js";
 import { isOnline } from "../offline/networkStatus.js";
 import { getRecordsByModule, putRecord } from "../offline/offlineDb.js";
@@ -42,7 +42,9 @@ function bowtieFromRow(r) {
 }
 
 export async function loadBowties() {
-  const rows = await sb("bowties?select=*&order=updated_at.desc");
+  const companyId = getCurrentCompanyId();
+  const filter = companyId ? `&company_id=eq.${companyId}` : "";
+  const rows = await sb(`bowties?select=*&order=updated_at.desc${filter}`);
   return (sbOk(rows) ? rows : []).map(bowtieFromRow);
 }
 
@@ -53,8 +55,10 @@ export async function loadBowties() {
  * connectivity; see the note in BowTieCanvas.jsx.
  */
 export async function loadBowtiesOfflineFirst() {
+  const companyId = getCurrentCompanyId();
+  const filter = companyId ? `&company_id=eq.${companyId}` : "";
   if (isOnline()) {
-    const rows = await sb("bowties?select=*&order=updated_at.desc");
+    const rows = await sb(`bowties?select=*&order=updated_at.desc${filter}`);
     if (sbOk(rows)) {
       for (const r of rows) await putRecord("bowties", r.id, r, "synced");
       const cached = await getRecordsByModule("bowties");
@@ -81,6 +85,7 @@ export async function insertBowtie(rec) {
     status: "draft",
     version: 1,
     created_by: rec.createdBy || "",
+    company_id: getCurrentCompanyId(),
   };
   const result = await offlineWrite({ module: "bowties", table: "bowties", action: "insert", id, payload: dbPayload });
   if (!result.ok) return { __error: true, message: "خطا در ذخیره‌سازی" };
