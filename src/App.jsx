@@ -1472,6 +1472,7 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
     }
     const convId = await findOrCreateLinkedConversation(currentUser, "anomaly", a.id, `آنومالی ${a.trackingNumber}`, initialParticipants);
     setLinkedChatBusy(false);
+    if (convId?.__error) { alert(convId.message); return; }
     setLinkedChatId(convId);
   };
   const [expandedId, setExpandedId] = useState(null);

@@ -37,6 +37,7 @@ export default function ChatDashboard({ onBack, currentUser }) {
     setCreating(true);
     const convId = await findOrCreateDirectConversation(currentUser, person.username, person.name, person.role);
     setCreating(false);
+    if (convId?.__error) { alert(convId.message); return; }
     setShowNew(false);
     setOpenConvId(convId);
   };
@@ -50,6 +51,7 @@ export default function ChatDashboard({ onBack, currentUser }) {
     setCreating(true);
     const convId = await createConversation(currentUser, "group", { title: groupTitle.trim(), participants: selectedPeople });
     setCreating(false);
+    if (convId?.__error) { alert(convId.message); return; }
     setShowNew(false);
     setOpenConvId(convId);
   };

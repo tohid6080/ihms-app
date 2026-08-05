@@ -41,6 +41,7 @@ export default function BowTieDashboard({ onBack, currentUser, readOnly }) {
     setLinkedChatBusy(true);
     const convId = await findOrCreateLinkedConversation(currentUser, "bowtie", b.id, `ریسک: ${b.title}`, []);
     setLinkedChatBusy(false);
+    if (convId?.__error) { alert(convId.message); return; }
     setLinkedChatId(convId);
   };
 
