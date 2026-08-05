@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { AlertTriangle, Plus, X, ChevronRight, LogOut, CheckCircle2, Clock, Camera, ImagePlus, Trash2, FileSpreadsheet, FileText, User, Users, ShieldCheck, LayoutGrid, BarChart3, Briefcase, Settings, Archive, Truck, Tag } from "lucide-react";
+import { AlertTriangle, Plus, X, ChevronRight, LogOut, CheckCircle2, Clock, Camera, ImagePlus, Trash2, FileSpreadsheet, FileText, User, Users, ShieldCheck, LayoutGrid, BarChart3, Briefcase, Settings, Archive, Truck, Tag, MessageCircle } from "lucide-react";
 import * as XLSX from "xlsx";
 import BowTieDashboard from "./bowtie/BowTieDashboard.jsx";
 import PersonnelForm from "./personnel/PersonnelForm.jsx";
@@ -17,6 +17,10 @@ import DbSizeWarningBanner from "./offline/DbSizeWarningBanner.jsx";
 import { checkUploadAllowed } from "./offline/dbSizeMonitor.js";
 import ArchiveManager from "./offline/ArchiveManager.jsx";
 import AdminAnalytics from "./admin/AdminAnalytics.jsx";
+import ChatDashboard from "./chat/ChatDashboard.jsx";
+import { loadUnreadTotal } from "./chat/chatApi.js";
+import ChatThread from "./chat/ChatThread.jsx";
+import { findOrCreateLinkedConversation, resolveContractorUsername } from "./chat/chatApi.js";
 import { trackLogin, trackLogout, trackPageView } from "./admin/activityApi.js";
 import SuperAdminLogin from "./superadmin/SuperAdminLogin.jsx";
 import SuperAdminPanel from "./superadmin/SuperAdminPanel.jsx";
@@ -67,6 +71,7 @@ const ANOMALY_FORMATS = [
 // بقیه به‌عنوان جای‌نگه‌دار (Placeholder) نمایش داده می‌شوند تا در فازهای بعدی توسعه یابند.
 const HSE_MODULES = [
   { key: "profile", label: "پروفایل من" },
+  { key: "chat", label: "چت" },
   { key: "manageUsers", label: "ایجاد حساب کاربری برای پیمانکاران", employerOnly: true },
   {
     key: "anomalyReport",
@@ -1456,6 +1461,19 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
   const [contractorFilter, setContractorFilter] = useState(initialContractorFilter || "all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("newest");
+  const [linkedChatId, setLinkedChatId] = useState(null);
+  const [linkedChatBusy, setLinkedChatBusy] = useState(false);
+  const openLinkedChat = async (a) => {
+    setLinkedChatBusy(true);
+    let initialParticipants = [];
+    if (a.contractor) {
+      const uname = await resolveContractorUsername(a.contractor);
+      if (uname) initialParticipants = [{ username: uname, fullName: a.contractor, role: "CONTRACTOR" }];
+    }
+    const convId = await findOrCreateLinkedConversation(currentUser, "anomaly", a.id, `آنومالی ${a.trackingNumber}`, initialParticipants);
+    setLinkedChatBusy(false);
+    setLinkedChatId(convId);
+  };
   const [expandedId, setExpandedId] = useState(null);
   const [draft, setDraft] = useState({});
   const [photosMap, setPhotosMap] = useState({});
@@ -1650,6 +1668,10 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
 
   if (loading) return <div style={{ padding: 24, textAlign: "center", color: "#93a1b0" }}>در حال بارگذاری...</div>;
 
+  if (linkedChatId) {
+    return <ChatThread conversationId={linkedChatId} currentUser={currentUser} onBack={() => setLinkedChatId(null)} />;
+  }
+
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: 24 }}>
       {onBack && <div style={styles.backLink} onClick={onBack}>← بازگشت به منو</div>}
@@ -1812,7 +1834,12 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
         const fixPhotos = photos.filter((p) => p.stage === "fix");
         return (
           <div style={{ ...styles.card, width: "auto", marginTop: 14, padding: "20px 22px" }}>
-            <h3 style={{ margin: "0 0 12px", fontSize: 14.5, color: THEME.navy, fontWeight: 700 }}>{a.trackingNumber}</h3>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <h3 style={{ margin: 0, fontSize: 14.5, color: THEME.navy, fontWeight: 700 }}>{a.trackingNumber}</h3>
+              <button type="button" style={{ ...styles.smallButton, background: THEME.teal, display: "flex", alignItems: "center", gap: 6 }} onClick={() => openLinkedChat(a)} disabled={linkedChatBusy}>
+                <MessageCircle size={13} /> {linkedChatBusy ? "..." : "چت درباره این مورد"}
+              </button>
+            </div>
 
             {a.reviewNote && a.status === "open" && (
               <div style={{ background: "#fee2e2", color: "#991b1b", padding: 10, borderRadius: 8, fontSize: 13, marginBottom: 14 }}>
@@ -2030,7 +2057,7 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
 }
 
 // ---------- پنل ادمین ----------
-const MODULE_ICON = { profile: User, manageUsers: Users, anomalyReport: AlertTriangle, personnelAccess: Users, managementDashboard: BarChart3 };
+const MODULE_ICON = { profile: User, chat: MessageCircle, manageUsers: Users, anomalyReport: AlertTriangle, personnelAccess: Users, managementDashboard: BarChart3 };
 
 // ---------- ردیف منوی استاندارد (آیکون + عنوان + شورون) ----------
 // ---------- هدر مشترک داشبورد (آواتار + نام + عنوان شغلی + اعلان/تنظیمات/خروج) ----------
@@ -2064,7 +2091,7 @@ function DashboardHeader({ panelLabel, currentUser, onLogout, onOpenSettings, sm
   );
 }
 
-function MenuRow({ icon: IconEl, label, onClick, accent, muted, sub }) {
+function MenuRow({ icon: IconEl, label, onClick, accent, muted, sub, badge }) {
   return (
     <div
       style={{
@@ -2091,6 +2118,11 @@ function MenuRow({ icon: IconEl, label, onClick, accent, muted, sub }) {
           <IconEl size={17} color={accent ? THEME.tealDeep : THEME.navyMid} />
         </div>
         <span>{label}</span>
+        {badge > 0 && (
+          <span style={{ background: THEME.danger, color: "#fff", fontSize: 10.5, fontWeight: 700, borderRadius: 999, minWidth: 19, height: 19, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px" }}>
+            {badge}
+          </span>
+        )}
       </div>
       {sub ? (
         <ChevronRight size={16} color={THEME.text3} style={{ transform: "rotate(180deg)" }} />
@@ -2105,6 +2137,13 @@ function AdminDashboard({ onLogout, currentUser }) {
   const [view, setView] = usePersistedState("ihms_view_admin", "menu");
   useEffect(() => { trackPageView(currentUser, view); }, [view]);
   const [navFilter, setNavFilter] = useState(null);
+  const [chatUnread, setChatUnread] = useState(0);
+  useEffect(() => {
+    const load = () => loadUnreadTotal(currentUser?.username).then(setChatUnread);
+    load();
+    const t = setInterval(load, 15000);
+    return () => clearInterval(t);
+  }, [currentUser?.username]);
   const anomalyMod = HSE_MODULES.find((m) => m.key === "anomalyReport");
   const riskMod = HSE_MODULES.find((m) => m.key === "riskAssessment");
   const personnelMod = HSE_MODULES.find((m) => m.key === "personnelAccess");
@@ -2132,6 +2171,7 @@ function AdminDashboard({ onLogout, currentUser }) {
         <div style={styles.menuList}>
           <DbSizeWarningBanner />
           <MenuRow icon={User} label="پروفایل من" onClick={() => setView("profile")} />
+          <MenuRow icon={MessageCircle} label="چت" onClick={() => setView("chat")} badge={chatUnread} />
           <MenuRow icon={AlertTriangle} label={anomalyMod.label} onClick={() => setView("anomalyReport")} accent sub />
           <MenuRow icon={ShieldCheck} label={riskMod.label} onClick={() => setView("riskAssessment")} accent sub />
           <MenuRow icon={Users} label={personnelMod.label} onClick={() => setView("personnelAccess")} accent sub />
@@ -2219,6 +2259,7 @@ function AdminDashboard({ onLogout, currentUser }) {
       )}
 
       {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel="ادمین" />}
+      {view === "chat" && <ChatDashboard onBack={() => setView("menu")} currentUser={currentUser} />}
       {view === "employers" && <EmployerAccountManager onBack={() => setView("systemManagement")} />}
       {view === "contractors" && <ContractorManager onBack={() => setView("systemManagement")} />}
       {view === "anomalyForm" && <AnomalyForm onBack={() => setView("anomalyReport")} currentUser={currentUser} onSaved={() => setView("anomalyList")} />}
@@ -2245,6 +2286,13 @@ function EmployerDashboard({ onLogout, currentUser }) {
   const [navFilter, setNavFilter] = useState(null);
   const [permMap, setPermMap] = useState({});
   const [smartItems, setSmartItems] = useState([]);
+  const [chatUnread, setChatUnread] = useState(0);
+  useEffect(() => {
+    const load = () => loadUnreadTotal(currentUser?.username).then(setChatUnread);
+    load();
+    const t = setInterval(load, 15000);
+    return () => clearInterval(t);
+  }, [currentUser?.username]);
   const canEdit = currentUser?.canEdit !== false;
 
   useEffect(() => {
@@ -2264,6 +2312,7 @@ function EmployerDashboard({ onLogout, currentUser }) {
 
   const openModule = (mod) => {
     if (mod.key === "profile") { setView("profile"); return; }
+    if (mod.key === "chat") { setView("chat"); return; }
     if (!isModuleVisible(permMap, mod.key)) { alert("شما مجوز دسترسی به این بخش را ندارید"); return; }
     if (mod.employerOnly && !canEdit) { alert("این بخش فقط با دسترسی کامل در دسترس است"); return; }
     if (mod.key === "managementDashboard") { setView("managementDashboard"); return; }
@@ -2309,6 +2358,7 @@ function EmployerDashboard({ onLogout, currentUser }) {
               accent={!!mod.icon}
               muted={mod.employerOnly && !canEdit}
               sub={!!mod.sub}
+              badge={mod.key === "chat" ? chatUnread : undefined}
             />
           ))}
         </div>
@@ -2375,6 +2425,7 @@ function EmployerDashboard({ onLogout, currentUser }) {
       )}
 
       {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel={canEdit ? "کارفرما" : "کارفرما (فقط مشاهده)"} />}
+      {view === "chat" && <ChatDashboard onBack={() => setView("menu")} currentUser={currentUser} />}
       {view === "manageUsers" && <ContractorManager onBack={() => setView("menu")} />}
       {view === "anomalyForm" && anomalyCanEdit && <AnomalyForm onBack={() => setView("anomalyReport")} currentUser={currentUser} onSaved={() => setView("anomalyList")} />}
       {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="EMPLOYER" currentUser={currentUser} readOnly={!canEdit || getAccessLevel(permMap, "anomalyReport") === "view"} initialStatusFilter={navFilter?.module === "anomaly" ? navFilter.statusFilter : undefined} initialRiskFilter={navFilter?.module === "anomaly" ? navFilter.riskFilter : undefined} initialContractorFilter={navFilter?.module === "anomaly" ? navFilter.contractorFilter : undefined} />}
@@ -2395,6 +2446,13 @@ function ContractorDashboard({ onLogout, currentUser }) {
   const [navFilter, setNavFilter] = useState(null);
   const [permMap, setPermMap] = useState({});
   const [smartItems, setSmartItems] = useState([]);
+  const [chatUnread, setChatUnread] = useState(0);
+  useEffect(() => {
+    const load = () => loadUnreadTotal(currentUser?.username).then(setChatUnread);
+    load();
+    const t = setInterval(load, 15000);
+    return () => clearInterval(t);
+  }, [currentUser?.username]);
 
   useEffect(() => {
     loadPermissionsMap("contractor", currentUser?.id).then(setPermMap);
@@ -2413,6 +2471,7 @@ function ContractorDashboard({ onLogout, currentUser }) {
 
   const openModule = (mod) => {
     if (mod.key === "profile") { setView("profile"); return; }
+    if (mod.key === "chat") { setView("chat"); return; }
     if (!isModuleVisible(permMap, mod.key)) { alert("شما مجوز دسترسی به این بخش را ندارید"); return; }
     if (mod.employerOnly) { alert("این بخش فقط برای کارفرما/ادمین در دسترس است"); return; }
     if (mod.key === "managementDashboard") { setView("managementDashboard"); return; }
@@ -2456,6 +2515,7 @@ function ContractorDashboard({ onLogout, currentUser }) {
               accent={!!mod.icon}
               muted={!!mod.employerOnly}
               sub={!!mod.sub}
+              badge={mod.key === "chat" ? chatUnread : undefined}
             />
           ))}
         </div>
@@ -2510,6 +2570,7 @@ function ContractorDashboard({ onLogout, currentUser }) {
       )}
 
       {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel="پیمانکار" />}
+      {view === "chat" && <ChatDashboard onBack={() => setView("menu")} currentUser={currentUser} />}
       {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="CONTRACTOR" currentUser={currentUser} readOnly={getAccessLevel(permMap, "anomalyReport") === "view"} initialStatusFilter={navFilter?.module === "anomaly" ? navFilter.statusFilter : undefined} initialRiskFilter={navFilter?.module === "anomaly" ? navFilter.riskFilter : undefined} />}
       {view === "personnelForm" && getAccessLevel(permMap, "personnelAccess") !== "view" && <PersonnelForm onBack={() => setView("personnelAccess")} currentUser={currentUser} onSaved={() => setView("personnelAccess")} />}
       {view === "personnelDashboard" && <PersonnelDashboard onBack={() => setView("personnelAccess")} currentUser={currentUser} role="CONTRACTOR" readOnly={getAccessLevel(permMap, "personnelAccess") === "view"} initialStatusFilter={navFilter?.module === "personnel" ? navFilter.statusFilter : undefined} />}

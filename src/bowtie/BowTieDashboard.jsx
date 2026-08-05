@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Trash2, Search, ShieldCheck, GitBranch, WifiOff } from "lucide-react";
+import { Plus, Trash2, Search, ShieldCheck, GitBranch, WifiOff, MessageCircle } from "lucide-react";
 import { styles, THEME } from "../shared.js";
+import { findOrCreateLinkedConversation } from "../chat/chatApi.js";
+import ChatThread from "../chat/ChatThread.jsx";
 import {
   BOWTIE_STATUSES,
   bowtieStatusMeta,
@@ -33,6 +35,14 @@ export default function BowTieDashboard({ onBack, currentUser, readOnly }) {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [linkedChatId, setLinkedChatId] = useState(null);
+  const [linkedChatBusy, setLinkedChatBusy] = useState(false);
+  const openLinkedChat = async (b) => {
+    setLinkedChatBusy(true);
+    const convId = await findOrCreateLinkedConversation(currentUser, "bowtie", b.id, `ریسک: ${b.title}`, []);
+    setLinkedChatBusy(false);
+    setLinkedChatId(convId);
+  };
 
   const [showForm, setShowForm] = useState(false);
   const [title, setTitle] = useState("");
@@ -139,6 +149,10 @@ export default function BowTieDashboard({ onBack, currentUser, readOnly }) {
 
   if (openBowtie) {
     return <BowTieEditor bowtie={openBowtie} onBack={() => { setOpenBowtie(null); load(); }} readOnly={readOnly} />;
+  }
+
+  if (linkedChatId) {
+    return <ChatThread conversationId={linkedChatId} currentUser={currentUser} onBack={() => setLinkedChatId(null)} />;
   }
 
   return (
