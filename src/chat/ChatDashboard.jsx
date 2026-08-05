@@ -19,8 +19,11 @@ export default function ChatDashboard({ onBack, currentUser }) {
   const [creating, setCreating] = useState(false);
 
   const load = async () => {
+    console.log("[chat-ui] ChatDashboard.load: شروع برای", currentUser.username);
     setLoading(true);
-    setConversations(await loadMyConversations(currentUser.username));
+    const list = await loadMyConversations(currentUser.username);
+    console.log("[chat-ui] ChatDashboard.load: تعداد مکالمات دریافتی =", list.length, list);
+    setConversations(list);
     setLoading(false);
   };
   const silentRefresh = async () => {
@@ -42,12 +45,15 @@ export default function ChatDashboard({ onBack, currentUser }) {
   };
 
   const startDirect = async (person) => {
+    console.log("[chat-ui] startDirect: شروع گفتگو با", person);
     setCreating(true);
     const convId = await findOrCreateDirectConversation(currentUser, person.username, person.name, person.role);
+    console.log("[chat-ui] startDirect: نتیجه", convId);
     setCreating(false);
-    if (convId?.__error) { alert(convId.message); return; }
+    if (convId?.__error) { console.error("[chat-ui] startDirect: خطا", convId.message); alert(convId.message); return; }
     setShowNew(false);
     setOpenConvId(convId);
+    await load();
   };
 
   const togglePerson = (person) => {
@@ -56,12 +62,15 @@ export default function ChatDashboard({ onBack, currentUser }) {
 
   const startGroup = async () => {
     if (!groupTitle.trim() || selectedPeople.length === 0) return;
+    console.log("[chat-ui] startGroup: شروع", { title: groupTitle.trim(), people: selectedPeople });
     setCreating(true);
     const convId = await createConversation(currentUser, "group", { title: groupTitle.trim(), participants: selectedPeople });
+    console.log("[chat-ui] startGroup: نتیجه", convId);
     setCreating(false);
-    if (convId?.__error) { alert(convId.message); return; }
+    if (convId?.__error) { console.error("[chat-ui] startGroup: خطا", convId.message); alert(convId.message); return; }
     setShowNew(false);
     setOpenConvId(convId);
+    await load();
   };
 
   if (openConvId) {

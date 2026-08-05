@@ -71,7 +71,6 @@ const ANOMALY_FORMATS = [
 // فقط "مدیریت عدم انطباق‌ها (Anomaly Report)" و "ایجاد حساب کاربری" فعلاً پیاده‌سازی شده‌اند؛
 // بقیه به‌عنوان جای‌نگه‌دار (Placeholder) نمایش داده می‌شوند تا در فازهای بعدی توسعه یابند.
 const HSE_MODULES = [
-  { key: "profile", label: "پروفایل من" },
   { key: "chat", label: "چت" },
   { key: "manageUsers", label: "ایجاد حساب کاربری برای پیمانکاران", employerOnly: true },
   {
@@ -143,7 +142,38 @@ function contractorFromRow(r) {
     jobPositionTitle: r.job_positions?.title || "",
     role: "CONTRACTOR",
     companyId: r.company_id || "",
+    phone: r.phone || "",
+    email: r.email || "",
+    createdAt: r.created_at || "",
   };
+}
+
+// ---------- به‌روزرسانی خودسرویس پروفایل (فقط موبایل/ایمیل) ----------
+// عمداً یک تابع کاملاً جدا از updateEmployerAccountDB/updateContractorDB —
+// تا حتی در آینده هم هیچ مسیری از خودِ کاربر به فیلدهای دیگر (نام، سمت،
+// نقش) که فقط ادمین باید تغییرشان بدهد، باز نماند.
+async function updateMyProfile(role, id, patch) {
+  const table = role === "CONTRACTOR" ? "contractors" : "employer_accounts";
+  const dbPatch = {};
+  if ("phone" in patch) dbPatch.phone = patch.phone;
+  if ("email" in patch) dbPatch.email = patch.email;
+  const rows = await sb(`${table}?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(dbPatch) });
+  if (!sbOk(rows)) return { __error: true, message: sbErrMsg(rows) };
+  return rows[0];
+}
+
+async function loadMyLastLogin(username) {
+  if (!username) return null;
+  const rows = await sb(`user_activity?username=eq.${encodeURIComponent(username)}&event_type=eq.login&select=created_at&order=created_at.desc&limit=2`);
+  // ردیف اول همین ورودِ فعلیه؛ دومی رو می‌خوایم («آخرین ورود» یعنی نشست قبلی)
+  if (!sbOk(rows) || rows.length < 2) return null;
+  return rows[1].created_at;
+}
+
+async function loadMyCompanyName(companyId) {
+  if (!companyId) return "";
+  const rows = await sb(`companies?id=eq.${companyId}&select=name`);
+  return sbOk(rows) && rows.length > 0 ? rows[0].name : "";
 }
 
 async function loadContractors() {
@@ -188,6 +218,9 @@ function employerAccountFromRow(r) {
     jobPositionTitle: r.job_positions?.title || "",
     role: r.role === "admin" ? "ADMIN" : "EMPLOYER",
     companyId: r.company_id || "",
+    phone: r.phone || "",
+    email: r.email || "",
+    createdAt: r.created_at || "",
   };
 }
 
@@ -885,21 +918,82 @@ function Avatar({ name, size = 40, bg }) {
 }
 
 function ProfileView({ onBack, currentUser, roleLabel }) {
+  const [companyName, setCompanyName] = useState("");
+  const [lastLogin, setLastLogin] = useState(null);
+  const [phone, setPhone] = useState(currentUser?.phone || "");
+  const [email, setEmail] = useState(currentUser?.email || "");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (currentUser?.role === "CONTRACTOR") {
+      setCompanyName(currentUser?.name || "");
+    } else {
+      loadMyCompanyName(currentUser?.companyId).then(setCompanyName);
+    }
+    loadMyLastLogin(currentUser?.username).then(setLastLogin);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError("");
+    setSaved(false);
+    const result = await updateMyProfile(currentUser?.role, currentUser?.id, { phone: phone.trim(), email: email.trim() });
+    setSaving(false);
+    if (result?.__error) { setError(result.message); return; }
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  };
+
+  const Field = ({ label, value }) => (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: 11, color: THEME.text3, fontWeight: 600, marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: 13.5, color: THEME.text }}>{value || "—"}</div>
+    </div>
+  );
+
   return (
-    <div style={{ maxWidth: 420, margin: "0 auto", padding: 24 }}>
+    <div style={{ maxWidth: 460, margin: "0 auto", padding: 24 }}>
       {onBack && <div style={styles.backLink} onClick={onBack}>← بازگشت به منو</div>}
       <div style={{ ...styles.card, width: "auto" }}>
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
-          <IhmsLogo size={64} />
-        </div>
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
           <Avatar name={currentUser?.name} size={64} />
         </div>
-        <h3 style={{ textAlign: "center", marginBottom: 4 }}>{currentUser?.name || "—"}</h3>
-        <p style={{ textAlign: "center", color: "#93a1b0", fontSize: 13, marginTop: 0 }}>{roleLabel}</p>
-        {currentUser?.jobPositionTitle && (
-          <p style={{ textAlign: "center", color: "#0d8f8a", fontSize: 12.5, marginTop: 4, fontWeight: 600 }}>{currentUser.jobPositionTitle}</p>
-        )}
+        <h3 style={{ textAlign: "center", marginBottom: 2 }}>{currentUser?.name || "—"}</h3>
+        <p style={{ textAlign: "center", color: THEME.text3, fontSize: 12.5, marginTop: 0, marginBottom: 20 }}>{roleLabel}</p>
+
+        <div style={{ borderTop: `1px solid ${THEME.border}`, paddingTop: 14, marginBottom: 6 }}>
+          <p style={{ fontSize: 11, color: THEME.text3, fontWeight: 700, marginBottom: 10 }}>اطلاعات سازمانی (فقط ادمین تغییر می‌دهد)</p>
+          <div style={styles.formGrid}>
+            <Field label="نام و نام خانوادگی" value={currentUser?.name} />
+            <Field label={currentUser?.role === "CONTRACTOR" ? "پیمانکار" : "شرکت"} value={companyName} />
+          </div>
+          <div style={styles.formGrid}>
+            <Field label="سمت سازمانی" value={currentUser?.jobPositionTitle} />
+            <Field label="نقش کاربری" value={roleLabel} />
+          </div>
+          <div style={styles.formGrid}>
+            <Field label="تاریخ عضویت" value={isoToJalaliDisplay(currentUser?.createdAt)} />
+            <Field label="آخرین ورود قبلی" value={lastLogin ? isoToJalaliDisplay(lastLogin) : "اولین ورود شماست"} />
+          </div>
+        </div>
+
+        <div style={{ borderTop: `1px solid ${THEME.border}`, paddingTop: 14, marginTop: 8 }}>
+          <p style={{ fontSize: 11, color: THEME.text3, fontWeight: 700, marginBottom: 10 }}>اطلاعات تماس (قابل ویرایش توسط شما)</p>
+          <label style={styles.label}>شماره موبایل</label>
+          <input style={styles.input} value={phone} onChange={(e) => setPhone(e.target.value)} dir="ltr" placeholder="09xxxxxxxxx" />
+          <label style={styles.label}>ایمیل سازمانی</label>
+          <input style={styles.input} value={email} onChange={(e) => setEmail(e.target.value)} dir="ltr" placeholder="name@company.com" type="email" />
+
+          {error && <p style={styles.error}>{error}</p>}
+          {saved && <p style={{ color: "#166534", fontSize: 12.5, marginTop: 6 }}>ذخیره شد.</p>}
+          <button type="button" style={{ ...styles.button, marginTop: 10 }} onClick={handleSave} disabled={saving}>
+            {saving ? "در حال ذخیره..." : "ذخیره‌ی تغییرات"}
+          </button>
+        </div>
+
         <p style={{ textAlign: "center", color: "#aaa", fontSize: 11, marginTop: 20, direction: "ltr" }}>{APP_NAME}</p>
       </div>
     </div>
@@ -2172,7 +2266,6 @@ function AdminDashboard({ onLogout, currentUser }) {
       {view === "menu" && (
         <div style={styles.menuList}>
           <DbSizeWarningBanner />
-          <MenuRow icon={User} label="پروفایل من" onClick={() => setView("profile")} />
           <MenuRow icon={MessageCircle} label="چت" onClick={() => setView("chat")} badge={chatUnread} />
           <MenuRow icon={AlertTriangle} label={anomalyMod.label} onClick={() => setView("anomalyReport")} accent sub />
           <MenuRow icon={ShieldCheck} label={riskMod.label} onClick={() => setView("riskAssessment")} accent sub />
@@ -2354,7 +2447,7 @@ function EmployerDashboard({ onLogout, currentUser }) {
 
       {view === "menu" && (
         <div style={styles.menuList}>
-          {HSE_MODULES.filter((mod) => mod.key === "profile" || isModuleVisible(permMap, mod.key)).map((mod) => (
+          {HSE_MODULES.filter((mod) => isModuleVisible(permMap, mod.key)).map((mod) => (
             <MenuRow
               key={mod.key}
               icon={MODULE_ICON[mod.key] || LayoutGrid}
@@ -2511,7 +2604,7 @@ function ContractorDashboard({ onLogout, currentUser }) {
 
       {view === "menu" && (
         <div style={styles.menuList}>
-          {HSE_MODULES.filter((mod) => mod.key === "profile" || isModuleVisible(permMap, mod.key)).map((mod) => (
+          {HSE_MODULES.filter((mod) => isModuleVisible(permMap, mod.key)).map((mod) => (
             <MenuRow
               key={mod.key}
               icon={MODULE_ICON[mod.key] || LayoutGrid}

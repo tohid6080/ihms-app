@@ -19,7 +19,9 @@ export default function ChatThread({ conversationId, currentUser, onBack }) {
   const me = { username: currentUser?.username, name: currentUser?.name, role: currentUser?.role };
 
   const load = async (scrollToBottom) => {
+    console.log("[chat-ui] ChatThread.load: شروع برای مکالمه", conversationId);
     const [msgs, parts] = await Promise.all([loadMessages(conversationId), loadParticipants(conversationId)]);
+    console.log("[chat-ui] ChatThread.load: پیام‌ها =", msgs.length, "شرکت‌کنندگان =", parts.length, { msgs, parts });
     setMessages(msgs);
     setParticipants(parts);
     markConversationRead(conversationId, me.username);
@@ -36,13 +38,15 @@ export default function ChatThread({ conversationId, currentUser, onBack }) {
   const handleSend = async (attachment) => {
     if (!attachment && !text.trim()) return;
     if (sending) return;
+    console.log("[chat-ui] handleSend: شروع", { conversationId, hasAttachment: !!attachment, textLength: text.trim().length });
     setSending(true);
     setError("");
     const body = text.trim();
     setText("");
     const result = await sendMessage(conversationId, me, body, attachment);
+    console.log("[chat-ui] handleSend: نتیجه", result);
     setSending(false);
-    if (result?.__error) { setError(result.message); return; }
+    if (result?.__error) { console.error("[chat-ui] handleSend: خطا", result.message); setError(result.message); return; }
     await load(true);
   };
 

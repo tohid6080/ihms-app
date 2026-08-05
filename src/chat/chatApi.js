@@ -80,13 +80,19 @@ export async function loadChatDirectory() {
 // ---------- مکالمات کاربر جاری ----------
 
 export async function loadMyConversations(username) {
+  console.log("[chat] loadMyConversations: شروع برای", username);
   const partRows = await sb(`chat_participants?username=eq.${encodeURIComponent(username)}&select=*`);
-  if (!sbOk(partRows) || partRows.length === 0) return [];
+  console.log("[chat] loadMyConversations: ردیف‌های عضویت این کاربر", partRows);
+  if (!sbOk(partRows) || partRows.length === 0) {
+    console.warn("[chat] loadMyConversations: هیچ ردیف عضویتی برای این کاربر یافت نشد — لیست خالی برمی‌گردد");
+    return [];
+  }
   const convIds = partRows.map((p) => p.conversation_id);
   const myParticipant = {};
   partRows.forEach((p) => { myParticipant[p.conversation_id] = participantFromRow(p); });
 
   const convRows = await sb(`chat_conversations?id=in.(${convIds.join(",")})&select=*&order=updated_at.desc`);
+  console.log("[chat] loadMyConversations: ردیف‌های مکالمه بر اساس آن عضویت‌ها", convRows);
   const conversations = sbOk(convRows) ? convRows.map(convFromRow) : [];
 
   // برای هر مکالمه، بقیه‌ی اعضا (برای نمایش نام طرف مقابل در چت مستقیم) و آخرین پیام را بگیر
@@ -111,7 +117,7 @@ export async function loadMyConversations(username) {
     });
   }
 
-  return conversations.map((c) => ({
+  const result = conversations.map((c) => ({
     ...c,
     participants: participantsByConv[c.id] || [],
     lastMessage: lastMessageByConv[c.id] || null,
@@ -121,6 +127,8 @@ export async function loadMyConversations(username) {
     const bt = b.lastMessage?.createdAt || b.createdAt;
     return bt.localeCompare(at);
   });
+  console.log("[chat] loadMyConversations: نتیجه‌ی نهایی", result);
+  return result;
 }
 
 // ---------- شروع/یافتن یک مکالمه‌ی مستقیم ----------
@@ -144,6 +152,7 @@ export async function findOrCreateDirectConversation(me, otherUsername, otherNam
 // ---------- ساخت مکالمه (مستقیم، گروهی، یا متصل به یک ماژول) ----------
 
 export async function createConversation(me, type, { title, participants, linkedModule, linkedId, linkedLabel } = {}) {
+  console.log("[chat] createConversation: شروع", { me, type, title, participants, linkedModule, linkedId, linkedLabel, companyId: getCurrentCompanyId() });
   const payload = {
     company_id: getCurrentCompanyId(),
     type,
@@ -154,8 +163,13 @@ export async function createConversation(me, type, { title, participants, linked
     created_by: me.username || "",
   };
   const rows = await sb("chat_conversations", { method: "POST", body: JSON.stringify([payload]) });
-  if (!sbOk(rows)) return { __error: true, message: "خطا در ساخت مکالمه: " + (rows?.message || "نامشخص") };
+  console.log("[chat] createConversation: نتیجه‌ی INSERT روی chat_conversations", rows);
+  if (!sbOk(rows)) {
+    console.error("[chat] createConversation: شکست در ساخت ردیف مکالمه", rows);
+    return { __error: true, message: "خطا در ساخت مکالمه: " + (rows?.message || "نامشخص") };
+  }
   const conv = rows[0];
+  console.log("[chat] createConversation: مکالمه ساخته شد با id =", conv.id);
 
   const allParticipants = [
     { username: me.username, fullName: me.name, role: me.role },
@@ -164,20 +178,24 @@ export async function createConversation(me, type, { title, participants, linked
   const uniqueByUsername = Object.values(
     allParticipants.reduce((acc, p) => { if (p.username) acc[p.username] = p; return acc; }, {})
   );
+  console.log("[chat] createConversation: در حال درج شرکت‌کنندگان", uniqueByUsername);
   const partResult = await sb("chat_participants", {
     method: "POST",
     body: JSON.stringify(uniqueByUsername.map((p) => ({
       conversation_id: conv.id, username: p.username, full_name: p.fullName || p.name || "", role: p.role || "",
     }))),
   });
+  console.log("[chat] createConversation: نتیجه‌ی INSERT روی chat_participants", partResult);
   if (!sbOk(partResult)) {
     // اگر عضوها ثبت نشوند، این مکالمه برای هیچ‌کس (نه حتی سازنده‌اش) قابل‌یافتن
     // نخواهد بود — دقیقاً همان چیزی که باعث می‌شد تاریخچه‌ی چت «گم» به‌نظر برسد.
     // چون خودِ ردیف مکالمه بی‌فایده است، حذفش می‌کنیم تا رکورد یتیم نماند.
+    console.error("[chat] createConversation: شکست در درج شرکت‌کنندگان — مکالمه‌ی یتیم در حال حذف", partResult);
     await sb(`chat_conversations?id=eq.${conv.id}`, { method: "DELETE", prefer: "return=minimal" });
     return { __error: true, message: "خطا در افزودن اعضای گفتگو: " + (partResult?.message || "نامشخص") };
   }
 
+  console.log("[chat] createConversation: موفق — بازگشت id =", conv.id);
   return conv.id;
 }
 
@@ -208,10 +226,12 @@ export async function findOrCreateLinkedConversation(me, linkedModule, linkedId,
 
 export async function loadMessages(conversationId) {
   const rows = await sb(`chat_messages?conversation_id=eq.${conversationId}&select=*&order=created_at.asc`);
+  console.log("[chat] loadMessages: مکالمه", conversationId, "→", sbOk(rows) ? `${rows.length} پیام` : "خطا", rows);
   return sbOk(rows) ? rows.map(msgFromRow) : [];
 }
 
 export async function sendMessage(conversationId, me, body, attachment) {
+  console.log("[chat] sendMessage: شروع", { conversationId, sender: me.username, bodyLength: (body || "").length, hasAttachment: !!attachment });
   let attachmentUrl = "", attachmentName = "", attachmentType = "";
   if (attachment) {
     try {
@@ -220,7 +240,9 @@ export async function sendMessage(conversationId, me, body, attachment) {
       attachmentUrl = await uploadBase64ToStorage("chat-attachments", path, attachment.data, attachment.mimeType);
       attachmentName = attachment.name || "";
       attachmentType = attachment.mimeType || "";
+      console.log("[chat] sendMessage: آپلود پیوست موفق", attachmentUrl);
     } catch (e) {
+      console.error("[chat] sendMessage: شکست در آپلود پیوست", e);
       return { __error: true, message: "خطا در آپلود پیوست: " + (e?.message || "") };
     }
   }
@@ -235,13 +257,20 @@ export async function sendMessage(conversationId, me, body, attachment) {
     attachment_type: attachmentType || null,
   };
   const rows = await sb("chat_messages", { method: "POST", body: JSON.stringify([payload]) });
-  if (!sbOk(rows)) return { __error: true, message: "خطا در ارسال پیام: " + (rows?.message || "نامشخص") };
-  await sb(`chat_conversations?id=eq.${conversationId}`, { method: "PATCH", body: JSON.stringify({ updated_at: new Date().toISOString() }), prefer: "return=minimal" });
+  console.log("[chat] sendMessage: نتیجه‌ی INSERT روی chat_messages", rows);
+  if (!sbOk(rows)) {
+    console.error("[chat] sendMessage: شکست در ثبت پیام", rows);
+    return { __error: true, message: "خطا در ارسال پیام: " + (rows?.message || "نامشخص") };
+  }
+  const touchResult = await sb(`chat_conversations?id=eq.${conversationId}`, { method: "PATCH", body: JSON.stringify({ updated_at: new Date().toISOString() }) });
+  console.log("[chat] sendMessage: به‌روزرسانی updated_at مکالمه", touchResult);
+  console.log("[chat] sendMessage: موفق", rows[0]);
   return msgFromRow(rows[0]);
 }
 
 export async function loadParticipants(conversationId) {
   const rows = await sb(`chat_participants?conversation_id=eq.${conversationId}&select=*`);
+  console.log("[chat] loadParticipants: مکالمه", conversationId, "→", sbOk(rows) ? `${rows.length} عضو` : "خطا", rows);
   return sbOk(rows) ? rows.map(participantFromRow) : [];
 }
 
@@ -262,23 +291,26 @@ export async function addParticipant(conversationId, person) {
 // باعث می‌شد تیک دوم برای بعضی کاربران (مثلاً پیمانکار) هیچ‌وقت ظاهر نشود.
 // این نسخه ابتدا وجود عضویت را چک می‌کند؛ اگر نبود، همان لحظه می‌سازدش.
 export async function markConversationRead(conversationId, username) {
+  console.log("[chat] markConversationRead: شروع", { conversationId, username });
   const existing = await sb(`chat_participants?conversation_id=eq.${conversationId}&username=eq.${encodeURIComponent(username)}&select=id`);
+  console.log("[chat] markConversationRead: عضویت موجود؟", existing);
   if (sbOk(existing) && existing.length > 0) {
-    await sb(`chat_participants?id=eq.${existing[0].id}`, {
+    const patchResult = await sb(`chat_participants?id=eq.${existing[0].id}`, {
       method: "PATCH",
       body: JSON.stringify({ last_read_at: new Date().toISOString() }),
-      prefer: "return=minimal",
     });
+    console.log("[chat] markConversationRead: نتیجه‌ی PATCH last_read_at", patchResult);
     return;
   }
   if (sbOk(existing) && existing.length === 0) {
     // عضویت گم‌شده بود — همین الان ترمیمش کن (نیاز به نام/نقش کامل نیست؛
     // پیام‌های موجود همچنان بر اساس sender_username نمایش داده می‌شوند)
-    await sb("chat_participants", {
+    console.warn("[chat] markConversationRead: عضویتی پیدا نشد — در حال ترمیم خودکار");
+    const repairResult = await sb("chat_participants", {
       method: "POST",
       body: JSON.stringify([{ conversation_id: conversationId, username, last_read_at: new Date().toISOString() }]),
-      prefer: "return=minimal",
     });
+    console.log("[chat] markConversationRead: نتیجه‌ی ترمیم خودکار", repairResult);
   }
 }
 
@@ -286,5 +318,7 @@ export async function markConversationRead(conversationId, username) {
 
 export async function loadUnreadTotal(username) {
   const convs = await loadMyConversations(username);
-  return convs.reduce((sum, c) => sum + c.unreadCount, 0);
+  const total = convs.reduce((sum, c) => sum + c.unreadCount, 0);
+  console.log("[chat] loadUnreadTotal:", username, "→", total);
+  return total;
 }
