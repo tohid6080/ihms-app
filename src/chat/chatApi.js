@@ -154,7 +154,7 @@ export async function createConversation(me, type, { title, participants, linked
     created_by: me.username || "",
   };
   const rows = await sb("chat_conversations", { method: "POST", body: JSON.stringify([payload]) });
-  if (!sbOk(rows)) return { __error: true, message: "خطا در ساخت مکالمه" };
+  if (!sbOk(rows)) return { __error: true, message: "خطا در ساخت مکالمه: " + (rows?.message || "نامشخص") };
   const conv = rows[0];
 
   const allParticipants = [
@@ -229,7 +229,7 @@ export async function sendMessage(conversationId, me, body, attachment) {
     attachment_type: attachmentType || null,
   };
   const rows = await sb("chat_messages", { method: "POST", body: JSON.stringify([payload]) });
-  if (!sbOk(rows)) return { __error: true, message: "خطا در ارسال پیام" };
+  if (!sbOk(rows)) return { __error: true, message: "خطا در ارسال پیام: " + (rows?.message || "نامشخص") };
   await sb(`chat_conversations?id=eq.${conversationId}`, { method: "PATCH", body: JSON.stringify({ updated_at: new Date().toISOString() }), prefer: "return=minimal" });
   return msgFromRow(rows[0]);
 }
