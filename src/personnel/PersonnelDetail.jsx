@@ -5,6 +5,7 @@ import { isoToJalaliDisplay, JalaliDateInput } from "./jalaliDate.jsx";
 import DocUploadField from "./DocUploadField.jsx";
 import DocumentViewerModal from "./DocumentViewerModal.jsx";
 import SyncStatusBadge from "../offline/SyncStatusBadge.jsx";
+import { loadRequiredTrainingsForJobTitle } from "../training/trainingApi.js";
 import {
   DOC_TYPES, docStatusMeta, personnelStatusMeta,
   loadPersonnelDocuments, upsertDocument, reviewDocumentDB, deleteDocumentDB,
@@ -33,6 +34,16 @@ export default function PersonnelDetail({ personnel: initialPersonnel, role, cur
   const [terminationDateDraft, setTerminationDateDraft] = useState("");
   const [terminationError, setTerminationError] = useState("");
   const [savingEmployment, setSavingEmployment] = useState(false);
+  const [requiredTrainings, setRequiredTrainings] = useState([]);
+  const [trainingsLoading, setTrainingsLoading] = useState(true);
+
+  useEffect(() => {
+    loadRequiredTrainingsForJobTitle(personnel.jobTitle).then((list) => {
+      setRequiredTrainings(list);
+      setTrainingsLoading(false);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [personnel.jobTitle]);
 
   const isEmployer = (role === "EMPLOYER" || role === "ADMIN") && !readOnly;
   const isContractor = role === "CONTRACTOR" && !readOnly;
@@ -137,6 +148,21 @@ export default function PersonnelDetail({ personnel: initialPersonnel, role, cur
             <div style={{ color: THEME.danger, fontWeight: 600 }}>تاریخ ترک کار / تسویه حساب: {isoToJalaliDisplay(personnel.terminationDate)}</div>
           )}
         </div>
+      </div>
+
+      <div style={{ ...styles.card, width: "auto" }}>
+        <h3 style={{ fontSize: 14, color: THEME.navy, margin: "0 0 8px", fontWeight: 700 }}>آموزش‌های تخصصی موردنیاز (بر اساس عنوان شغلی)</h3>
+        {trainingsLoading && <p style={{ fontSize: 12, color: THEME.text3 }}>در حال بررسی...</p>}
+        {!trainingsLoading && requiredTrainings.length === 0 && (
+          <p style={{ fontSize: 12, color: THEME.text3 }}>برای عنوان شغلی «{personnel.jobTitle}» آموزش الزامی‌ای در ماتریس تعریف نشده است.</p>
+        )}
+        {!trainingsLoading && requiredTrainings.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {requiredTrainings.map((t) => (
+              <span key={t.id} style={{ ...styles.badge, background: "#e3f5f4", color: THEME.tealDeep }} title={t.description || ""}>{t.title}</span>
+            ))}
+          </div>
+        )}
       </div>
 
       {isEmployer && (

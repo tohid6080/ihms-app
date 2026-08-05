@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { AlertTriangle, Plus, X, ChevronRight, LogOut, CheckCircle2, Clock, Camera, ImagePlus, Trash2, FileSpreadsheet, FileText, User, Users, ShieldCheck, LayoutGrid, BarChart3, Briefcase, Settings, Archive, Truck, Tag, MessageCircle } from "lucide-react";
+import { AlertTriangle, Plus, X, ChevronRight, LogOut, CheckCircle2, Clock, Camera, ImagePlus, Trash2, FileSpreadsheet, FileText, User, Users, ShieldCheck, LayoutGrid, BarChart3, Briefcase, Settings, Archive, Truck, Tag, MessageCircle, GraduationCap } from "lucide-react";
 import * as XLSX from "xlsx";
 import BowTieDashboard from "./bowtie/BowTieDashboard.jsx";
 import PersonnelForm from "./personnel/PersonnelForm.jsx";
@@ -18,6 +18,7 @@ import { checkUploadAllowed } from "./offline/dbSizeMonitor.js";
 import ArchiveManager from "./offline/ArchiveManager.jsx";
 import AdminAnalytics from "./admin/AdminAnalytics.jsx";
 import ChatDashboard from "./chat/ChatDashboard.jsx";
+import TrainingManager from "./training/TrainingManager.jsx";
 import { loadUnreadTotal } from "./chat/chatApi.js";
 import ChatThread from "./chat/ChatThread.jsx";
 import { findOrCreateLinkedConversation, resolveContractorUsername } from "./chat/chatApi.js";
@@ -2195,9 +2196,12 @@ function AdminDashboard({ onLogout, currentUser }) {
             <MenuRow icon={Briefcase} label="مدیریت عناوین شغلی" onClick={() => setView("jobPositionManagement")} />
             <MenuRow icon={Archive} label="آرشیو فایل‌ها" onClick={() => setView("archiveManagement")} />
             <MenuRow icon={Tag} label="کد تگ داربست پیمانکاران" onClick={() => setView("scaffoldCodeManagement")} />
+            <MenuRow icon={GraduationCap} label="مدیریت آموزش‌های تخصصی" onClick={() => setView("trainingManagement")} />
           </div>
         </div>
       )}
+
+      {view === "trainingManagement" && <TrainingManager onBack={() => setView("systemManagement")} />}
 
       {view === "anomalyReport" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
