@@ -23,7 +23,15 @@ export default function ChatDashboard({ onBack, currentUser }) {
     setConversations(await loadMyConversations(currentUser.username));
     setLoading(false);
   };
+  const silentRefresh = async () => {
+    setConversations(await loadMyConversations(currentUser.username));
+  };
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const t = setInterval(silentRefresh, 6000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const openNew = async () => {
     setShowNew(true);
