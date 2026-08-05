@@ -17,6 +17,7 @@ import DbSizeWarningBanner from "./offline/DbSizeWarningBanner.jsx";
 import { checkUploadAllowed } from "./offline/dbSizeMonitor.js";
 import ArchiveManager from "./offline/ArchiveManager.jsx";
 import AdminAnalytics from "./admin/AdminAnalytics.jsx";
+import { trackLogin, trackLogout, trackPageView } from "./admin/activityApi.js";
 import SuperAdminLogin from "./superadmin/SuperAdminLogin.jsx";
 import SuperAdminPanel from "./superadmin/SuperAdminPanel.jsx";
 import DataView, { StatusPill } from "./shared/DataView.jsx";
@@ -786,6 +787,7 @@ function LoginScreen({ onLogin }) {
       setLoading(false);
       setError("");
       setCurrentCompanyId(employerMatch.companyId);
+      trackLogin(employerMatch);
       onLogin(employerMatch);
       return;
     }
@@ -797,6 +799,7 @@ function LoginScreen({ onLogin }) {
       setLoading(false);
       setError("");
       setCurrentCompanyId(found.companyId);
+      trackLogin(found);
       onLogin(found);
       return;
     }
@@ -809,7 +812,9 @@ function LoginScreen({ onLogin }) {
       console.warn("ورود از طریق حساب موقت SEED_USERS — لطفاً SQL مهاجرت فاز ۲ را اجرا کنید.");
       setError("");
       setCurrentCompanyId(null);
-      onLogin({ ...seedMatch, canEdit: true, name: seedMatch.role === "EMPLOYER" ? "کارفرما (حساب اصلی)" : seedMatch.username });
+      const seedUser = { ...seedMatch, canEdit: true, name: seedMatch.role === "EMPLOYER" ? "کارفرما (حساب اصلی)" : seedMatch.username };
+      trackLogin(seedUser);
+      onLogin(seedUser);
     } else {
       setError("نام کاربری یا رمز عبور اشتباه است");
     }
@@ -2098,6 +2103,7 @@ function MenuRow({ icon: IconEl, label, onClick, accent, muted, sub }) {
 
 function AdminDashboard({ onLogout, currentUser }) {
   const [view, setView] = usePersistedState("ihms_view_admin", "menu");
+  useEffect(() => { trackPageView(currentUser, view); }, [view]);
   const [navFilter, setNavFilter] = useState(null);
   const anomalyMod = HSE_MODULES.find((m) => m.key === "anomalyReport");
   const riskMod = HSE_MODULES.find((m) => m.key === "riskAssessment");
@@ -2136,7 +2142,7 @@ function AdminDashboard({ onLogout, currentUser }) {
           <MenuRow icon={BarChart3} label={managementMod.label} onClick={() => setView("managementDashboard")} accent />
           <MenuRow icon={ShieldCheck} label="مدیریت نقش‌ها و دسترسی‌ها" onClick={() => setView("permissionManagement")} />
           <MenuRow icon={Briefcase} label="مدیریت عناوین شغلی" onClick={() => setView("jobPositionManagement")} />
-          <MenuRow icon={BarChart3} label="آنالیتیکس (Google Analytics)" onClick={() => setView("adminAnalytics")} />
+          <MenuRow icon={BarChart3} label="داشبورد فعالیت کاربران" onClick={() => setView("adminAnalytics")} />
           <MenuRow icon={Archive} label="آرشیو فایل‌ها" onClick={() => setView("archiveManagement")} />
           <MenuRow icon={Tag} label="کد تگ داربست پیمانکاران" onClick={() => setView("scaffoldCodeManagement")} />
         </div>
@@ -2225,6 +2231,7 @@ function AdminDashboard({ onLogout, currentUser }) {
 // ---------- پنل کارفرما ----------
 function EmployerDashboard({ onLogout, currentUser }) {
   const [view, setView] = usePersistedState("ihms_view_employer", "menu");
+  useEffect(() => { trackPageView(currentUser, view); }, [view]);
   const [navFilter, setNavFilter] = useState(null);
   const [permMap, setPermMap] = useState({});
   const [smartItems, setSmartItems] = useState([]);
@@ -2374,6 +2381,7 @@ function EmployerDashboard({ onLogout, currentUser }) {
 // ---------- پنل پیمانکار ----------
 function ContractorDashboard({ onLogout, currentUser }) {
   const [view, setView] = usePersistedState("ihms_view_contractor", "menu");
+  useEffect(() => { trackPageView(currentUser, view); }, [view]);
   const [navFilter, setNavFilter] = useState(null);
   const [permMap, setPermMap] = useState({});
   const [smartItems, setSmartItems] = useState([]);
@@ -2543,9 +2551,9 @@ function AppInner() {
   }, [currentUser]);
 
   if (!currentUser) return <LoginScreen onLogin={setCurrentUser} />;
-  if (currentUser.role === "ADMIN") return <AdminDashboard onLogout={() => setCurrentUser(null)} currentUser={currentUser} />;
-  if (currentUser.role === "EMPLOYER") return <EmployerDashboard onLogout={() => setCurrentUser(null)} currentUser={currentUser} />;
-  return <ContractorDashboard onLogout={() => setCurrentUser(null)} currentUser={currentUser} />;
+  if (currentUser.role === "ADMIN") return <AdminDashboard onLogout={() => { trackLogout(currentUser); setCurrentUser(null); }} currentUser={currentUser} />;
+  if (currentUser.role === "EMPLOYER") return <EmployerDashboard onLogout={() => { trackLogout(currentUser); setCurrentUser(null); }} currentUser={currentUser} />;
+  return <ContractorDashboard onLogout={() => { trackLogout(currentUser); setCurrentUser(null); }} currentUser={currentUser} />;
 }
 
 // مسیر Super Admin کاملاً جدا از درخت بالاست — هیچ حساب کارفرما/پیمانکار/ادمین
