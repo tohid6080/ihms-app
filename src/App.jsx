@@ -2132,19 +2132,29 @@ function AdminDashboard({ onLogout, currentUser }) {
         <div style={styles.menuList}>
           <DbSizeWarningBanner />
           <MenuRow icon={User} label="پروفایل من" onClick={() => setView("profile")} />
-          <MenuRow icon={Users} label="مدیریت حساب‌های کارفرما/همکاران" onClick={() => setView("employers")} />
-          <MenuRow icon={ShieldCheck} label="مدیریت پیمانکاران" onClick={() => setView("contractors")} />
           <MenuRow icon={AlertTriangle} label={anomalyMod.label} onClick={() => setView("anomalyReport")} accent sub />
           <MenuRow icon={ShieldCheck} label={riskMod.label} onClick={() => setView("riskAssessment")} accent sub />
           <MenuRow icon={Users} label={personnelMod.label} onClick={() => setView("personnelAccess")} accent sub />
           <MenuRow icon={Truck} label={machineryMod.label} onClick={() => setView("machineryManagement")} accent sub />
           <MenuRow icon={Tag} label={scaffoldMod.label} onClick={() => setView("scaffoldManagement")} accent sub />
           <MenuRow icon={BarChart3} label={managementMod.label} onClick={() => setView("managementDashboard")} accent />
-          <MenuRow icon={ShieldCheck} label="مدیریت نقش‌ها و دسترسی‌ها" onClick={() => setView("permissionManagement")} />
-          <MenuRow icon={Briefcase} label="مدیریت عناوین شغلی" onClick={() => setView("jobPositionManagement")} />
           <MenuRow icon={BarChart3} label="داشبورد فعالیت کاربران" onClick={() => setView("adminAnalytics")} />
-          <MenuRow icon={Archive} label="آرشیو فایل‌ها" onClick={() => setView("archiveManagement")} />
-          <MenuRow icon={Tag} label="کد تگ داربست پیمانکاران" onClick={() => setView("scaffoldCodeManagement")} />
+          <MenuRow icon={Settings} label="مدیریت سیستم" onClick={() => setView("systemManagement")} accent sub />
+        </div>
+      )}
+
+      {view === "systemManagement" && (
+        <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
+          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>مدیریت سیستم</h3>
+          <div style={styles.menuList2}>
+            <MenuRow icon={Users} label="مدیریت حساب‌های کارفرما/همکاران" onClick={() => setView("employers")} />
+            <MenuRow icon={ShieldCheck} label="مدیریت پیمانکاران" onClick={() => setView("contractors")} />
+            <MenuRow icon={ShieldCheck} label="مدیریت نقش‌ها و دسترسی‌ها" onClick={() => setView("permissionManagement")} />
+            <MenuRow icon={Briefcase} label="مدیریت عناوین شغلی" onClick={() => setView("jobPositionManagement")} />
+            <MenuRow icon={Archive} label="آرشیو فایل‌ها" onClick={() => setView("archiveManagement")} />
+            <MenuRow icon={Tag} label="کد تگ داربست پیمانکاران" onClick={() => setView("scaffoldCodeManagement")} />
+          </div>
         </div>
       )}
 
@@ -2209,8 +2219,8 @@ function AdminDashboard({ onLogout, currentUser }) {
       )}
 
       {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel="ادمین" />}
-      {view === "employers" && <EmployerAccountManager onBack={() => setView("menu")} />}
-      {view === "contractors" && <ContractorManager onBack={() => setView("menu")} />}
+      {view === "employers" && <EmployerAccountManager onBack={() => setView("systemManagement")} />}
+      {view === "contractors" && <ContractorManager onBack={() => setView("systemManagement")} />}
       {view === "anomalyForm" && <AnomalyForm onBack={() => setView("anomalyReport")} currentUser={currentUser} onSaved={() => setView("anomalyList")} />}
       {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="ADMIN" currentUser={currentUser} initialStatusFilter={navFilter?.module === "anomaly" ? navFilter.statusFilter : undefined} initialRiskFilter={navFilter?.module === "anomaly" ? navFilter.riskFilter : undefined} initialContractorFilter={navFilter?.module === "anomaly" ? navFilter.contractorFilter : undefined} />}
       {view === "bowtieDashboard" && <BowTieDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} readOnly={false} />}
@@ -2218,12 +2228,12 @@ function AdminDashboard({ onLogout, currentUser }) {
       {view === "personnelDashboard" && <PersonnelDashboard onBack={() => setView("personnelAccess")} currentUser={currentUser} role="ADMIN" initialStatusFilter={navFilter?.module === "personnel" ? navFilter.statusFilter : undefined} initialContractorFilter={navFilter?.module === "personnel" ? navFilter.contractorFilter : undefined} />}
       {view === "machineryDashboard" && <MachineryDashboard onBack={() => setView("machineryManagement")} currentUser={currentUser} role="ADMIN" initialApprovalFilter={navFilter?.module === "machinery" ? navFilter.approvalFilter : undefined} initialContractorFilter={navFilter?.module === "machinery" ? navFilter.contractorFilter : undefined} />}
       {view === "scaffoldDashboard" && <ScaffoldDashboard onBack={() => setView("scaffoldManagement")} currentUser={currentUser} role="ADMIN" initialStatusFilter={navFilter?.module === "scaffold" ? navFilter.statusFilter : undefined} initialContractorFilter={navFilter?.module === "scaffold" ? navFilter.contractorFilter : undefined} />}
-      {view === "scaffoldCodeManagement" && <ScaffoldTagCodeManager onBack={() => setView("menu")} />}
+      {view === "scaffoldCodeManagement" && <ScaffoldTagCodeManager onBack={() => setView("systemManagement")} />}
       {view === "managementDashboard" && <HomeDashboard role="ADMIN" currentUser={currentUser} onNavigate={handleHomeNavigate} onBack={() => setView("menu")} />}
-      {view === "permissionManagement" && <PermissionManager onBack={() => setView("menu")} />}
-      {view === "jobPositionManagement" && <JobPositionManager onBack={() => setView("menu")} />}
+      {view === "permissionManagement" && <PermissionManager onBack={() => setView("systemManagement")} />}
+      {view === "jobPositionManagement" && <JobPositionManager onBack={() => setView("systemManagement")} />}
       {view === "adminAnalytics" && <AdminAnalytics onBack={() => setView("menu")} currentUser={currentUser} />}
-      {view === "archiveManagement" && <ArchiveManager onBack={() => setView("menu")} currentUser={currentUser} />}
+      {view === "archiveManagement" && <ArchiveManager onBack={() => setView("systemManagement")} currentUser={currentUser} />}
     </div>
   );
 }
