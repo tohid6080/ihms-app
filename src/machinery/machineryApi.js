@@ -3,6 +3,7 @@ import { offlineWrite, offlineWriteFile } from "../offline/offlineWrite.js";
 import { isOnline } from "../offline/networkStatus.js";
 import { getRecordsByModule, putRecord } from "../offline/offlineDb.js";
 import { checkUploadAllowed } from "../offline/dbSizeMonitor.js";
+import { parseStorageUrl, deleteFromStorage } from "../offline/storageUpload.js";
 
 export const MACHINE_TYPES = [
   { value: "heavy", label: "سنگین" },
@@ -71,7 +72,15 @@ function machineryFromRow(r) {
     manufactureYear: r.manufacture_year || "",
     ownershipStatus: r.ownership_status || "owned",
     insuranceExpiry: r.insurance_expiry || "",
+    insuranceIssueDate: r.insurance_issue_date || "",
     inspectionExpiry: r.inspection_expiry || "",
+    inspectionIssueDate: r.inspection_issue_date || "",
+    healthCertIssueDate: r.health_cert_issue_date || "",
+    healthCertExpiry: r.health_cert_expiry || "",
+    driverLicenseIssueDate: r.driver_license_issue_date || "",
+    driverLicenseExpiry: r.driver_license_expiry || "",
+    backupDriverLicenseIssueDate: r.backup_driver_license_issue_date || "",
+    backupDriverLicenseExpiry: r.backup_driver_license_expiry || "",
     unsafeBehavior: r.unsafe_behavior || "",
     driverName: r.driver_name || "",
     driverLicenseType: r.driver_license_type || "grade_one",
@@ -99,7 +108,15 @@ function machineryToDb(rec) {
     manufacture_year: rec.manufactureYear || "",
     ownership_status: rec.ownershipStatus || "owned",
     insurance_expiry: rec.insuranceExpiry || null,
+    insurance_issue_date: rec.insuranceIssueDate || null,
     inspection_expiry: rec.inspectionExpiry || null,
+    inspection_issue_date: rec.inspectionIssueDate || null,
+    health_cert_issue_date: rec.healthCertIssueDate || null,
+    health_cert_expiry: rec.healthCertExpiry || null,
+    driver_license_issue_date: rec.driverLicenseIssueDate || null,
+    driver_license_expiry: rec.driverLicenseExpiry || null,
+    backup_driver_license_issue_date: rec.backupDriverLicenseIssueDate || null,
+    backup_driver_license_expiry: rec.backupDriverLicenseExpiry || null,
     unsafe_behavior: rec.unsafeBehavior || "",
     driver_name: rec.driverName || "",
     driver_license_type: rec.driverLicenseType || "grade_one",
@@ -173,8 +190,20 @@ export async function submitMachineryForReview(id, rec, uploadedDocTypes) {
   return { ...machineryFromRow(result.record), syncStatus: result.offline ? "pending" : "synced" };
 }
 
+// حذف کامل ماشین به همراه مدارکش — عمداً روی cascade خودِ دیتابیس تکیه
+// نمی‌کنیم (که ممکن است روی همه‌ی دیپلوی‌ها درست اعمال نشده باشد)، بلکه
+// صریحاً مدارک را اول حذف می‌کنیم تا اگر آن قید وجود نداشت، حذف ماشین با
+// خطای «کلید خارجی در حال استفاده» بی‌صدا شکست نخورد.
 export async function deleteMachineryDB(id) {
-  await offlineWrite({ module: "machinery", table: "machinery", action: "delete", id, payload: {} });
+  const docs = await loadMachineryDocuments(id);
+  for (const doc of docs) {
+    const parsed = doc.fileData ? parseStorageUrl(doc.fileData) : null;
+    if (parsed) { try { await deleteFromStorage(parsed.bucket, parsed.path); } catch { /* ادامه بده */ } }
+    await offlineWrite({ module: "machineryDocuments", table: "machinery_documents", action: "delete", id: doc.id, payload: {} });
+  }
+  const result = await offlineWrite({ module: "machinery", table: "machinery", action: "delete", id, payload: {} });
+  if (!result.ok) return { __error: true, message: result.error || "خطا در حذف" };
+  return { ok: true };
 }
 
 // تصمیم کارفرما — approved | needs_correction | rejected
@@ -231,7 +260,9 @@ export async function uploadMachineryDocument(machineryId, docType, fileData, fi
 }
 
 export async function deleteMachineryDocument(id) {
-  await offlineWrite({ module: "machineryDocuments", table: "machinery_documents", action: "delete", id, payload: {} });
+  const result = await offlineWrite({ module: "machineryDocuments", table: "machinery_documents", action: "delete", id, payload: {} });
+  if (!result.ok) return { __error: true, message: result.error || "خطا در حذف مدرک" };
+  return { ok: true };
 }
 
 // ---------- محاسبه‌ی روزهای باقی‌مانده تا انقضا (برای هشدار) ----------

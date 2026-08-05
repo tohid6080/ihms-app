@@ -86,7 +86,8 @@ export default function MachineryDashboard({ onBack, currentUser, role, initialA
   const handleDelete = async (id) => {
     if (readOnly) { alert("شما مجوز حذف را ندارید"); return; }
     if (!confirm("این ماشین حذف شود؟")) return;
-    await deleteMachineryDB(id);
+    const result = await deleteMachineryDB(id);
+    if (result?.__error) { alert(result.message); return; }
     await load();
   };
   const handleBulkDelete = async (ids) => {
@@ -149,9 +150,19 @@ export default function MachineryDashboard({ onBack, currentUser, role, initialA
   const expiryWarning = (m) => {
     const insuranceDays = daysUntil(m.insuranceExpiry);
     const inspectionDays = daysUntil(m.inspectionExpiry);
+    const healthCertDays = daysUntil(m.healthCertExpiry);
+    const driverLicenseDays = daysUntil(m.driverLicenseExpiry);
+    const backupDriverLicenseDays = daysUntil(m.backupDriverLicenseExpiry);
     const insuranceWarn = insuranceDays !== null && insuranceDays <= EXPIRY_WARNING_DAYS;
     const inspectionWarn = inspectionDays !== null && inspectionDays <= EXPIRY_WARNING_DAYS;
-    return { insuranceDays, inspectionDays, insuranceWarn, inspectionWarn };
+    const healthCertWarn = healthCertDays !== null && healthCertDays <= EXPIRY_WARNING_DAYS;
+    const driverLicenseWarn = driverLicenseDays !== null && driverLicenseDays <= EXPIRY_WARNING_DAYS;
+    const backupDriverLicenseWarn = backupDriverLicenseDays !== null && backupDriverLicenseDays <= EXPIRY_WARNING_DAYS;
+    return {
+      insuranceDays, inspectionDays, healthCertDays, driverLicenseDays, backupDriverLicenseDays,
+      insuranceWarn, inspectionWarn, healthCertWarn, driverLicenseWarn, backupDriverLicenseWarn,
+      anyWarn: insuranceWarn || inspectionWarn || healthCertWarn || driverLicenseWarn || backupDriverLicenseWarn,
+    };
   };
 
   const rowActions = (m) => {
@@ -240,9 +251,9 @@ export default function MachineryDashboard({ onBack, currentUser, role, initialA
           {
             key: "expiry", label: "انقضا",
             render: (m) => {
-              const { insuranceWarn, inspectionWarn } = expiryWarning(m);
-              if (!insuranceWarn && !inspectionWarn) return <span style={{ color: THEME.text3 }}>—</span>;
-              return <span style={{ color: "#b45309", fontSize: 11 }}>⚠ {insuranceWarn ? "بیمه" : ""}{insuranceWarn && inspectionWarn ? " / " : ""}{inspectionWarn ? "معاینه" : ""}</span>;
+              const { anyWarn } = expiryWarning(m);
+              if (!anyWarn) return <span style={{ color: THEME.text3 }}>—</span>;
+              return <span style={{ color: "#b45309", fontSize: 11 }}>⚠ مدارک نزدیک/منقضی</span>;
             },
           },
           {
@@ -261,7 +272,10 @@ export default function MachineryDashboard({ onBack, currentUser, role, initialA
         renderRowActions={rowActions}
         renderCard={(m) => {
           const sm = approvalStatusMeta(m.approvalStatus);
-          const { insuranceDays, inspectionDays, insuranceWarn, inspectionWarn } = expiryWarning(m);
+          const {
+            insuranceDays, inspectionDays, healthCertDays, driverLicenseDays, backupDriverLicenseDays,
+            insuranceWarn, inspectionWarn, healthCertWarn, driverLicenseWarn, backupDriverLicenseWarn, anyWarn,
+          } = expiryWarning(m);
           return (
             <div style={{ ...styles.card, width: "auto", margin: 0, borderInlineStart: `4px solid ${sm.color}`, height: "100%" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 6 }}>
@@ -278,10 +292,13 @@ export default function MachineryDashboard({ onBack, currentUser, role, initialA
                 </div>
               </div>
 
-              {(insuranceWarn || inspectionWarn) && (
+              {anyWarn && (
                 <div style={{ marginTop: 8, fontSize: 11.5, color: "#b45309" }}>
                   {insuranceWarn && <div>⚠ بیمه‌نامه {insuranceDays < 0 ? "منقضی شده" : `تا ${insuranceDays} روز دیگر منقضی می‌شود`} ({toJalaliSafe(m.insuranceExpiry)})</div>}
-                  {inspectionWarn && <div>⚠ {m.machineType === "heavy" ? "سرتیفیکیت سلامت" : "معاینه فنی"} {inspectionDays < 0 ? "منقضی شده" : `تا ${inspectionDays} روز دیگر منقضی می‌شود`} ({toJalaliSafe(m.inspectionExpiry)})</div>}
+                  {inspectionWarn && <div>⚠ معاینه فنی {inspectionDays < 0 ? "منقضی شده" : `تا ${inspectionDays} روز دیگر منقضی می‌شود`} ({toJalaliSafe(m.inspectionExpiry)})</div>}
+                  {healthCertWarn && <div>⚠ سرتیفیکیت سلامت {healthCertDays < 0 ? "منقضی شده" : `تا ${healthCertDays} روز دیگر منقضی می‌شود`} ({toJalaliSafe(m.healthCertExpiry)})</div>}
+                  {driverLicenseWarn && <div>⚠ گواهینامه راننده {driverLicenseDays < 0 ? "منقضی شده" : `تا ${driverLicenseDays} روز دیگر منقضی می‌شود`} ({toJalaliSafe(m.driverLicenseExpiry)})</div>}
+                  {backupDriverLicenseWarn && <div>⚠ گواهینامه جانشین راننده {backupDriverLicenseDays < 0 ? "منقضی شده" : `تا ${backupDriverLicenseDays} روز دیگر منقضی می‌شود`} ({toJalaliSafe(m.backupDriverLicenseExpiry)})</div>}
                 </div>
               )}
 

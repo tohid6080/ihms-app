@@ -35,10 +35,18 @@ export default function MachineryForm({ existingMachinery, existingDocuments, cu
   const [manufactureYear, setManufactureYear] = useState(existingMachinery?.manufactureYear || "");
   const [ownershipStatus, setOwnershipStatus] = useState(existingMachinery?.ownershipStatus || "owned");
   const [insuranceExpiry, setInsuranceExpiry] = useState(existingMachinery?.insuranceExpiry || "");
+  const [insuranceIssueDate, setInsuranceIssueDate] = useState(existingMachinery?.insuranceIssueDate || "");
   const [inspectionExpiry, setInspectionExpiry] = useState(existingMachinery?.inspectionExpiry || "");
+  const [inspectionIssueDate, setInspectionIssueDate] = useState(existingMachinery?.inspectionIssueDate || "");
+  const [healthCertIssueDate, setHealthCertIssueDate] = useState(existingMachinery?.healthCertIssueDate || "");
+  const [healthCertExpiry, setHealthCertExpiry] = useState(existingMachinery?.healthCertExpiry || "");
   const [driverName, setDriverName] = useState(existingMachinery?.driverName || "");
   const [driverLicenseType, setDriverLicenseType] = useState(existingMachinery?.driverLicenseType || "grade_one");
+  const [driverLicenseIssueDate, setDriverLicenseIssueDate] = useState(existingMachinery?.driverLicenseIssueDate || "");
+  const [driverLicenseExpiry, setDriverLicenseExpiry] = useState(existingMachinery?.driverLicenseExpiry || "");
   const [backupDriverName, setBackupDriverName] = useState(existingMachinery?.backupDriverName || "");
+  const [backupDriverLicenseIssueDate, setBackupDriverLicenseIssueDate] = useState(existingMachinery?.backupDriverLicenseIssueDate || "");
+  const [backupDriverLicenseExpiry, setBackupDriverLicenseExpiry] = useState(existingMachinery?.backupDriverLicenseExpiry || "");
   const [deviceCode, setDeviceCode] = useState(existingMachinery?.deviceCode || "");
   const [trafficStatus, setTrafficStatus] = useState(existingMachinery?.trafficStatus || "active");
   const [unsafeBehavior, setUnsafeBehavior] = useState(existingMachinery?.unsafeBehavior || "");
@@ -61,8 +69,10 @@ export default function MachineryForm({ existingMachinery, existingDocuments, cu
     machineName: machineName.trim(),
     machineType, plateNumber: plateNumber.trim(), chassisNumber: chassisNumber.trim(),
     manufactureYear: manufactureYear.trim(), ownershipStatus,
-    insuranceExpiry, inspectionExpiry,
-    driverName: driverName.trim(), driverLicenseType, backupDriverName: backupDriverName.trim(),
+    insuranceExpiry, insuranceIssueDate, inspectionExpiry, inspectionIssueDate,
+    healthCertIssueDate, healthCertExpiry,
+    driverName: driverName.trim(), driverLicenseType, driverLicenseIssueDate, driverLicenseExpiry,
+    backupDriverName: backupDriverName.trim(), backupDriverLicenseIssueDate, backupDriverLicenseExpiry,
     deviceCode: deviceCode.trim(), trafficStatus, unsafeBehavior: unsafeBehavior.trim(),
     createdBy: currentUser?.name || "",
   });
@@ -193,12 +203,34 @@ export default function MachineryForm({ existingMachinery, existingDocuments, cu
 
         <div style={styles.formGrid}>
           <div>
+            <label style={styles.label}>تاریخ صدور بیمه‌نامه</label>
+            <JalaliDateInput value={insuranceIssueDate} onChange={setInsuranceIssueDate} allowEmpty />
+          </div>
+          <div>
             <label style={styles.label}>تاریخ انقضای بیمه‌نامه</label>
             <JalaliDateInput value={insuranceExpiry} onChange={setInsuranceExpiry} allowEmpty />
           </div>
+        </div>
+
+        <div style={styles.formGrid}>
           <div>
-            <label style={styles.label}>تاریخ معاینه فنی یا اخذ سرتیفیکیت</label>
+            <label style={styles.label}>تاریخ صدور معاینه فنی</label>
+            <JalaliDateInput value={inspectionIssueDate} onChange={setInspectionIssueDate} allowEmpty />
+          </div>
+          <div>
+            <label style={styles.label}>تاریخ انقضای معاینه فنی</label>
             <JalaliDateInput value={inspectionExpiry} onChange={setInspectionExpiry} allowEmpty />
+          </div>
+        </div>
+
+        <div style={styles.formGrid}>
+          <div>
+            <label style={styles.label}>تاریخ صدور سرتیفیکیت سلامت (ماشین‌آلات سنگین)</label>
+            <JalaliDateInput value={healthCertIssueDate} onChange={setHealthCertIssueDate} allowEmpty />
+          </div>
+          <div>
+            <label style={styles.label}>تاریخ انقضای سرتیفیکیت سلامت</label>
+            <JalaliDateInput value={healthCertExpiry} onChange={setHealthCertExpiry} allowEmpty />
           </div>
         </div>
 
@@ -217,12 +249,34 @@ export default function MachineryForm({ existingMachinery, existingDocuments, cu
 
         <div style={styles.formGrid}>
           <div>
+            <label style={styles.label}>تاریخ صدور گواهینامه راننده</label>
+            <JalaliDateInput value={driverLicenseIssueDate} onChange={setDriverLicenseIssueDate} allowEmpty />
+          </div>
+          <div>
+            <label style={styles.label}>تاریخ انقضای گواهینامه راننده</label>
+            <JalaliDateInput value={driverLicenseExpiry} onChange={setDriverLicenseExpiry} allowEmpty />
+          </div>
+        </div>
+
+        <div style={styles.formGrid}>
+          <div>
             <label style={styles.label}>نام جانشین راننده (دارای گواهینامه)</label>
             <input style={styles.input} value={backupDriverName} onChange={(e) => setBackupDriverName(e.target.value)} dir="rtl" />
           </div>
           <div>
             <label style={styles.label}>کد دستگاه</label>
             <input style={styles.input} value={deviceCode} onChange={(e) => setDeviceCode(e.target.value)} dir="rtl" />
+          </div>
+        </div>
+
+        <div style={styles.formGrid}>
+          <div>
+            <label style={styles.label}>تاریخ صدور گواهینامه جانشین راننده</label>
+            <JalaliDateInput value={backupDriverLicenseIssueDate} onChange={setBackupDriverLicenseIssueDate} allowEmpty />
+          </div>
+          <div>
+            <label style={styles.label}>تاریخ انقضای گواهینامه جانشین راننده</label>
+            <JalaliDateInput value={backupDriverLicenseExpiry} onChange={setBackupDriverLicenseExpiry} allowEmpty />
           </div>
         </div>
 

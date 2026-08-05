@@ -16,6 +16,7 @@ import { offlineWrite, offlineWriteFile } from "./offline/offlineWrite.js";
 import DbSizeWarningBanner from "./offline/DbSizeWarningBanner.jsx";
 import { checkUploadAllowed } from "./offline/dbSizeMonitor.js";
 import ArchiveManager from "./offline/ArchiveManager.jsx";
+import AdminAnalytics from "./admin/AdminAnalytics.jsx";
 import SuperAdminLogin from "./superadmin/SuperAdminLogin.jsx";
 import SuperAdminPanel from "./superadmin/SuperAdminPanel.jsx";
 import DataView, { StatusPill } from "./shared/DataView.jsx";
@@ -2135,6 +2136,7 @@ function AdminDashboard({ onLogout, currentUser }) {
           <MenuRow icon={BarChart3} label={managementMod.label} onClick={() => setView("managementDashboard")} accent />
           <MenuRow icon={ShieldCheck} label="مدیریت نقش‌ها و دسترسی‌ها" onClick={() => setView("permissionManagement")} />
           <MenuRow icon={Briefcase} label="مدیریت عناوین شغلی" onClick={() => setView("jobPositionManagement")} />
+          <MenuRow icon={BarChart3} label="آنالیتیکس (Google Analytics)" onClick={() => setView("adminAnalytics")} />
           <MenuRow icon={Archive} label="آرشیو فایل‌ها" onClick={() => setView("archiveManagement")} />
           <MenuRow icon={Tag} label="کد تگ داربست پیمانکاران" onClick={() => setView("scaffoldCodeManagement")} />
         </div>
@@ -2214,6 +2216,7 @@ function AdminDashboard({ onLogout, currentUser }) {
       {view === "managementDashboard" && <HomeDashboard role="ADMIN" currentUser={currentUser} onNavigate={handleHomeNavigate} onBack={() => setView("menu")} />}
       {view === "permissionManagement" && <PermissionManager onBack={() => setView("menu")} />}
       {view === "jobPositionManagement" && <JobPositionManager onBack={() => setView("menu")} />}
+      {view === "adminAnalytics" && <AdminAnalytics onBack={() => setView("menu")} currentUser={currentUser} />}
       {view === "archiveManagement" && <ArchiveManager onBack={() => setView("menu")} currentUser={currentUser} />}
     </div>
   );
