@@ -37,11 +37,15 @@ export function trackPageView(user, page) {
 
 // ---------- خواندن برای داشبورد فعالیت ادمین ----------
 
-export async function loadActivitySummary() {
+// bازه‌ی پیش‌فرض ۳۰ روز اخیر؛ می‌توان با fromDate/toDate (رشته‌ی ISO تاریخ،
+// بدون زمان) محدوده‌ی دیگری خواست. محاسبه‌ی جفت‌شدن ورود/خروج و مدت حضور
+// سمت کلاینت انجام می‌شود (در AdminAnalytics.jsx)، نه اینجا.
+export async function loadActivitySummary(fromDate, toDate) {
   const companyId = getCurrentCompanyId();
   const filter = companyId ? `&company_id=eq.${companyId}` : "";
-  // ۳۰ روز اخیر کافیست؛ محاسبات (روزانه، پرکاربردترین صفحات، فعال‌ها) سمت کلاینت انجام می‌شود
-  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const rows = await sb(`user_activity?created_at=gte.${since}&select=*&order=created_at.desc&limit=2000${filter}`);
+  const since = fromDate ? `${fromDate}T00:00:00` : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const until = toDate ? `${toDate}T23:59:59` : null;
+  const untilFilter = until ? `&created_at=lte.${until}` : "";
+  const rows = await sb(`user_activity?created_at=gte.${since}${untilFilter}&select=*&order=created_at.asc&limit=5000${filter}`);
   return sbOk(rows) ? rows : [];
 }

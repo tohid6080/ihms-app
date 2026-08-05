@@ -1,185 +1,158 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { BarChart3, Users, Radio, FileText, History } from "lucide-react";
+import { Users, Filter } from "lucide-react";
 import { THEME, styles } from "../shared.js";
-import { toJalaliDateTime } from "../personnel/jalaliDate.jsx";
+import { JalaliDateInput, toJalaliSafe } from "../personnel/jalaliDate.jsx";
 import { loadActivitySummary } from "./activityApi.js";
 
 const ROLE_LABEL = { ADMIN: "ادمین", EMPLOYER: "کارفرما", CONTRACTOR: "پیمانکار" };
-const EVENT_LABEL = { login: "ورود", logout: "خروج", page_view: "بازدید صفحه" };
-const ACTIVE_WINDOW_MIN = 15; // چند دقیقه‌ی اخیر «فعال الان» حساب می‌شود
+
+function formatTime(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return d.toLocaleTimeString("fa-IR", { hour: "2-digit", minute: "2-digit" });
+}
+function formatDuration(ms) {
+  if (ms === null || ms === undefined) return "—";
+  const totalMin = Math.round(ms / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h === 0) return `${m} دقیقه`;
+  return `${h} ساعت و ${m} دقیقه`;
+}
 
 /**
- * Admin → Activity Dashboard — reads directly from `user_activity`, the
- * same Supabase project everything else in IHMS already uses. No external
- * service, no secrets, no separate deployment step — this replaced an
- * earlier GA4-based version for exactly that reason.
+ * یک ردیف رویداد لاگین را با اولین رویداد خروج بعد از آن (و قبل از لاگین
+ * بعدی) جفت می‌کند تا مدت حضور واقعی هر نشست به دست بیاید. اگر کاربر بدون
+ * زدن دکمه‌ی خروج، مرورگر را ببندد، آن نشست بدون تاریخ/ساعت خروج و بدون
+ * مدت‌زمان نمایش داده می‌شود (نه یک عدد نادرست حدسی).
  */
+function computeAttendance(rows) {
+  const byUser = {};
+  rows.forEach((r) => {
+    if (!r.username) return;
+    if (!byUser[r.username]) byUser[r.username] = { username: r.username, fullName: r.full_name || r.username, role: r.role || "", events: [] };
+    if (r.event_type === "login" || r.event_type === "logout") byUser[r.username].events.push(r);
+  });
+
+  return Object.values(byUser).map((u) => {
+    const sessions = [];
+    let openLogin = null;
+    u.events.forEach((e) => {
+      if (e.event_type === "login") {
+        if (openLogin) sessions.push({ login: openLogin, logout: null });
+        openLogin = e;
+      } else if (e.event_type === "logout" && openLogin) {
+        sessions.push({ login: openLogin, logout: e });
+        openLogin = null;
+      }
+    });
+    if (openLogin) sessions.push({ login: openLogin, logout: null });
+
+    const loginCount = u.events.filter((e) => e.event_type === "login").length;
+    const lastSession = sessions.length > 0 ? sessions[sessions.length - 1] : null;
+    const durationMs = lastSession?.logout ? new Date(lastSession.logout.created_at) - new Date(lastSession.login.created_at) : null;
+
+    return {
+      username: u.username,
+      fullName: u.fullName,
+      role: u.role,
+      lastLoginAt: lastSession ? lastSession.login.created_at : null,
+      lastLogoutAt: lastSession?.logout ? lastSession.logout.created_at : null,
+      durationMs,
+      loginCount,
+    };
+  }).sort((a, b) => (b.lastLoginAt || "").localeCompare(a.lastLoginAt || ""));
+}
+
 export default function AdminAnalytics({ onBack, currentUser }) {
-  const [rows, setRows] = useState([]);
+  const [rawRows, setRawRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [userFilter, setUserFilter] = useState("all");
 
   const load = async () => {
     setLoading(true);
-    setRows(await loadActivitySummary());
+    setRawRows(await loadActivitySummary(fromDate || undefined, toDate || undefined));
     setLoading(false);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const dailyVisits = useMemo(() => {
+  const attendance = useMemo(() => computeAttendance(rawRows), [rawRows]);
+
+  const userOptions = useMemo(() => {
     const map = {};
-    rows.filter((r) => r.event_type === "login").forEach((r) => {
-      const day = (r.created_at || "").slice(0, 10);
-      if (!day) return;
-      map[day] = (map[day] || 0) + 1;
-    });
-    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b)).slice(-14);
-  }, [rows]);
+    rawRows.forEach((r) => { if (r.username) map[r.username] = r.full_name || r.username; });
+    return Object.entries(map).sort(([, a], [, b]) => a.localeCompare(b, "fa"));
+  }, [rawRows]);
 
-  const activeUsersNow = useMemo(() => {
-    const cutoff = Date.now() - ACTIVE_WINDOW_MIN * 60 * 1000;
-    const seen = new Set();
-    rows.forEach((r) => {
-      if (new Date(r.created_at).getTime() >= cutoff && r.username) seen.add(r.username);
-    });
-    return seen.size;
-  }, [rows]);
-
-  const totalUsersInPeriod = useMemo(() => {
-    const seen = new Set();
-    rows.forEach((r) => { if (r.username) seen.add(r.username); });
-    return seen.size;
-  }, [rows]);
-
-  const topPages = useMemo(() => {
-    const map = {};
-    rows.filter((r) => r.event_type === "page_view").forEach((r) => {
-      const page = r.page || "—";
-      map[page] = (map[page] || 0) + 1;
-    });
-    return Object.entries(map).sort(([, a], [, b]) => b - a).slice(0, 10).map(([label, value]) => ({ label, value }));
-  }, [rows]);
-
-  const recent = rows.slice(0, 30);
-
-  if (loading) return <div style={{ padding: 40, textAlign: "center", color: THEME.text3 }}>در حال بارگذاری...</div>;
+  const filtered = userFilter === "all" ? attendance : attendance.filter((a) => a.username === userFilter);
 
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto", padding: 24 }}>
+    <div style={{ maxWidth: 1000, margin: "0 auto", padding: 24 }}>
       {onBack && <div style={styles.backLink} onClick={onBack}>← بازگشت به منو</div>}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-        <BarChart3 size={20} color={THEME.teal} />
-        <h2 style={{ margin: 0, fontSize: 19, color: THEME.navy, fontWeight: 700 }}>داشبورد فعالیت کاربران</h2>
+        <Users size={20} color={THEME.teal} />
+        <h2 style={{ margin: 0, fontSize: 19, color: THEME.navy, fontWeight: 700 }}>حضور و فعالیت کاربران</h2>
       </div>
-      <p style={{ color: THEME.text3, fontSize: 12.5, marginTop: 4, marginBottom: 18 }}>بر اساس ۳۰ روز اخیر — تماماً از داده‌ی داخلی سامانه</p>
+      <p style={{ color: THEME.text3, fontSize: 12.5, marginTop: 4, marginBottom: 16 }}>میزان حضور هر کاربر در سامانه، بر اساس آخرین نشست ورود/خروج</p>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 1, background: THEME.surface, borderRadius: 10, border: `1px solid ${THEME.border}`, overflow: "hidden", marginBottom: 14 }}>
-        <StatBox icon={Users} label="کاربران این بازه" value={totalUsersInPeriod} />
-        <StatBox icon={Radio} label={`فعال (${ACTIVE_WINDOW_MIN} دقیقه‌ی اخیر)`} value={activeUsersNow} color="#166534" />
-        <StatBox icon={FileText} label="کل رویدادهای ثبت‌شده" value={rows.length} />
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 16, background: THEME.surface, border: `1px solid ${THEME.border}`, borderRadius: 10, padding: 14 }}>
+        <div>
+          <label style={{ ...styles.label, display: "flex", alignItems: "center", gap: 4 }}><Filter size={12} /> کاربر</label>
+          <select style={styles.filterSelect} value={userFilter} onChange={(e) => setUserFilter(e.target.value)} dir="rtl">
+            <option value="all">همه کاربران</option>
+            {userOptions.map(([username, name]) => <option key={username} value={username}>{name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={styles.label}>از تاریخ</label>
+          <JalaliDateInput value={fromDate} onChange={setFromDate} allowEmpty />
+        </div>
+        <div>
+          <label style={styles.label}>تا تاریخ</label>
+          <JalaliDateInput value={toDate} onChange={setToDate} allowEmpty />
+        </div>
+        <button type="button" style={styles.smallButton} onClick={load}>اعمال فیلتر</button>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.3fr) minmax(0,1fr)", gap: 12, marginBottom: 12 }}>
-        <Panel title="بازدید روزانه (ورود کاربران، ۱۴ روز اخیر)" icon={BarChart3}>
-          <MiniBarChart data={dailyVisits.map(([d, c]) => ({ label: d.slice(5), value: c }))} />
-        </Panel>
-        <Panel title="پرکاربردترین ماژول‌ها/صفحات" icon={FileText}>
-          <ListTable rows={topPages} />
-        </Panel>
-      </div>
+      {loading && <p style={{ color: THEME.text3, textAlign: "center", padding: 30 }}>در حال بارگذاری...</p>}
 
-      <Panel title="فعالیت‌های اخیر کاربران" icon={History}>
-        <div style={{ maxHeight: 420, overflowY: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5 }}>
+      {!loading && (
+        <div style={{ background: THEME.surface, borderRadius: 10, border: `1px solid ${THEME.border}`, overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
             <thead>
               <tr style={{ borderBottom: `1.5px solid ${THEME.border}`, color: THEME.text3 }}>
-                <th style={{ textAlign: "right", padding: "5px 6px" }}>کاربر</th>
-                <th style={{ textAlign: "center", padding: "5px 6px" }}>نقش</th>
-                <th style={{ textAlign: "center", padding: "5px 6px" }}>رویداد</th>
-                <th style={{ textAlign: "center", padding: "5px 6px" }}>صفحه</th>
-                <th style={{ textAlign: "center", padding: "5px 6px" }}>زمان</th>
+                <th style={{ textAlign: "right", padding: "8px 10px" }}>نام کاربر</th>
+                <th style={{ textAlign: "center", padding: "8px 10px" }}>نقش</th>
+                <th style={{ textAlign: "center", padding: "8px 10px" }}>تاریخ آخرین ورود</th>
+                <th style={{ textAlign: "center", padding: "8px 10px" }}>ساعت ورود</th>
+                <th style={{ textAlign: "center", padding: "8px 10px" }}>تاریخ خروج</th>
+                <th style={{ textAlign: "center", padding: "8px 10px" }}>ساعت خروج</th>
+                <th style={{ textAlign: "center", padding: "8px 10px" }}>مدت حضور</th>
+                <th style={{ textAlign: "center", padding: "8px 10px" }}>تعداد دفعات ورود</th>
               </tr>
             </thead>
             <tbody>
-              {recent.map((r) => (
-                <tr key={r.id} style={{ borderBottom: `1px solid ${THEME.border}` }}>
-                  <td style={{ padding: "6px", fontWeight: 600 }}>{r.full_name || r.username || "—"}</td>
-                  <td style={{ padding: "6px", textAlign: "center" }}>{ROLE_LABEL[r.role] || r.role || "—"}</td>
-                  <td style={{ padding: "6px", textAlign: "center" }}>{EVENT_LABEL[r.event_type] || r.event_type}</td>
-                  <td style={{ padding: "6px", textAlign: "center", color: THEME.text3 }}>{r.page || "—"}</td>
-                  <td style={{ padding: "6px", textAlign: "center", color: THEME.text3 }}>{toJalaliDateTime(r.created_at)}</td>
+              {filtered.map((a) => (
+                <tr key={a.username} style={{ borderBottom: `1px solid ${THEME.border}` }}>
+                  <td style={{ padding: "8px 10px", fontWeight: 600 }}>{a.fullName}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "center" }}>{ROLE_LABEL[a.role] || a.role || "—"}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "center" }}>{toJalaliSafe(a.lastLoginAt) || "—"}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "center" }}>{formatTime(a.lastLoginAt)}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "center" }}>{a.lastLogoutAt ? toJalaliSafe(a.lastLogoutAt) : "—"}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "center" }}>{a.lastLogoutAt ? formatTime(a.lastLogoutAt) : "—"}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "center" }}>{formatDuration(a.durationMs)}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "center", fontWeight: 700 }}>{a.loginCount}</td>
                 </tr>
               ))}
-              {recent.length === 0 && (
-                <tr><td colSpan={5} style={{ padding: 16, textAlign: "center", color: THEME.text3 }}>هنوز فعالیتی ثبت نشده است</td></tr>
+              {filtered.length === 0 && (
+                <tr><td colSpan={8} style={{ padding: 20, textAlign: "center", color: THEME.text3 }}>در این بازه فعالیتی ثبت نشده است</td></tr>
               )}
             </tbody>
           </table>
         </div>
-      </Panel>
-    </div>
-  );
-}
-
-function StatBox({ icon: Icon, label, value, color }) {
-  return (
-    <div style={{ flex: "1 1 160px", padding: "12px 16px", borderInlineEnd: `1px solid ${THEME.border}` }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 5, color: THEME.text3, marginBottom: 4 }}>
-        <Icon size={12} />
-        <span style={{ fontSize: 10.5, fontWeight: 600 }}>{label}</span>
-      </div>
-      <div style={{ fontSize: 22, fontWeight: 800, color: color || THEME.navy }}>{(value ?? 0).toLocaleString("fa-IR")}</div>
-    </div>
-  );
-}
-
-function Panel({ title, icon: Icon, children }) {
-  return (
-    <div style={{ background: THEME.surface, borderRadius: 10, border: `1px solid ${THEME.border}`, padding: "12px 14px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-        <Icon size={13} color={THEME.teal} />
-        <h3 style={{ fontSize: 12.5, color: THEME.navy, fontWeight: 700, margin: 0 }}>{title}</h3>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function MiniBarChart({ data }) {
-  if (data.length === 0) return <p style={{ fontSize: 11, color: THEME.text3, margin: 0 }}>داده‌ای موجود نیست</p>;
-  const max = Math.max(1, ...data.map((d) => d.value));
-  return (
-    <div>
-      {data.map((d) => (
-        <div key={d.label} style={{ marginBottom: 6 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: THEME.text2, marginBottom: 2 }}>
-            <span>{d.label}</span>
-            <span style={{ fontWeight: 700 }}>{d.value}</span>
-          </div>
-          <div style={{ background: "#eef1f5", borderRadius: 4, height: 6, overflow: "hidden" }}>
-            <div style={{ width: `${(d.value / max) * 100}%`, height: "100%", background: THEME.navy }} />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function ListTable({ rows }) {
-  if (!rows || rows.length === 0) return <p style={{ fontSize: 11.5, color: THEME.text3, margin: 0 }}>داده‌ای موجود نیست</p>;
-  const max = Math.max(1, ...rows.map((r) => r.value));
-  return (
-    <div>
-      {rows.map((r, i) => (
-        <div key={i} style={{ marginBottom: 6 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: THEME.text2, marginBottom: 2 }}>
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 220 }}>{r.label}</span>
-            <span style={{ fontWeight: 700 }}>{r.value.toLocaleString("fa-IR")}</span>
-          </div>
-          <div style={{ background: "#eef1f5", borderRadius: 4, height: 5, overflow: "hidden" }}>
-            <div style={{ width: `${(r.value / max) * 100}%`, height: "100%", background: THEME.teal }} />
-          </div>
-        </div>
-      ))}
+      )}
     </div>
   );
 }

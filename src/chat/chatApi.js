@@ -164,13 +164,19 @@ export async function createConversation(me, type, { title, participants, linked
   const uniqueByUsername = Object.values(
     allParticipants.reduce((acc, p) => { if (p.username) acc[p.username] = p; return acc; }, {})
   );
-  await sb("chat_participants", {
+  const partResult = await sb("chat_participants", {
     method: "POST",
     body: JSON.stringify(uniqueByUsername.map((p) => ({
       conversation_id: conv.id, username: p.username, full_name: p.fullName || p.name || "", role: p.role || "",
     }))),
-    prefer: "return=minimal",
   });
+  if (!sbOk(partResult)) {
+    // اگر عضوها ثبت نشوند، این مکالمه برای هیچ‌کس (نه حتی سازنده‌اش) قابل‌یافتن
+    // نخواهد بود — دقیقاً همان چیزی که باعث می‌شد تاریخچه‌ی چت «گم» به‌نظر برسد.
+    // چون خودِ ردیف مکالمه بی‌فایده است، حذفش می‌کنیم تا رکورد یتیم نماند.
+    await sb(`chat_conversations?id=eq.${conv.id}`, { method: "DELETE", prefer: "return=minimal" });
+    return { __error: true, message: "خطا در افزودن اعضای گفتگو: " + (partResult?.message || "نامشخص") };
+  }
 
   return conv.id;
 }
@@ -183,11 +189,11 @@ export async function findOrCreateLinkedConversation(me, linkedModule, linkedId,
     // مطمئن شو کاربر جاری هم عضو است (ممکن است بعداً به بحث اضافه شده باشد)
     const already = await sb(`chat_participants?conversation_id=eq.${existing[0].id}&username=eq.${encodeURIComponent(me.username)}&select=id`);
     if (!sbOk(already) || already.length === 0) {
-      await sb("chat_participants", {
+      const addResult = await sb("chat_participants", {
         method: "POST",
         body: JSON.stringify([{ conversation_id: existing[0].id, username: me.username, full_name: me.name, role: me.role }]),
-        prefer: "return=minimal",
       });
+      if (!sbOk(addResult)) return { __error: true, message: "خطا در پیوستن به گفتگو: " + (addResult?.message || "نامشخص") };
     }
     return existing[0].id;
   }
@@ -240,21 +246,40 @@ export async function loadParticipants(conversationId) {
 }
 
 export async function addParticipant(conversationId, person) {
-  await sb("chat_participants", {
+  const result = await sb("chat_participants", {
     method: "POST",
     body: JSON.stringify([{ conversation_id: conversationId, username: person.username, full_name: person.fullName || person.name || "", role: person.role || "" }]),
-    prefer: "return=minimal",
   });
+  if (!sbOk(result)) return { __error: true, message: "خطا در افزودن عضو: " + (result?.message || "نامشخص") };
+  return { ok: true };
 }
 
 // ---------- علامت‌گذاری خوانده‌شدن ----------
 
+// خودترمیم‌شونده: اگر به هر دلیلی (مثلاً شکست گذشته‌ی درج اعضا هنگام ساخت
+// مکالمه) ردیف عضویت این کاربر برای این مکالمه وجود نداشته باشد، PATCH چیزی
+// را تغییر نمی‌دهد و «دیده‌شدن» برای همیشه ثبت نمی‌شود — دقیقاً همان چیزی که
+// باعث می‌شد تیک دوم برای بعضی کاربران (مثلاً پیمانکار) هیچ‌وقت ظاهر نشود.
+// این نسخه ابتدا وجود عضویت را چک می‌کند؛ اگر نبود، همان لحظه می‌سازدش.
 export async function markConversationRead(conversationId, username) {
-  await sb(`chat_participants?conversation_id=eq.${conversationId}&username=eq.${encodeURIComponent(username)}`, {
-    method: "PATCH",
-    body: JSON.stringify({ last_read_at: new Date().toISOString() }),
-    prefer: "return=minimal",
-  });
+  const existing = await sb(`chat_participants?conversation_id=eq.${conversationId}&username=eq.${encodeURIComponent(username)}&select=id`);
+  if (sbOk(existing) && existing.length > 0) {
+    await sb(`chat_participants?id=eq.${existing[0].id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ last_read_at: new Date().toISOString() }),
+      prefer: "return=minimal",
+    });
+    return;
+  }
+  if (sbOk(existing) && existing.length === 0) {
+    // عضویت گم‌شده بود — همین الان ترمیمش کن (نیاز به نام/نقش کامل نیست؛
+    // پیام‌های موجود همچنان بر اساس sender_username نمایش داده می‌شوند)
+    await sb("chat_participants", {
+      method: "POST",
+      body: JSON.stringify([{ conversation_id: conversationId, username, last_read_at: new Date().toISOString() }]),
+      prefer: "return=minimal",
+    });
+  }
 }
 
 // ---------- آمار خلاصه برای زنگوله‌ی اعلان ----------
