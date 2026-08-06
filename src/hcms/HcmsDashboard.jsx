@@ -3,7 +3,7 @@ import { ShieldAlert, Plus, Trash2, Link as LinkIcon } from "lucide-react";
 import { styles, THEME } from "../shared.js";
 import { toJalaliSafe } from "../personnel/jalaliDate.jsx";
 import {
-  loadHcmsAssessments, saveHcmsAssessment, deleteHcmsAssessment,
+  loadHcmsAssessments, saveHcmsAssessment, deleteHcmsAssessment, approveHcmsAssessment,
   computeRiskLevel, worstLevel, RISK_LEVEL_META, parseRpnCode,
 } from "./hcmsApi.js";
 
@@ -14,7 +14,7 @@ const EMPTY_FORM = {
   initialRpn: { human: "", equipment: "", environment: "", reputation: "" },
   permitToWork: "", proposedControls: "", recoveryPlan: "", responsiblePerson: "", targetDate: "", proposedControlsResult: "",
   residualRpn: { human: "", equipment: "", environment: "", reputation: "" },
-  emergencyCondition: "", criticalElement: "",
+  emergencyCondition: "", criticalElement: "", status: "active",
 };
 
 const CATEGORY_LABELS = { human: "انسان", equipment: "تجهیزات", environment: "محیط‌زیست", reputation: "اعتبار" };
@@ -69,7 +69,7 @@ export default function HcmsDashboard({ onBack, currentUser, focusAnomalyId }) {
       permitToWork: rec.permitToWork, proposedControls: rec.proposedControls, recoveryPlan: rec.recoveryPlan, responsiblePerson: rec.responsiblePerson, targetDate: rec.targetDate, proposedControlsResult: rec.proposedControlsResult,
       residualRpn: rec.residualRpn,
       emergencyCondition: rec.emergencyCondition, criticalElement: rec.criticalElement,
-      linkedAnomalyId: rec.linkedAnomalyId,
+      linkedAnomalyId: rec.linkedAnomalyId, status: rec.status || "active",
     });
     setEditingId(rec.id);
     setError("");
@@ -104,6 +104,19 @@ export default function HcmsDashboard({ onBack, currentUser, focusAnomalyId }) {
     await load();
   };
 
+  const handleApprove = async () => {
+    if (!editingId) return;
+    setSaving(true);
+    // اول تغییرات فعلی فرم را ذخیره کن (شاید کارفرما چیزی را ویرایش کرده)، بعد وضعیت را تأیید‌شده کن
+    const saveResult = await saveHcmsAssessment({ ...form, id: editingId, createdBy: currentUser?.name });
+    if (saveResult?.__error) { setSaving(false); setError(saveResult.message); return; }
+    const approveResult = await approveHcmsAssessment(editingId);
+    setSaving(false);
+    if (approveResult?.__error) { setError(approveResult.message); return; }
+    setShowForm(false);
+    await load();
+  };
+
   if (loading) return <div style={{ padding: 24, textAlign: "center", color: THEME.text3 }}>در حال بارگذاری...</div>;
 
   if (showForm) {
@@ -112,9 +125,16 @@ export default function HcmsDashboard({ onBack, currentUser, focusAnomalyId }) {
         <div style={styles.backLink} onClick={() => setShowForm(false)}>← انصراف</div>
         <h2 style={{ fontSize: 17, color: THEME.navy, fontWeight: 700, marginBottom: 4 }}>{editingId ? "ویرایش ارزیابی ریسک HCMS" : "ارزیابی ریسک HCMS جدید"}</h2>
         {form.linkedAnomalyId && (
-          <p style={{ fontSize: 11.5, color: THEME.teal, display: "flex", alignItems: "center", gap: 4, marginBottom: 12 }}>
+          <p style={{ fontSize: 11.5, color: THEME.teal, display: "flex", alignItems: "center", gap: 4, marginBottom: 8 }}>
             <LinkIcon size={12} /> این ارزیابی به یک آنومالی متصل است
           </p>
+        )}
+        {form.status === "pending_review" && (
+          <div style={{ background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 8, padding: "10px 14px", marginBottom: 14 }}>
+            <p style={{ fontSize: 12, color: "#92400e", margin: 0, lineHeight: 1.8 }}>
+              این رکورد به‌صورت خودکار از یک آنومالی و بر اساس منطق پیشنهادی سامانه ساخته شده و <b>هنوز نهایی نیست</b>. لطفاً همه‌ی فیلدها را بررسی، در صورت نیاز اصلاح کن، سپس «تأیید نهایی» را بزن.
+            </p>
+          </div>
         )}
 
         <div style={{ ...styles.card, width: "auto", marginBottom: 14 }}>
@@ -207,7 +227,12 @@ export default function HcmsDashboard({ onBack, currentUser, focusAnomalyId }) {
         </div>
 
         {error && <p style={styles.error}>{error}</p>}
-        <button type="button" style={styles.button} onClick={handleSave} disabled={saving}>{saving ? "در حال ذخیره..." : "ذخیره‌ی ارزیابی ریسک"}</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button type="button" style={styles.button} onClick={handleSave} disabled={saving}>{saving ? "در حال ذخیره..." : "ذخیره‌ی ارزیابی ریسک"}</button>
+          {form.status === "pending_review" && (
+            <button type="button" style={{ ...styles.button, background: "#166534" }} onClick={handleApprove} disabled={saving}>تأیید نهایی</button>
+          )}
+        </div>
       </div>
     );
   }
@@ -234,6 +259,9 @@ export default function HcmsDashboard({ onBack, currentUser, focusAnomalyId }) {
               <div style={{ fontWeight: 700, color: THEME.navy, fontSize: 14 }}>
                 {rec.activity}
                 {rec.linkedAnomalyId && <LinkIcon size={12} color={THEME.teal} style={{ marginRight: 6, display: "inline" }} />}
+                {rec.status === "pending_review" && (
+                  <span style={{ fontSize: 10, background: "#fef3c7", color: "#92400e", padding: "2px 8px", borderRadius: 999, fontWeight: 600, marginRight: 6 }}>در انتظار بررسی کارفرما</span>
+                )}
               </div>
               <div style={{ fontSize: 11.5, color: THEME.text3, marginTop: 4 }}>{rec.hazard || rec.environmentalAspect || "—"}</div>
               <div style={{ fontSize: 10.5, color: THEME.text3, marginTop: 4 }}>{toJalaliSafe(rec.createdAt)}</div>

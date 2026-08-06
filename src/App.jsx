@@ -3,7 +3,8 @@ import { AlertTriangle, Plus, X, ChevronRight, LogOut, CheckCircle2, Clock, Came
 import * as XLSX from "xlsx";
 import BowTieDashboard from "./bowtie/BowTieDashboard.jsx";
 import HcmsDashboard from "./hcms/HcmsDashboard.jsx";
-import { getOrCreateHcmsForAnomaly } from "./hcms/hcmsApi.js";
+import HcmsMatrixManager from "./hcms/HcmsMatrixManager.jsx";
+import { getOrCreateHcmsForAnomaly, createSuggestedHcmsFromAnomaly } from "./hcms/hcmsApi.js";
 import PersonnelForm from "./personnel/PersonnelForm.jsx";
 import PersonnelDashboard from "./personnel/PersonnelDashboard.jsx";
 import HomeDashboard from "./dashboard/HomeDashboard.jsx";
@@ -1320,6 +1321,8 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
   const [format, setFormat] = useState(ANOMALY_FORMATS[0]);
   const [description, setDescription] = useState("");
   const [follower, setFollower] = useState("");
+  const [needsRiskAssessment, setNeedsRiskAssessment] = useState(false);
+  const [identifiedHazard, setIdentifiedHazard] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [photos, setPhotos] = useState([]);
@@ -1350,6 +1353,10 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
   const handleSubmit = async () => {
     if (!area.trim() || !description.trim()) {
       setError("موقعیت/ناحیه و شرح آنومالی الزامی است");
+      return;
+    }
+    if (needsRiskAssessment && !identifiedHazard.trim()) {
+      setError("چون «نیاز به ارزیابی ریسک دارد» را انتخاب کردید، وارد کردن «خطر شناسایی‌شده» الزامی است");
       return;
     }
     if (photos.length > 0 && isOnline()) {
@@ -1400,6 +1407,14 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
           base64Data: p, contentType: "image/jpeg", fileFieldName: "photo",
           extraFields: { anomaly_id: record.id, stage: "report" },
         });
+      }
+    }
+    if (needsRiskAssessment) {
+      const hcmsResult = await createSuggestedHcmsFromAnomaly(record, identifiedHazard.trim(), currentUser?.name);
+      if (hcmsResult?.__error) {
+        // آنومالی با موفقیت ثبت شده؛ فقط ارزیابی ریسک پیشنهادی ساخته نشد — این
+        // نباید کل ثبت آنومالی را از دید کاربر ناموفق نشان بدهد، ولی باید مطلع شود
+        alert(`آنومالی ثبت شد، اما ساخت خودکار ارزیابی ریسک HCMS با خطا مواجه شد: ${hcmsResult.message}\nمی‌توانید بعداً از داخل «مدیریت ریسک → HCMS» آن را دستی بسازید.`);
       }
     }
     setSaving(false);
@@ -1498,6 +1513,18 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
 
         <label style={styles.label}>شخص پیگیری‌کننده (اختیاری)</label>
         <input style={styles.input} value={follower} onChange={(e) => setFollower(e.target.value)} dir="rtl" />
+
+        <label style={styles.label}>نیاز به ارزیابی ریسک دارد؟</label>
+        <div style={{ display: "flex", gap: 8, marginBottom: needsRiskAssessment ? 10 : 0 }}>
+          <button type="button" onClick={() => setNeedsRiskAssessment(true)} style={{ flex: 1, padding: "10px 6px", borderRadius: 8, border: needsRiskAssessment ? "2px solid #0d8f8a" : "1px solid #e3e8ee", background: needsRiskAssessment ? "#e3f5f4" : "#fff", color: "#0d8f8a", fontSize: 13, cursor: "pointer" }}>بله</button>
+          <button type="button" onClick={() => setNeedsRiskAssessment(false)} style={{ flex: 1, padding: "10px 6px", borderRadius: 8, border: !needsRiskAssessment ? "2px solid #123a54" : "1px solid #e3e8ee", background: !needsRiskAssessment ? "#f1f5f9" : "#fff", color: "#334155", fontSize: 13, cursor: "pointer" }}>خیر</button>
+        </div>
+        {needsRiskAssessment && (
+          <>
+            <label style={styles.label}>خطر شناسایی‌شده</label>
+            <textarea style={{ ...styles.input, minHeight: 70, fontFamily: "inherit" }} value={identifiedHazard} onChange={(e) => setIdentifiedHazard(e.target.value)} dir="rtl" placeholder="خطری که مشاهده کردید را شرح دهید — بعد از ثبت آنومالی، یک ارزیابی ریسک HCMS پیشنهادی خودکار ساخته می‌شود که کارفرما باید آن را بررسی و تأیید کند." />
+          </>
+        )}
 
         <label style={styles.label}>عکس‌های پیوست ({photos.length}/2)</label>
         <div style={{ display: "flex", gap: 8 }}>
@@ -2325,12 +2352,14 @@ function AdminDashboard({ onLogout, currentUser }) {
             <MenuRow icon={Tag} label="کد تگ داربست پیمانکاران" onClick={() => setView("scaffoldCodeManagement")} />
             <MenuRow icon={GraduationCap} label="مدیریت آموزش‌های تخصصی" onClick={() => setView("trainingManagement")} />
             <MenuRow icon={ShieldOff} label="مدیریت دسترسی چت" onClick={() => setView("chatAccessManagement")} />
+            <MenuRow icon={ShieldAlert} label="ماتریس ریسک HCMS" onClick={() => setView("hcmsMatrixManagement")} />
           </div>
         </div>
       )}
 
       {view === "trainingManagement" && <TrainingManager onBack={() => setView("systemManagement")} />}
       {view === "chatAccessManagement" && <ChatAccessManager onBack={() => setView("systemManagement")} />}
+      {view === "hcmsMatrixManagement" && <HcmsMatrixManager onBack={() => setView("systemManagement")} />}
 
       {view === "anomalyReport" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>

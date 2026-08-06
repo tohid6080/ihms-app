@@ -121,6 +121,25 @@ export async function loadUsedJobPositionsByRole() {
   return { employerJobPositionIds: employerIds, contractorJobPositionIds: contractorIds };
 }
 
+// ---------- افزودن دستی هویت به ماتریس (برای عناوینی که هنوز حسابی باهاشون نیست) ----------
+export async function loadExtraIdentities() {
+  const companyId = getCurrentCompanyId();
+  const filter = companyId ? `&company_id=eq.${companyId}` : "";
+  const rows = await sb(`chat_matrix_extra_identities?select=job_position_id,role${filter}`);
+  return sbOk(rows) ? rows.map((r) => ({ jobPositionId: r.job_position_id, role: r.role })) : [];
+}
+
+export async function addExtraIdentity(jobPositionId, role) {
+  const result = await sb("chat_matrix_extra_identities", { method: "POST", body: JSON.stringify([{ job_position_id: jobPositionId, role, company_id: getCurrentCompanyId() }]) });
+  if (!sbOk(result)) return { __error: true, message: "خطا در افزودن" };
+  return { ok: true };
+}
+
+export async function removeExtraIdentity(jobPositionId, role) {
+  await sb(`chat_matrix_extra_identities?job_position_id=eq.${jobPositionId}&role=eq.${role}`, { method: "DELETE", prefer: "return=minimal" });
+  return { ok: true };
+}
+
 // ---------- مدیریت قوانین دسترسی چت (فقط ادمین) ----------
 
 export async function loadVisibilityRules() {

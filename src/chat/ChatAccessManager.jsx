@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { ShieldOff, X } from "lucide-react";
+import { ShieldOff, X, Plus } from "lucide-react";
 import { styles, THEME } from "../shared.js";
 import { loadActiveJobPositions } from "../jobpositions/jobPositionsApi.js";
-import { loadVisibilityRules, setVisibilityRule, loadUsedJobPositionsByRole } from "./chatApi.js";
+import {
+  loadVisibilityRules, setVisibilityRule, loadUsedJobPositionsByRole,
+  loadExtraIdentities, addExtraIdentity, removeExtraIdentity,
+} from "./chatApi.js";
 
 const ROLE_LABEL = { EMPLOYER: "کارفرما", CONTRACTOR: "پیمانکار" };
 
@@ -10,10 +13,13 @@ const ROLE_LABEL = { EMPLOYER: "کارفرما", CONTRACTOR: "پیمانکار" 
  * "مدیریت دسترسی چت" — ماتریس (نقش + عنوان‌شغلی) × (نقش + عنوان‌شغلی).
  *
  * چرا نقش هم بخشی از هویته، نه فقط عنوان شغلی: یک عنوان شغلی مثل «سرپرست
- * کارگاه» می‌تواند هم سمت کارفرما (سرپرست کارگاهِ خودِ پروژه) هم سمت
- * پیمانکار (سرپرست کارگاهِ پیمانکار) استفاده شود — این دو نفر باید بتوانند
- * مستقل از هم بلاک شوند، وگرنه بلاک‌کردن «سرپرست کارگاه» یا هر دو طرف را
- * می‌گیرد یا هیچ‌کدام را (باگی که قبلاً همین‌جا وجود داشت).
+ * کارگاه» می‌تواند هم سمت کارفرما هم سمت پیمانکار استفاده شود — این دو نفر
+ * باید بتوانند مستقل از هم بلاک شوند.
+ *
+ * لیست پایه‌ی ماتریس فقط عناوینی است که واقعاً حساب واقعی با آن نقش دارند
+ * (تا شلوغ نشود) — اما چون گاهی لازم است عنوانی را زودتر از ساختن حساب
+ * واقعی‌اش در ماتریس تنظیم کرد، امکان «افزودن دستی» هم هست (جدول
+ * chat_matrix_extra_identities).
  *
  * حساب‌های ادمین همیشه برای همه قابل‌مشاهده می‌مانند — عمداً در این ماتریس
  * نیستند.
@@ -22,23 +28,38 @@ export default function ChatAccessManager({ onBack }) {
   const [positions, setPositions] = useState([]);
   const [rules, setRules] = useState([]);
   const [usedByRole, setUsedByRole] = useState({ employerJobPositionIds: new Set(), contractorJobPositionIds: new Set() });
+  const [extraIdentities, setExtraIdentities] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [addPositionId, setAddPositionId] = useState("");
+  const [addRole, setAddRole] = useState("EMPLOYER");
 
   const load = async () => {
-    const [p, r, used] = await Promise.all([loadActiveJobPositions(), loadVisibilityRules(), loadUsedJobPositionsByRole()]);
+    const [p, r, used, extra] = await Promise.all([loadActiveJobPositions(), loadVisibilityRules(), loadUsedJobPositionsByRole(), loadExtraIdentities()]);
     setPositions(p);
     setRules(r);
     setUsedByRole(used);
+    setExtraIdentities(extra);
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
 
-  // هر عنوان شغلی فعال، فقط اگر واقعاً یک حساب واقعی با آن نقش وجودش داشته
-  // باشد، به یک «هویت» تبدیل می‌شود — نه به‌صورت فرضی برای هر دو نقش.
+  // پایه: عناوینی که واقعاً حساب دارند + عناوینی که دستی اضافه شده‌اند
   const identities = [];
+  const seen = new Set();
+  const addIdentity = (role, jobPositionId, title) => {
+    const key = `${role}-${jobPositionId}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    identities.push({ role, jobPositionId, title });
+  };
   positions.forEach((p) => {
-    if (usedByRole.employerJobPositionIds.has(p.id)) identities.push({ role: "EMPLOYER", jobPositionId: p.id, title: p.title });
-    if (usedByRole.contractorJobPositionIds.has(p.id)) identities.push({ role: "CONTRACTOR", jobPositionId: p.id, title: p.title });
+    if (usedByRole.employerJobPositionIds.has(p.id)) addIdentity("EMPLOYER", p.id, p.title);
+    if (usedByRole.contractorJobPositionIds.has(p.id)) addIdentity("CONTRACTOR", p.id, p.title);
+  });
+  extraIdentities.forEach((e) => {
+    const pos = positions.find((p) => p.id === e.jobPositionId);
+    if (pos) addIdentity(e.role, e.jobPositionId, pos.title);
   });
 
   const sameIdentity = (a, b) => a.role === b.role && a.jobPositionId === b.jobPositionId;
@@ -60,21 +81,73 @@ export default function ChatAccessManager({ onBack }) {
     if (result?.__error) { alert(result.message); await load(); }
   };
 
+  const handleAddIdentity = async () => {
+    if (!addPositionId) return;
+    const result = await addExtraIdentity(addPositionId, addRole);
+    if (result?.__error) { alert(result.message); return; }
+    setAddPositionId("");
+    setShowAdd(false);
+    await load();
+  };
+
+  const handleRemoveExtra = async (jobPositionId, role) => {
+    if (!confirm("این عنوان از ماتریس حذف شود؟ (قوانین بلاک ثبت‌شده برایش هم پاک می‌شود چون دیگر در جدول نیست)")) return;
+    await removeExtraIdentity(jobPositionId, role);
+    await load();
+  };
+
+  // آیا این هویت جزو «دستی‌اضافه‌شده»هاست (نه خودکار از روی حساب واقعی)؟
+  const isExtra = (id) => extraIdentities.some((e) => e.jobPositionId === id.jobPositionId && e.role === id.role)
+    && !((id.role === "EMPLOYER" && usedByRole.employerJobPositionIds.has(id.jobPositionId)) || (id.role === "CONTRACTOR" && usedByRole.contractorJobPositionIds.has(id.jobPositionId)));
+
+  // عناوینی که هنوز توی ماتریس نیستن (برای فرم افزودن)
+  const availableToAdd = [];
+  positions.forEach((p) => {
+    ["EMPLOYER", "CONTRACTOR"].forEach((role) => {
+      if (!seen.has(`${role}-${p.id}`)) availableToAdd.push({ role, jobPositionId: p.id, title: p.title });
+    });
+  });
+
   if (loading) return <div style={{ padding: 24, textAlign: "center", color: THEME.text3 }}>در حال بارگذاری...</div>;
 
   return (
     <div style={{ maxWidth: 1000, margin: "0 auto", padding: 24 }}>
       {onBack && <div style={styles.backLink} onClick={onBack}>← بازگشت به مدیریت سیستم</div>}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-        <ShieldOff size={20} color={THEME.teal} />
-        <h2 style={{ margin: 0, fontSize: 19, color: THEME.navy, fontWeight: 700 }}>مدیریت دسترسی چت</h2>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <ShieldOff size={20} color={THEME.teal} />
+          <h2 style={{ margin: 0, fontSize: 19, color: THEME.navy, fontWeight: 700 }}>مدیریت دسترسی چت</h2>
+        </div>
+        <button type="button" style={{ ...styles.smallButton, display: "flex", alignItems: "center", gap: 6 }} onClick={() => setShowAdd((v) => !v)}>
+          <Plus size={14} /> افزودن عنوان به ماتریس
+        </button>
       </div>
-      <p style={{ color: THEME.text3, fontSize: 12.5, marginBottom: 18 }}>
-        روی خانه‌ی تلاقی دو مورد کلیک کن تا آن‌ها نتوانند برای همدیگر «گفتگوی جدید» شروع کنند (گفتگوهای موجود، و چت‌های مرتبط با آنومالی/ریسک، تحت‌تأثیر این تنظیم نیستند). فقط عنوان‌های شغلی‌ای که واقعاً حداقل یک حساب کارفرما یا پیمانکار با آن‌ها ثبت شده نشان داده می‌شوند — اگر یک عنوان فقط سمت پیمانکار وجود دارد، نسخه‌ی کارفرمایش اینجا نمی‌آید. ادمین همیشه برای همه قابل‌مشاهده می‌ماند.
+      <p style={{ color: THEME.text3, fontSize: 12.5, marginBottom: 14 }}>
+        روی خانه‌ی تلاقی دو مورد کلیک کن تا آن‌ها نتوانند برای همدیگر «گفتگوی جدید» شروع کنند. عناوینی که حساب واقعی دارند خودکار نشان داده می‌شوند؛ عناوینی که هنوز حسابی باهاشون نیست را می‌توانی با دکمه‌ی بالا دستی اضافه کنی (مثلاً برای تنظیم زودهنگام، قبل از ساختن حساب). ادمین همیشه برای همه قابل‌مشاهده می‌ماند.
       </p>
 
+      {showAdd && (
+        <div style={{ ...styles.card, width: "auto", marginBottom: 16, display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 160 }}>
+            <label style={styles.label}>عنوان شغلی</label>
+            <select style={styles.input} value={addPositionId} onChange={(e) => setAddPositionId(e.target.value)} dir="rtl">
+              <option value="">— انتخاب کنید —</option>
+              {positions.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={styles.label}>سمت</label>
+            <select style={styles.input} value={addRole} onChange={(e) => setAddRole(e.target.value)} dir="rtl">
+              <option value="EMPLOYER">کارفرما</option>
+              <option value="CONTRACTOR">پیمانکار</option>
+            </select>
+          </div>
+          <button type="button" style={styles.button} onClick={handleAddIdentity} disabled={!addPositionId}>افزودن</button>
+        </div>
+      )}
+
       {identities.length < 2 && (
-        <p style={{ color: THEME.text3, fontSize: 12.5 }}>برای تعریف قانون، حداقل به یک عنوان شغلی فعال (از «مدیریت عناوین شغلی») نیاز است.</p>
+        <p style={{ color: THEME.text3, fontSize: 12.5 }}>برای تعریف قانون، حداقل به دو مورد در ماتریس نیاز است — از دکمه‌ی «افزودن عنوان به ماتریس» استفاده کن.</p>
       )}
 
       {identities.length >= 2 && (
@@ -97,6 +170,11 @@ export default function ChatAccessManager({ onBack }) {
                 <tr key={`${rowId.role}-${rowId.jobPositionId}`} style={{ borderBottom: `1px solid ${THEME.border}` }}>
                   <td style={{ position: "sticky", insetInlineStart: 0, background: THEME.surface, padding: "6px 10px", fontWeight: 600, whiteSpace: "nowrap" }}>
                     {rowId.title} ({ROLE_LABEL[rowId.role]})
+                    {isExtra(rowId) && (
+                      <button type="button" onClick={() => handleRemoveExtra(rowId.jobPositionId, rowId.role)} title="حذف از ماتریس" style={{ background: "none", border: "none", cursor: "pointer", marginRight: 6, color: THEME.text3 }}>
+                        <X size={11} />
+                      </button>
+                    )}
                   </td>
                   {identities.map((colId) => {
                     if (sameIdentity(rowId, colId)) {
