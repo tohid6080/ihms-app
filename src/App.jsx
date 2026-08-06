@@ -313,6 +313,7 @@ function anomalyRecordToDb(record) {
     close_date: record.closeDate || null,
     effectiveness: record.effectiveness,
     photo_count: record.photoCount,
+    company_id: getCurrentCompanyId(),
   };
 }
 
