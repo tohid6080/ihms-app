@@ -1,4 +1,4 @@
-import { sb, sbOk, uid, getCurrentCompanyId } from "../shared.js";
+import { sb, sbOk, getCurrentCompanyId } from "../shared.js";
 
 /**
  * HCMS (سیستم مدیریت و کنترل خطرات) — پیاده‌سازی دقیق ساختار فایل مرجع
@@ -242,7 +242,10 @@ export async function saveHcmsAssessment(rec) {
     if (!sbOk(rows)) return { __error: true, message: "خطا در ذخیره‌سازی: " + (rows?.message || "نامشخص") };
     return rowFromDb(rows[0]);
   }
-  payload.id = uid("hcms");
+  // id عمداً اینجا ست نمی‌شود — ستون id در جدول از نوع uuid است و خودش با
+  // gen_random_uuid() مقداردهی می‌شود؛ فرستادن یک رشته‌ی سفارشی مثل
+  // «hcms-...» روی آن، دقیقاً همان خطای «invalid input syntax for type
+  // uuid» را می‌داد که باعث می‌شد ساخت خودکار HCMS از روی آنومالی شکست بخورد.
   payload.created_by = rec.createdBy || "";
   payload.company_id = getCurrentCompanyId();
   const rows = await sb("hcms_risk_assessments", { method: "POST", body: JSON.stringify([payload]) });
