@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Send, Paperclip, Users as UsersIcon, Check, CheckCheck } from "lucide-react";
+import { Send, Paperclip, Users as UsersIcon, Check, CheckCheck, LogOut } from "lucide-react";
 import { styles, THEME } from "../shared.js";
 import { toJalaliDateTime } from "../personnel/jalaliDate.jsx";
 import { isPdfDataUrl, fileToBase64 } from "../personnel/fileHelpers.js";
 import DocumentViewerModal from "../personnel/DocumentViewerModal.jsx";
-import { loadMessages, loadParticipants, sendMessage, markConversationRead } from "./chatApi.js";
+import { loadMessages, loadParticipants, sendMessage, markConversationRead, leaveConversation } from "./chatApi.js";
 
 const MSG_POLL_MS = 4000;
 
@@ -14,9 +14,19 @@ export default function ChatThread({ conversationId, currentUser, onBack }) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const [leaving, setLeaving] = useState(false);
   const [viewerSrc, setViewerSrc] = useState(null);
   const bottomRef = useRef(null);
   const me = { username: currentUser?.username, name: currentUser?.name, role: currentUser?.role };
+
+  const handleLeave = async () => {
+    if (!confirm("از این گفتگو خارج می‌شوی؛ دیگر توی لیست چت‌هایت نمایش داده نمی‌شود. ادامه می‌دهی؟")) return;
+    setLeaving(true);
+    const result = await leaveConversation(conversationId, me);
+    setLeaving(false);
+    if (result?.__error) { alert(result.message); return; }
+    onBack();
+  };
 
   const load = async (scrollToBottom) => {
     console.log("[chat-ui] ChatThread.load: شروع برای مکالمه", conversationId);
@@ -77,11 +87,21 @@ export default function ChatThread({ conversationId, currentUser, onBack }) {
           {isGroup && <UsersIcon size={15} color={THEME.text3} />}
           <span style={{ fontWeight: 700, color: THEME.navy, fontSize: 14.5 }}>{title}</span>
         </div>
+        <button type="button" onClick={handleLeave} disabled={leaving} title="خروج از گفتگو" style={{ background: "none", border: "none", cursor: "pointer", padding: 6, display: "flex", alignItems: "center" }}>
+          <LogOut size={16} color={THEME.danger} />
+        </button>
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", background: THEME.bg, borderRadius: 10, padding: 14, marginBottom: 10 }}>
         {messages.length === 0 && <p style={{ color: THEME.text3, textAlign: "center", padding: 20 }}>هنوز پیامی ارسال نشده — اولین پیام را بفرست</p>}
         {messages.map((m) => {
+          if (m.isSystem) {
+            return (
+              <div key={m.id} style={{ textAlign: "center", margin: "10px 0" }}>
+                <span style={{ fontSize: 11, color: THEME.text3, background: "#eef1f5", padding: "4px 10px", borderRadius: 999 }}>{m.body}</span>
+              </div>
+            );
+          }
           const isMine = m.senderUsername === me.username;
           return (
             <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: isMine ? "flex-end" : "flex-start", marginBottom: 10 }}>

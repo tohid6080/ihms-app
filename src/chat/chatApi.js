@@ -35,6 +35,7 @@ function msgFromRow(r) {
     attachmentUrl: r.attachment_url || "",
     attachmentName: r.attachment_name || "",
     attachmentType: r.attachment_type || "",
+    isSystem: r.is_system === true,
     createdAt: r.created_at,
   };
 }
@@ -64,17 +65,84 @@ export async function resolveContractorUsername(name) {
   return sbOk(rows) && rows[0]?.username ? rows[0].username : null;
 }
 
-export async function loadChatDirectory() {
+// کلید هویت برای قوانین دسترسی: نقش + عنوان شغلی با هم. چون یک عنوان شغلی
+// (مثلاً «سرپرست کارگاه») می‌تواند هم سمت کارفرما هم سمت پیمانکار استفاده
+// شود، بلاک‌کردن فقط بر اساس عنوان شغلی کافی نیست — دو «سرپرست کارگاه» از
+// دو طرف مختلف باید بتوانند مستقل از هم بلاک شوند.
+function identityKey(role, jobPositionId) {
+  return `${role || ""}::${jobPositionId || ""}`;
+}
+
+// جهت‌دار نیست: اگر (نقش+عنوان شغلی) A با B بلاک شده باشد، افراد هر دو گروه
+// در لیست «گفتگوی جدید» یکدیگر را نمی‌بینند. افرادی که عنوان شغلی ندارند،
+// یا هویتشان در هیچ قانونی نیست، طبق پیش‌فرض برای همه قابل‌مشاهده‌اند.
+// حساب‌های ADMIN همیشه قابل‌مشاهده می‌مانند (مسدودشدن کامل مدیر سامانه از
+// دید کسی منطقی نیست).
+export async function loadChatDirectory(myRole, myJobPositionId) {
+  const companyId = getCurrentCompanyId();
+  const filter = companyId ? `&company_id=eq.${companyId}` : "";
+  const [employers, contractors, rules] = await Promise.all([
+    sb(`employer_accounts?select=username,name,role,job_position_id${filter}`),
+    sb(`contractors?select=username,name,job_position_id${filter}`),
+    sb(`chat_visibility_rules?select=*${filter}`),
+  ]);
+  const people = [];
+  if (sbOk(employers)) employers.forEach((e) => { if (e.username) people.push({ username: e.username, name: e.name, role: e.role === "admin" ? "ADMIN" : "EMPLOYER", jobPositionId: e.job_position_id || "" }); });
+  if (sbOk(contractors)) contractors.forEach((c) => { if (c.username) people.push({ username: c.username, name: c.name, role: "CONTRACTOR", jobPositionId: c.job_position_id || "" }); });
+
+  if (myRole === "ADMIN" || !myJobPositionId || !sbOk(rules) || rules.length === 0) return people;
+
+  const myKey = identityKey(myRole, myJobPositionId);
+  const blockedKeys = new Set();
+  rules.forEach((r) => {
+    const keyA = identityKey(r.role_a, r.job_position_id_a);
+    const keyB = identityKey(r.role_b, r.job_position_id_b);
+    if (keyA === myKey) blockedKeys.add(keyB);
+    if (keyB === myKey) blockedKeys.add(keyA);
+  });
+  if (blockedKeys.size === 0) return people;
+
+  return people.filter((p) => p.role === "ADMIN" || !blockedKeys.has(identityKey(p.role, p.jobPositionId)));
+}
+
+// ---------- تشخیص اینکه هر عنوان شغلی واقعاً سمت کدام نقش استفاده می‌شود ----------
+// برای اینکه ماتریس دسترسی چت فقط ترکیب‌های واقعی را نشان بدهد (مثلاً
+// «کارشناس بهداشت و محیط‌زیست» ممکن است فقط سمت پیمانکار وجود داشته باشد،
+// نه کارفرما) — نه هر عنوان شغلی را برای هر دو نقش به‌صورت فرضی.
+export async function loadUsedJobPositionsByRole() {
   const companyId = getCurrentCompanyId();
   const filter = companyId ? `&company_id=eq.${companyId}` : "";
   const [employers, contractors] = await Promise.all([
-    sb(`employer_accounts?select=username,name,role${filter}`),
-    sb(`contractors?select=username,name${filter}`),
+    sb(`employer_accounts?select=job_position_id${filter}`),
+    sb(`contractors?select=job_position_id${filter}`),
   ]);
-  const people = [];
-  if (sbOk(employers)) employers.forEach((e) => { if (e.username) people.push({ username: e.username, name: e.name, role: e.role === "admin" ? "ADMIN" : "EMPLOYER" }); });
-  if (sbOk(contractors)) contractors.forEach((c) => { if (c.username) people.push({ username: c.username, name: c.name, role: "CONTRACTOR" }); });
-  return people;
+  const employerIds = new Set((sbOk(employers) ? employers : []).map((r) => r.job_position_id).filter(Boolean));
+  const contractorIds = new Set((sbOk(contractors) ? contractors : []).map((r) => r.job_position_id).filter(Boolean));
+  return { employerJobPositionIds: employerIds, contractorJobPositionIds: contractorIds };
+}
+
+// ---------- مدیریت قوانین دسترسی چت (فقط ادمین) ----------
+
+export async function loadVisibilityRules() {
+  const companyId = getCurrentCompanyId();
+  const filter = companyId ? `&company_id=eq.${companyId}` : "";
+  const rows = await sb(`chat_visibility_rules?select=*${filter}`);
+  return sbOk(rows) ? rows.map((r) => ({ roleA: r.role_a, jobPositionIdA: r.job_position_id_a, roleB: r.role_b, jobPositionIdB: r.job_position_id_b })) : [];
+}
+
+export async function setVisibilityRule(roleA, jobPositionIdA, roleB, jobPositionIdB, blocked) {
+  if (blocked) {
+    const existing = await sb(`chat_visibility_rules?role_a=eq.${roleA}&job_position_id_a=eq.${jobPositionIdA}&role_b=eq.${roleB}&job_position_id_b=eq.${jobPositionIdB}&select=id`);
+    if (sbOk(existing) && existing.length > 0) return { ok: true };
+    const reverseExisting = await sb(`chat_visibility_rules?role_a=eq.${roleB}&job_position_id_a=eq.${jobPositionIdB}&role_b=eq.${roleA}&job_position_id_b=eq.${jobPositionIdA}&select=id`);
+    if (sbOk(reverseExisting) && reverseExisting.length > 0) return { ok: true };
+    const result = await sb("chat_visibility_rules", { method: "POST", body: JSON.stringify([{ role_a: roleA, job_position_id_a: jobPositionIdA, role_b: roleB, job_position_id_b: jobPositionIdB, company_id: getCurrentCompanyId() }]) });
+    if (!sbOk(result)) return { __error: true, message: "خطا در ذخیره‌سازی: " + (result?.message || "نامشخص") };
+    return { ok: true };
+  }
+  await sb(`chat_visibility_rules?role_a=eq.${roleA}&job_position_id_a=eq.${jobPositionIdA}&role_b=eq.${roleB}&job_position_id_b=eq.${jobPositionIdB}`, { method: "DELETE", prefer: "return=minimal" });
+  await sb(`chat_visibility_rules?role_a=eq.${roleB}&job_position_id_a=eq.${jobPositionIdB}&role_b=eq.${roleA}&job_position_id_b=eq.${jobPositionIdA}`, { method: "DELETE", prefer: "return=minimal" });
+  return { ok: true };
 }
 
 // ---------- مکالمات کاربر جاری ----------
@@ -283,7 +351,26 @@ export async function addParticipant(conversationId, person) {
   return { ok: true };
 }
 
-// ---------- علامت‌گذاری خوانده‌شدن ----------
+// ---------- خروج از گفتگو (پیمانکار/کارفرما/ادمین — هرکسی می‌تواند خودش را از یک مکالمه خارج کند) ----------
+
+// یک پیام سیستمی («X گفتگو را ترک کرد») برای بقیه‌ی اعضا ثبت می‌شود، سپس
+// عضویت خودِ کاربر حذف می‌شود — یعنی از این به بعد آن مکالمه دیگر توی
+// لیست او ظاهر نمی‌شود، ولی برای بقیه‌ی اعضا (با تاریخچه‌ی کامل) باقی می‌ماند.
+export async function leaveConversation(conversationId, me) {
+  const sysPayload = {
+    conversation_id: conversationId,
+    sender_username: me.username || "",
+    sender_name: me.name || "",
+    sender_role: me.role || "",
+    body: `${me.name || me.username} گفتگو را ترک کرد`,
+    is_system: true,
+  };
+  await sb("chat_messages", { method: "POST", body: JSON.stringify([sysPayload]), prefer: "return=minimal" });
+
+  const result = await sb(`chat_participants?conversation_id=eq.${conversationId}&username=eq.${encodeURIComponent(me.username)}`, { method: "DELETE" });
+  if (!sbOk(result)) return { __error: true, message: "خطا در خروج از گفتگو: " + (result?.message || "نامشخص") };
+  return { ok: true };
+}
 
 // خودترمیم‌شونده: اگر به هر دلیلی (مثلاً شکست گذشته‌ی درج اعضا هنگام ساخت
 // مکالمه) ردیف عضویت این کاربر برای این مکالمه وجود نداشته باشد، PATCH چیزی

@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Users, FileSpreadsheet, FileDown, BarChart3 } from "lucide-react";
+import { Plus, Users, FileSpreadsheet, FileDown } from "lucide-react";
 import { styles, THEME } from "../shared.js";
 import DataView, { StatusPill } from "../shared/DataView.jsx";
 import { loadPersonnelListOfflineFirst, personnelStatusMeta, employmentStatusMeta, checkAndUpdateDeadlines, loadContractorOptions, PERSONNEL_STATUS } from "./personnelApi.js";
 import { exportPersonnelPdf, exportPersonnelExcel } from "./personnelExport.js";
 import PersonnelForm from "./PersonnelForm.jsx";
 import PersonnelDetail from "./PersonnelDetail.jsx";
-import PersonnelManagementDashboard from "./PersonnelManagementDashboard.jsx";
 import SyncStatusBadge from "../offline/SyncStatusBadge.jsx";
 
 const SORT_OPTIONS = [
@@ -31,7 +30,6 @@ export default function PersonnelDashboard({ onBack, currentUser, role, initialS
   const [contractorOptions, setContractorOptions] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [selected, setSelected] = useState(null);
-  const [showManagement, setShowManagement] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   const isContractor = role === "CONTRACTOR";
@@ -116,16 +114,6 @@ export default function PersonnelDashboard({ onBack, currentUser, role, initialS
       />
     );
   }
-  if (showManagement) {
-    return (
-      <PersonnelManagementDashboard
-        personnelList={scoped}
-        contractorOptions={contractorOptions}
-        isContractor={isContractor}
-        onClose={() => setShowManagement(false)}
-      />
-    );
-  }
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: 24 }}>
@@ -164,9 +152,6 @@ export default function PersonnelDashboard({ onBack, currentUser, role, initialS
             <Plus size={16} style={{ marginLeft: 6 }} /> ثبت پرسنل جدید
           </div>
         )}
-        <div style={{ ...styles.menuCard, background: THEME.navyMid, color: "#fff", justifyContent: "center", flex: 1 }} onClick={() => setShowManagement(true)}>
-          <BarChart3 size={16} style={{ marginLeft: 6 }} /> داشبورد مدیریتی
-        </div>
       </div>
 
       <div

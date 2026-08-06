@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { AlertTriangle, Plus, X, ChevronRight, LogOut, CheckCircle2, Clock, Camera, ImagePlus, Trash2, FileSpreadsheet, FileText, User, Users, ShieldCheck, LayoutGrid, BarChart3, Briefcase, Settings, Archive, Truck, Tag, MessageCircle, GraduationCap } from "lucide-react";
+import { AlertTriangle, Plus, X, ChevronRight, LogOut, CheckCircle2, Clock, Camera, ImagePlus, Trash2, FileSpreadsheet, FileText, User, Users, ShieldCheck, LayoutGrid, BarChart3, Briefcase, Settings, Archive, Truck, Tag, MessageCircle, GraduationCap, ShieldOff, ShieldAlert } from "lucide-react";
 import * as XLSX from "xlsx";
 import BowTieDashboard from "./bowtie/BowTieDashboard.jsx";
+import HcmsDashboard from "./hcms/HcmsDashboard.jsx";
+import { getOrCreateHcmsForAnomaly } from "./hcms/hcmsApi.js";
 import PersonnelForm from "./personnel/PersonnelForm.jsx";
 import PersonnelDashboard from "./personnel/PersonnelDashboard.jsx";
 import HomeDashboard from "./dashboard/HomeDashboard.jsx";
@@ -19,6 +21,7 @@ import ArchiveManager from "./offline/ArchiveManager.jsx";
 import AdminAnalytics from "./admin/AdminAnalytics.jsx";
 import ChatDashboard from "./chat/ChatDashboard.jsx";
 import TrainingManager from "./training/TrainingManager.jsx";
+import ChatAccessManager from "./chat/ChatAccessManager.jsx";
 import { loadUnreadTotal } from "./chat/chatApi.js";
 import ChatThread from "./chat/ChatThread.jsx";
 import { findOrCreateLinkedConversation, resolveContractorUsername } from "./chat/chatApi.js";
@@ -72,7 +75,6 @@ const ANOMALY_FORMATS = [
 // بقیه به‌عنوان جای‌نگه‌دار (Placeholder) نمایش داده می‌شوند تا در فازهای بعدی توسعه یابند.
 const HSE_MODULES = [
   { key: "chat", label: "چت" },
-  { key: "manageUsers", label: "ایجاد حساب کاربری برای پیمانکاران", employerOnly: true },
   {
     key: "anomalyReport",
     label: "مدیریت عدم انطباق‌ها (Anomaly Report)",
@@ -89,6 +91,7 @@ const HSE_MODULES = [
     employerOnly: true,
     sub: [
       { key: "bowtieDashboard", label: "BowTie Risk Analysis" },
+      { key: "hcmsDashboard", label: "HCMS - سیستم مدیریت و کنترل خطرات" },
     ],
   },
   {
@@ -134,6 +137,7 @@ function contractorFromRow(r) {
   return {
     id: r.id,
     name: r.name,
+    contactPersonName: r.contact_person_name || "",
     startDate: r.start_date || "",
     contractDetails: r.contract_details || "",
     username: r.username || "",
@@ -185,7 +189,7 @@ async function loadContractors() {
 async function insertContractor(rec) {
   const rows = await sb("contractors", {
     method: "POST",
-    body: JSON.stringify([{ name: rec.name, start_date: rec.startDate || null, contract_details: rec.contractDetails, username: rec.username, password: rec.password, job_position_id: rec.jobPositionId || null, company_id: getCurrentCompanyId() }]),
+    body: JSON.stringify([{ name: rec.name, contact_person_name: rec.contactPersonName || "", start_date: rec.startDate || null, contract_details: rec.contractDetails, username: rec.username, password: rec.password, job_position_id: rec.jobPositionId || null, company_id: getCurrentCompanyId() }]),
   });
   if (!sbOk(rows)) return { __error: true, message: sbErrMsg(rows) };
   return contractorFromRow(rows[0]);
@@ -193,6 +197,7 @@ async function insertContractor(rec) {
 async function updateContractorDB(id, patch) {
   const dbPatch = {};
   if ("name" in patch) dbPatch.name = patch.name;
+  if ("contactPersonName" in patch) dbPatch.contact_person_name = patch.contactPersonName;
   if ("startDate" in patch) dbPatch.start_date = patch.startDate || null;
   if ("contractDetails" in patch) dbPatch.contract_details = patch.contractDetails;
   if ("username" in patch) dbPatch.username = patch.username;
@@ -211,6 +216,7 @@ function employerAccountFromRow(r) {
   return {
     id: r.id,
     name: r.name,
+    companyName: r.company_name || "",
     username: r.username,
     password: r.password,
     canEdit: r.can_edit !== false,
@@ -233,7 +239,7 @@ async function loadEmployerAccounts() {
 async function insertEmployerAccount(rec) {
   const rows = await sb("employer_accounts", {
     method: "POST",
-    body: JSON.stringify([{ name: rec.name, username: rec.username, password: rec.password, can_edit: rec.canEdit, job_position_id: rec.jobPositionId || null, company_id: getCurrentCompanyId(), role: "employer" }]),
+    body: JSON.stringify([{ name: rec.name, company_name: rec.companyName || "", username: rec.username, password: rec.password, can_edit: rec.canEdit, job_position_id: rec.jobPositionId || null, company_id: getCurrentCompanyId(), role: "employer" }]),
   });
   if (!sbOk(rows)) return { __error: true, message: sbErrMsg(rows) };
   return employerAccountFromRow(rows[0]);
@@ -241,6 +247,7 @@ async function insertEmployerAccount(rec) {
 async function updateEmployerAccountDB(id, patch) {
   const dbPatch = {};
   if ("name" in patch) dbPatch.name = patch.name;
+  if ("companyName" in patch) dbPatch.company_name = patch.companyName;
   if ("username" in patch) dbPatch.username = patch.username;
   if ("password" in patch) dbPatch.password = patch.password;
   if ("canEdit" in patch) dbPatch.can_edit = patch.canEdit;
@@ -1007,6 +1014,7 @@ function ContractorManager({ onBack }) {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
+  const [contactPersonName, setContactPersonName] = useState("");
   const [startDate, setStartDate] = useState("");
   const [contractDetails, setContractDetails] = useState("");
   const [username, setUsername] = useState("");
@@ -1032,17 +1040,17 @@ function ContractorManager({ onBack }) {
     const uname = username.trim();
     if (!name.trim() || !uname || !password || !jobPositionId) { setFormError("نام پیمانکار، عنوان شغلی، نام کاربری و رمز عبور الزامی است"); return; }
     if (usernameTaken(uname, null)) { setFormError("این نام کاربری قبلاً استفاده شده است"); return; }
-    const inserted = await insertContractor({ name: name.trim(), startDate, contractDetails: contractDetails.trim(), username: uname, password, jobPositionId });
+    const inserted = await insertContractor({ name: name.trim(), contactPersonName: contactPersonName.trim(), startDate, contractDetails: contractDetails.trim(), username: uname, password, jobPositionId });
     if (!inserted || inserted.__error) { setFormError(`خطا در ذخیره‌سازی: ${inserted?.message || "نامشخص"}`); return; }
     await initializeNoAccess("contractor", inserted.id);
     setContractors([...contractors, inserted]);
-    setName(""); setStartDate(""); setContractDetails(""); setUsername(""); setPassword(""); setJobPositionId(""); setFormError(""); setShowForm(false);
+    setName(""); setContactPersonName(""); setStartDate(""); setContractDetails(""); setUsername(""); setPassword(""); setJobPositionId(""); setFormError(""); setShowForm(false);
     alert("حساب پیمانکار ساخته شد. اکنون از «مدیریت نقش‌ها و دسترسی‌ها» دسترسی ماژول‌های این حساب را تعیین کنید.");
   };
 
   const startEdit = (c) => {
     setEditingId(c.id);
-    setEditData({ name: c.name, startDate: c.startDate, contractDetails: c.contractDetails, username: c.username, password: c.password, jobPositionId: c.jobPositionId });
+    setEditData({ name: c.name, contactPersonName: c.contactPersonName, startDate: c.startDate, contractDetails: c.contractDetails, username: c.username, password: c.password, jobPositionId: c.jobPositionId });
   };
   const cancelEdit = () => { setEditingId(null); setEditData({}); };
 
@@ -1077,6 +1085,8 @@ function ContractorManager({ onBack }) {
         <div style={styles.card}>
           <label style={styles.label}>نام پیمانکار</label>
           <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} dir="rtl" placeholder="همین نام در لیست کشویی «پیمانکار» فرم آنومالی نشان داده می‌شود" />
+          <label style={styles.label}>نام و نام خانوادگی (نماینده/شخص رابط)</label>
+          <input style={styles.input} value={contactPersonName} onChange={(e) => setContactPersonName(e.target.value)} dir="rtl" />
           <label style={styles.label}>عنوان شغلی</label>
           <select style={styles.input} value={jobPositionId} onChange={(e) => setJobPositionId(e.target.value)} dir="rtl">
             <option value="">— انتخاب کنید —</option>
@@ -1103,6 +1113,8 @@ function ContractorManager({ onBack }) {
           <div key={c.id} style={styles.card}>
             <label style={styles.label}>نام پیمانکار</label>
             <input style={styles.input} value={editData.name} onChange={(e) => setEditData({ ...editData, name: e.target.value })} dir="rtl" />
+            <label style={styles.label}>نام و نام خانوادگی (نماینده/شخص رابط)</label>
+            <input style={styles.input} value={editData.contactPersonName || ""} onChange={(e) => setEditData({ ...editData, contactPersonName: e.target.value })} dir="rtl" />
             <label style={styles.label}>عنوان شغلی</label>
             <select style={styles.input} value={editData.jobPositionId || ""} onChange={(e) => setEditData({ ...editData, jobPositionId: e.target.value })} dir="rtl">
               <option value="">— انتخاب کنید —</option>
@@ -1126,6 +1138,7 @@ function ContractorManager({ onBack }) {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
                 <div style={{ fontWeight: "bold", fontSize: 16 }}>{c.name}</div>
+                {c.contactPersonName && <div style={{ fontSize: 13, color: "#555", marginTop: 2 }}>نماینده: {c.contactPersonName}</div>}
                 {c.jobPositionTitle && <div style={{ fontSize: 12.5, color: "#0d8f8a", marginTop: 3, fontWeight: 600 }}>{c.jobPositionTitle}</div>}
                 {c.startDate && <div style={{ fontSize: 13, color: "#666", marginTop: 4 }}>تاریخ شروع: {isoToJalaliDisplay(c.startDate)}</div>}
                 {c.contractDetails && <div style={{ fontSize: 13, color: "#666", marginTop: 4 }}>قرارداد: {c.contractDetails}</div>}
@@ -1150,6 +1163,7 @@ function EmployerAccountManager({ onBack }) {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
+  const [companyName, setCompanyName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [canEdit, setCanEdit] = useState(true);
@@ -1174,15 +1188,15 @@ function EmployerAccountManager({ onBack }) {
     const uname = username.trim();
     if (!name.trim() || !uname || !password || !jobPositionId) { setFormError("نام، عنوان شغلی، نام کاربری و رمز عبور الزامی است"); return; }
     if (usernameTaken(uname, null)) { setFormError("این نام کاربری قبلاً استفاده شده است"); return; }
-    const inserted = await insertEmployerAccount({ name: name.trim(), username: uname, password, canEdit, jobPositionId });
+    const inserted = await insertEmployerAccount({ name: name.trim(), companyName: companyName.trim(), username: uname, password, canEdit, jobPositionId });
     if (!inserted || inserted.__error) { setFormError(`خطا در ذخیره‌سازی: ${inserted?.message || "نامشخص"}`); return; }
     await initializeNoAccess("employer", inserted.id);
     setAccounts([...accounts, inserted]);
-    setName(""); setUsername(""); setPassword(""); setCanEdit(true); setJobPositionId(""); setFormError(""); setShowForm(false);
+    setName(""); setCompanyName(""); setUsername(""); setPassword(""); setCanEdit(true); setJobPositionId(""); setFormError(""); setShowForm(false);
     alert("حساب کارفرما ساخته شد. اکنون از «مدیریت نقش‌ها و دسترسی‌ها» دسترسی ماژول‌های این حساب را تعیین کنید.");
   };
 
-  const startEdit = (a) => { setEditingId(a.id); setEditData({ name: a.name, username: a.username, password: a.password, canEdit: a.canEdit, jobPositionId: a.jobPositionId }); };
+  const startEdit = (a) => { setEditingId(a.id); setEditData({ name: a.name, companyName: a.companyName, username: a.username, password: a.password, canEdit: a.canEdit, jobPositionId: a.jobPositionId }); };
   const cancelEdit = () => { setEditingId(null); setEditData({}); };
 
   const saveEdit = async (id) => {
@@ -1217,6 +1231,8 @@ function EmployerAccountManager({ onBack }) {
         <div style={styles.card}>
           <label style={styles.label}>نام و نام خانوادگی</label>
           <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} dir="rtl" />
+          <label style={styles.label}>نام شرکت</label>
+          <input style={styles.input} value={companyName} onChange={(e) => setCompanyName(e.target.value)} dir="rtl" />
           <label style={styles.label}>عنوان شغلی</label>
           <select style={styles.input} value={jobPositionId} onChange={(e) => setJobPositionId(e.target.value)} dir="rtl">
             <option value="">— انتخاب کنید —</option>
@@ -1244,6 +1260,8 @@ function EmployerAccountManager({ onBack }) {
           <div key={a.id} style={styles.card}>
             <label style={styles.label}>نام و نام خانوادگی</label>
             <input style={styles.input} value={editData.name} onChange={(e) => setEditData({ ...editData, name: e.target.value })} dir="rtl" />
+            <label style={styles.label}>نام شرکت</label>
+            <input style={styles.input} value={editData.companyName || ""} onChange={(e) => setEditData({ ...editData, companyName: e.target.value })} dir="rtl" />
             <label style={styles.label}>عنوان شغلی</label>
             <select style={styles.input} value={editData.jobPositionId || ""} onChange={(e) => setEditData({ ...editData, jobPositionId: e.target.value })} dir="rtl">
               <option value="">— انتخاب کنید —</option>
@@ -1268,6 +1286,7 @@ function EmployerAccountManager({ onBack }) {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
                 <div style={{ fontWeight: "bold", fontSize: 16 }}>{a.name}</div>
+                {a.companyName && <div style={{ fontSize: 13, color: "#555", marginTop: 2 }}>شرکت: {a.companyName}</div>}
                 {a.jobPositionTitle && <div style={{ fontSize: 12.5, color: "#0d8f8a", marginTop: 3, fontWeight: 600 }}>{a.jobPositionTitle}</div>}
                 <div style={{ fontSize: 13, color: "#0d8f8a", marginTop: 4, direction: "ltr", textAlign: "right" }}>یوزر: {a.username}</div>
                 <span style={{ ...styles.badge, marginTop: 6, display: "inline-block", color: a.canEdit ? "#166534" : "#92400e", background: a.canEdit ? "#dcfce7" : "#fef3c7" }}>
@@ -1558,6 +1577,15 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
   const [sort, setSort] = useState("newest");
   const [linkedChatId, setLinkedChatId] = useState(null);
   const [linkedChatBusy, setLinkedChatBusy] = useState(false);
+  const [linkedHcmsId, setLinkedHcmsId] = useState(null);
+  const [linkedHcmsBusy, setLinkedHcmsBusy] = useState(false);
+  const openLinkedHcms = async (a) => {
+    setLinkedHcmsBusy(true);
+    const rec = await getOrCreateHcmsForAnomaly(a, currentUser?.name);
+    setLinkedHcmsBusy(false);
+    if (rec?.__error) { alert(rec.message); return; }
+    setLinkedHcmsId(a.id);
+  };
   const openLinkedChat = async (a) => {
     setLinkedChatBusy(true);
     let initialParticipants = [];
@@ -1767,6 +1795,9 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
   if (linkedChatId) {
     return <ChatThread conversationId={linkedChatId} currentUser={currentUser} onBack={() => setLinkedChatId(null)} />;
   }
+  if (linkedHcmsId) {
+    return <HcmsDashboard focusAnomalyId={linkedHcmsId} currentUser={currentUser} onBack={() => setLinkedHcmsId(null)} />;
+  }
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: 24 }}>
@@ -1934,6 +1965,9 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
               <h3 style={{ margin: 0, fontSize: 14.5, color: THEME.navy, fontWeight: 700 }}>{a.trackingNumber}</h3>
               <button type="button" style={{ ...styles.smallButton, background: THEME.teal, display: "flex", alignItems: "center", gap: 6 }} onClick={() => openLinkedChat(a)} disabled={linkedChatBusy}>
                 <MessageCircle size={13} /> {linkedChatBusy ? "..." : "چت درباره این مورد"}
+              </button>
+              <button type="button" style={{ ...styles.smallButton, background: THEME.navyMid, display: "flex", alignItems: "center", gap: 6 }} onClick={() => openLinkedHcms(a)} disabled={linkedHcmsBusy}>
+                <ShieldAlert size={13} /> {linkedHcmsBusy ? "..." : "ارزیابی ریسک HCMS"}
               </button>
             </div>
 
@@ -2153,7 +2187,7 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
 }
 
 // ---------- پنل ادمین ----------
-const MODULE_ICON = { profile: User, chat: MessageCircle, manageUsers: Users, anomalyReport: AlertTriangle, personnelAccess: Users, managementDashboard: BarChart3 };
+const MODULE_ICON = { profile: User, chat: MessageCircle, anomalyReport: AlertTriangle, personnelAccess: Users, managementDashboard: BarChart3 };
 
 // ---------- ردیف منوی استاندارد (آیکون + عنوان + شورون) ----------
 // ---------- هدر مشترک داشبورد (آواتار + نام + عنوان شغلی + اعلان/تنظیمات/خروج) ----------
@@ -2290,11 +2324,13 @@ function AdminDashboard({ onLogout, currentUser }) {
             <MenuRow icon={Archive} label="آرشیو فایل‌ها" onClick={() => setView("archiveManagement")} />
             <MenuRow icon={Tag} label="کد تگ داربست پیمانکاران" onClick={() => setView("scaffoldCodeManagement")} />
             <MenuRow icon={GraduationCap} label="مدیریت آموزش‌های تخصصی" onClick={() => setView("trainingManagement")} />
+            <MenuRow icon={ShieldOff} label="مدیریت دسترسی چت" onClick={() => setView("chatAccessManagement")} />
           </div>
         </div>
       )}
 
       {view === "trainingManagement" && <TrainingManager onBack={() => setView("systemManagement")} />}
+      {view === "chatAccessManagement" && <ChatAccessManager onBack={() => setView("systemManagement")} />}
 
       {view === "anomalyReport" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
@@ -2363,6 +2399,7 @@ function AdminDashboard({ onLogout, currentUser }) {
       {view === "anomalyForm" && <AnomalyForm onBack={() => setView("anomalyReport")} currentUser={currentUser} onSaved={() => setView("anomalyList")} />}
       {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="ADMIN" currentUser={currentUser} initialStatusFilter={navFilter?.module === "anomaly" ? navFilter.statusFilter : undefined} initialRiskFilter={navFilter?.module === "anomaly" ? navFilter.riskFilter : undefined} initialContractorFilter={navFilter?.module === "anomaly" ? navFilter.contractorFilter : undefined} />}
       {view === "bowtieDashboard" && <BowTieDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} readOnly={false} />}
+      {view === "hcmsDashboard" && <HcmsDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} />}
       {view === "personnelForm" && <PersonnelForm onBack={() => setView("personnelAccess")} currentUser={currentUser} onSaved={() => setView("personnelAccess")} />}
       {view === "personnelDashboard" && <PersonnelDashboard onBack={() => setView("personnelAccess")} currentUser={currentUser} role="ADMIN" initialStatusFilter={navFilter?.module === "personnel" ? navFilter.statusFilter : undefined} initialContractorFilter={navFilter?.module === "personnel" ? navFilter.contractorFilter : undefined} />}
       {view === "machineryDashboard" && <MachineryDashboard onBack={() => setView("machineryManagement")} currentUser={currentUser} role="ADMIN" initialApprovalFilter={navFilter?.module === "machinery" ? navFilter.approvalFilter : undefined} initialContractorFilter={navFilter?.module === "machinery" ? navFilter.contractorFilter : undefined} />}
@@ -2524,10 +2561,10 @@ function EmployerDashboard({ onLogout, currentUser }) {
 
       {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel={canEdit ? "کارفرما" : "کارفرما (فقط مشاهده)"} />}
       {view === "chat" && <ChatDashboard onBack={() => setView("menu")} currentUser={currentUser} />}
-      {view === "manageUsers" && <ContractorManager onBack={() => setView("menu")} />}
       {view === "anomalyForm" && anomalyCanEdit && <AnomalyForm onBack={() => setView("anomalyReport")} currentUser={currentUser} onSaved={() => setView("anomalyList")} />}
       {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="EMPLOYER" currentUser={currentUser} readOnly={!canEdit || getAccessLevel(permMap, "anomalyReport") === "view"} initialStatusFilter={navFilter?.module === "anomaly" ? navFilter.statusFilter : undefined} initialRiskFilter={navFilter?.module === "anomaly" ? navFilter.riskFilter : undefined} initialContractorFilter={navFilter?.module === "anomaly" ? navFilter.contractorFilter : undefined} />}
       {view === "bowtieDashboard" && <BowTieDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} readOnly={!canEdit || getAccessLevel(permMap, "riskAssessment") === "view"} />}
+      {view === "hcmsDashboard" && <HcmsDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} />}
       {view === "personnelForm" && <PersonnelForm onBack={() => setView("personnelAccess")} currentUser={currentUser} onSaved={() => setView("personnelAccess")} />}
       {view === "personnelDashboard" && <PersonnelDashboard onBack={() => setView("personnelAccess")} currentUser={currentUser} role="EMPLOYER" readOnly={!canEdit || getAccessLevel(permMap, "personnelAccess") === "view"} initialStatusFilter={navFilter?.module === "personnel" ? navFilter.statusFilter : undefined} initialContractorFilter={navFilter?.module === "personnel" ? navFilter.contractorFilter : undefined} />}
       {view === "machineryDashboard" && <MachineryDashboard onBack={() => setView("machineryManagement")} currentUser={currentUser} role="EMPLOYER" readOnly={!canEdit || getAccessLevel(permMap, "machineryManagement") === "view"} initialApprovalFilter={navFilter?.module === "machinery" ? navFilter.approvalFilter : undefined} initialContractorFilter={navFilter?.module === "machinery" ? navFilter.contractorFilter : undefined} />}

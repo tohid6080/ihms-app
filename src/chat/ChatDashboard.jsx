@@ -36,12 +36,14 @@ export default function ChatDashboard({ onBack, currentUser }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const isAdmin = currentUser?.role === "ADMIN";
+
   const openNew = async () => {
     setShowNew(true);
     setNewMode("direct");
     setGroupTitle("");
     setSelectedPeople([]);
-    setDirectory((await loadChatDirectory()).filter((p) => p.username !== currentUser.username));
+    setDirectory((await loadChatDirectory(currentUser.role, currentUser.jobPositionId)).filter((p) => p.username !== currentUser.username));
   };
 
   const startDirect = async (person) => {
@@ -61,6 +63,7 @@ export default function ChatDashboard({ onBack, currentUser }) {
   };
 
   const startGroup = async () => {
+    if (!isAdmin) { alert("فقط ادمین می‌تواند گروه جدید بسازد"); return; }
     if (!groupTitle.trim() || selectedPeople.length === 0) return;
     console.log("[chat-ui] startGroup: شروع", { title: groupTitle.trim(), people: selectedPeople });
     setCreating(true);
@@ -102,7 +105,9 @@ export default function ChatDashboard({ onBack, currentUser }) {
         <div style={{ ...styles.card, width: "auto", marginBottom: 14 }}>
           <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
             <button type="button" style={{ ...styles.smallButton, background: newMode === "direct" ? THEME.teal : THEME.text3 }} onClick={() => setNewMode("direct")}>گفتگوی مستقیم</button>
-            <button type="button" style={{ ...styles.smallButton, background: newMode === "group" ? THEME.teal : THEME.text3 }} onClick={() => setNewMode("group")}>گروه جدید</button>
+            {isAdmin && (
+              <button type="button" style={{ ...styles.smallButton, background: newMode === "group" ? THEME.teal : THEME.text3 }} onClick={() => setNewMode("group")}>گروه جدید</button>
+            )}
           </div>
 
           {newMode === "direct" && (
@@ -117,7 +122,7 @@ export default function ChatDashboard({ onBack, currentUser }) {
             </div>
           )}
 
-          {newMode === "group" && (
+          {newMode === "group" && isAdmin && (
             <>
               <input style={styles.input} placeholder="نام گروه" value={groupTitle} onChange={(e) => setGroupTitle(e.target.value)} dir="rtl" />
               <div style={{ maxHeight: 220, overflowY: "auto", marginTop: 8 }}>
