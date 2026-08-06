@@ -1,4 +1,4 @@
-import { sb, sbOk, getCurrentCompanyId, SUPABASE_URL } from "../shared.js";
+import { sb, sbOk, getCurrentCompanyId, SUPABASE_URL, SUPABASE_ANON_KEY } from "../shared.js";
 
 /**
  * HCMS (سیستم مدیریت و کنترل خطرات) — پیاده‌سازی دقیق ساختار فایل مرجع
@@ -321,14 +321,28 @@ export async function generateAiScenarios(hazardText, activityContext, currentUs
   try {
     const res = await fetch(`${SUPABASE_URL}/functions/v1/hcms-ai-assistant`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        // دروازه‌ی Supabase قبل از رسیدن به کد خودِ تابع، وجود یک هدر
+        // Authorization معتبر را چک می‌کند؛ بدون این هدر، درخواست همان‌جا
+        // با یک خطای عمومیِ خودِ Supabase رد می‌شود (نه پیام خطای ما) —
+        // برای همین همان کلید publishable که همه‌جای برنامه استفاده می‌شود کافی است.
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        apikey: SUPABASE_ANON_KEY,
+      },
       body: JSON.stringify({
         username: currentUser?.username, password: currentUser?.password,
         hazardText, activityContext, matrixSummary,
       }),
     });
-    const data = await res.json();
-    if (!res.ok) return { __error: true, message: data?.error || "خطا در دریافت پیشنهاد هوش مصنوعی" };
+    let data;
+    try {
+      data = await res.json();
+    } catch {
+      const raw = await res.text().catch(() => "");
+      return { __error: true, message: `پاسخ نامعتبر از سرور (کد ${res.status}): ${raw.slice(0, 300)}` };
+    }
+    if (!res.ok) return { __error: true, message: data?.error || data?.message || `خطای سرور (کد ${res.status}): ${JSON.stringify(data)}` };
     return { scenarios: data.scenarios };
   } catch (e) {
     return { __error: true, message: "سرویس دستیار هوشمند در دسترس نیست: " + (e?.message || "") };
