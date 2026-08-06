@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { ShieldAlert, Plus, Trash2, Link as LinkIcon } from "lucide-react";
+import { ShieldAlert, Plus, Trash2, Link as LinkIcon, Sparkles } from "lucide-react";
 import { styles, THEME } from "../shared.js";
 import { toJalaliSafe } from "../personnel/jalaliDate.jsx";
 import {
   loadHcmsAssessments, saveHcmsAssessment, deleteHcmsAssessment, approveHcmsAssessment,
-  computeRiskLevel, worstLevel, RISK_LEVEL_META, parseRpnCode,
+  computeRiskLevel, worstLevel, RISK_LEVEL_META, parseRpnCode, generateAiScenarios,
 } from "./hcmsApi.js";
 
 const EMPTY_FORM = {
@@ -29,6 +29,9 @@ export default function HcmsDashboard({ onBack, currentUser, focusAnomalyId }) {
   const [residualLevels, setResidualLevels] = useState({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const [aiScenarios, setAiScenarios] = useState(null);
 
   const load = async () => {
     const rows = await loadHcmsAssessments();
@@ -78,6 +81,41 @@ export default function HcmsDashboard({ onBack, currentUser, focusAnomalyId }) {
 
   const setRpnField = (which, category, value) => {
     setForm((prev) => ({ ...prev, [which]: { ...prev[which], [category]: value } }));
+  };
+
+  // فیلد هدف برای اعمال RPN پیشنهادی: اگر «جنبه‌های زیست‌محیطی» پر شده
+  // (و «خطر» خالی است)، روی دسته‌ی «محیط‌زیست» اعمال می‌شود؛ در غیر این
+  // صورت روی «انسان» — بقیه‌ی دسته‌ها (تجهیزات/اعتبار) دست‌نخورده می‌ماند
+  // تا کارشناس خودش تشخیص بدهد که آیا اصلاً مصداق دارند یا نه.
+  const targetCategory = () => (form.environmentalAspect.trim() && !form.hazard.trim() ? "environment" : "human");
+
+  const handleGenerateAi = async () => {
+    const hazardText = form.hazard.trim() || form.environmentalAspect.trim();
+    if (!hazardText) { setAiError("اول «خطر» یا «جنبه‌های زیست‌محیطی» را وارد کن، بعد دستیار هوشمند را بزن"); return; }
+    setAiLoading(true);
+    setAiError("");
+    setAiScenarios(null);
+    const result = await generateAiScenarios(hazardText, form.activity, currentUser);
+    setAiLoading(false);
+    if (result?.__error) { setAiError(result.message); return; }
+    setAiScenarios(result.scenarios);
+  };
+
+  const handleSelectScenario = (scenario) => {
+    const cat = targetCategory();
+    const initialCode = `${scenario.severity}${scenario.probabilityLetter}`;
+    const residualCode = (scenario.residualSeverity !== undefined && scenario.residualProbabilityLetter)
+      ? `${scenario.residualSeverity}${scenario.residualProbabilityLetter}` : "";
+    setForm((prev) => ({
+      ...prev,
+      cause: scenario.cause || prev.cause,
+      consequence: scenario.consequence || prev.consequence,
+      existingControls: scenario.existingControls || prev.existingControls,
+      proposedControls: scenario.proposedControls || prev.proposedControls,
+      initialRpn: { ...prev.initialRpn, [cat]: initialCode },
+      residualRpn: residualCode ? { ...prev.residualRpn, [cat]: residualCode } : prev.residualRpn,
+    }));
+    setAiScenarios(null);
   };
 
   const handleSave = async () => {
@@ -155,6 +193,25 @@ export default function HcmsDashboard({ onBack, currentUser, focusAnomalyId }) {
           <textarea style={{ ...styles.input, minHeight: 60, fontFamily: "inherit" }} value={form.hazard} onChange={(e) => setForm({ ...form, hazard: e.target.value })} dir="rtl" />
           <label style={styles.label}>جنبه‌های زیست‌محیطی</label>
           <textarea style={{ ...styles.input, minHeight: 60, fontFamily: "inherit" }} value={form.environmentalAspect} onChange={(e) => setForm({ ...form, environmentalAspect: e.target.value })} dir="rtl" />
+
+          <button type="button" style={{ ...styles.smallButton, background: "#7c3aed", display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }} onClick={handleGenerateAi} disabled={aiLoading}>
+            <Sparkles size={13} /> {aiLoading ? "در حال تولید پیشنهاد..." : "تولید پیشنهاد با هوش مصنوعی"}
+          </button>
+          {aiError && <p style={styles.error}>{aiError}</p>}
+
+          {aiScenarios && (
+            <div style={{ marginBottom: 14 }}>
+              <p style={{ fontSize: 11.5, color: THEME.text3, marginBottom: 8 }}>
+                {aiScenarios.length} سناریو پیشنهاد شد — یکی را انتخاب کن تا فیلدهای فرم پر شوند (بعداً هم می‌توانی هر بخش را ویرایش کنی). این فقط یک پیشنهاده؛ خودت تصمیم نهایی رو می‌گیری.
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {aiScenarios.map((sc, i) => (
+                  <AiScenarioCard key={i} scenario={sc} onSelect={() => handleSelectScenario(sc)} />
+                ))}
+              </div>
+            </div>
+          )}
+
           <label style={styles.label}>علت</label>
           <textarea style={{ ...styles.input, minHeight: 50, fontFamily: "inherit" }} value={form.cause} onChange={(e) => setForm({ ...form, cause: e.target.value })} dir="rtl" />
           <label style={styles.label}>پیامد</label>
@@ -276,6 +333,44 @@ export default function HcmsDashboard({ onBack, currentUser, focusAnomalyId }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function AiScenarioCard({ scenario, onSelect }) {
+  const [level, setLevel] = useState(null);
+  const [residualLevel, setResidualLevel] = useState(null);
+  const initialCode = `${scenario.severity}${scenario.probabilityLetter}`;
+  const residualCode = scenario.residualSeverity !== undefined && scenario.residualProbabilityLetter ? `${scenario.residualSeverity}${scenario.residualProbabilityLetter}` : "";
+
+  useEffect(() => {
+    computeRiskLevel(initialCode).then(setLevel);
+    if (residualCode) computeRiskLevel(residualCode).then(setResidualLevel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialCode, residualCode]);
+
+  return (
+    <div style={{ border: `1px solid ${THEME.border}`, borderRadius: 8, padding: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <span style={{ fontWeight: 700, fontSize: 13, color: THEME.navy }}>{scenario.title || "سناریوی پیشنهادی"}</span>
+        <button type="button" style={{ ...styles.smallButton, background: "#7c3aed" }} onClick={onSelect}>انتخاب این سناریو</button>
+      </div>
+      <div style={{ fontSize: 11.5, color: THEME.text2, lineHeight: 1.8 }}>
+        {scenario.cause && <div><b>علت:</b> {scenario.cause}</div>}
+        {scenario.consequence && <div><b>پیامد:</b> {scenario.consequence}</div>}
+        {scenario.existingControls && <div><b>کنترل‌های موجود:</b> {scenario.existingControls}</div>}
+        {scenario.proposedControls && <div><b>اقدامات پیشنهادی:</b> {scenario.proposedControls}</div>}
+      </div>
+      <div style={{ display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 11, color: THEME.text3 }}>RPN اولیه: <b style={{ direction: "ltr", display: "inline-block" }}>{initialCode}</b></span>
+        {level && <LevelBadge level={level} />}
+        {residualCode && (
+          <>
+            <span style={{ fontSize: 11, color: THEME.text3 }}>RPN باقیمانده: <b style={{ direction: "ltr", display: "inline-block" }}>{residualCode}</b></span>
+            {residualLevel && <LevelBadge level={residualLevel} />}
+          </>
+        )}
+      </div>
     </div>
   );
 }

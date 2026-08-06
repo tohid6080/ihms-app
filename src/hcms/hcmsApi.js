@@ -1,4 +1,4 @@
-import { sb, sbOk, getCurrentCompanyId } from "../shared.js";
+import { sb, sbOk, getCurrentCompanyId, SUPABASE_URL } from "../shared.js";
 
 /**
  * HCMS (سیستم مدیریت و کنترل خطرات) — پیاده‌سازی دقیق ساختار فایل مرجع
@@ -310,6 +310,30 @@ export async function approveHcmsAssessment(id) {
 // وگرنه یک پیش‌نویس جدید می‌سازد و شرح آنومالی را — بر اساس دسته‌بندی‌اش —
 // در ستون «خطر» (ایمنی/بهداشت) یا «جنبه‌های زیست‌محیطی» (Environment) پر
 // می‌کند.
+// ---------- دستیار هوشمند تولید سناریو (فراخوانی Edge Function، هرگز مستقیم به هوش مصنوعی از مرورگر) ----------
+
+function matrixToSummaryText(grid) {
+  return grid.map((c) => `${c.severity}${c.letter}=${RISK_LEVEL_META[c.level]?.label || c.level}`).join("، ");
+}
+
+export async function generateAiScenarios(hazardText, activityContext, currentUser) {
+  const matrixSummary = matrixToSummaryText(await loadFullMatrix());
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/hcms-ai-assistant`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: currentUser?.username, password: currentUser?.password,
+        hazardText, activityContext, matrixSummary,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { __error: true, message: data?.error || "خطا در دریافت پیشنهاد هوش مصنوعی" };
+    return { scenarios: data.scenarios };
+  } catch (e) {
+    return { __error: true, message: "سرویس دستیار هوشمند در دسترس نیست: " + (e?.message || "") };
+  }
+}
 // ---------- یکپارچگی با آنومالی (ساخت دستی توسط ادمین/کارفرما از داخل HCMS) ----------
 export async function getOrCreateHcmsForAnomaly(anomaly, createdBy) {
   const existing = await loadHcmsByAnomaly(anomaly.id);
