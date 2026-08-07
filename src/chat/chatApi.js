@@ -90,7 +90,12 @@ export async function loadChatDirectory(myRole, myJobPositionId) {
   if (sbOk(employers)) employers.forEach((e) => { if (e.username) people.push({ username: e.username, name: e.name, role: e.role === "admin" ? "ADMIN" : "EMPLOYER", jobPositionId: e.job_position_id || "" }); });
   if (sbOk(contractors)) contractors.forEach((c) => { if (c.username) people.push({ username: c.username, name: c.name, role: "CONTRACTOR", jobPositionId: c.job_position_id || "" }); });
 
-  if (myRole === "ADMIN" || !myJobPositionId || !sbOk(rules) || rules.length === 0) return people;
+  // نکته: قبلاً ادمین همیشه از این فیلتر معاف بود. طبق خواسته‌ی کاربر این
+  // معافیت حذف شده — ادمین هم مثل هر نقش دیگری، اگر در ماتریس دسترسی چت
+  // با یک (نقش+عنوان شغلی) خاص بلاک شود، برای آن‌ها دیده نمی‌شود. ادمین‌ها
+  // معمولاً عنوان شغلی ندارند، برای همین «هویت» آن‌ها فقط بر پایه‌ی نقش
+  // («ADMIN») با jobPositionId خالی ساخته می‌شود.
+  if ((!myJobPositionId && myRole !== "ADMIN") || !sbOk(rules) || rules.length === 0) return people;
 
   const myKey = identityKey(myRole, myJobPositionId);
   const blockedKeys = new Set();
@@ -102,7 +107,7 @@ export async function loadChatDirectory(myRole, myJobPositionId) {
   });
   if (blockedKeys.size === 0) return people;
 
-  return people.filter((p) => p.role === "ADMIN" || !blockedKeys.has(identityKey(p.role, p.jobPositionId)));
+  return people.filter((p) => !blockedKeys.has(identityKey(p.role, p.jobPositionId)));
 }
 
 // ---------- تشخیص اینکه هر عنوان شغلی واقعاً سمت کدام نقش استفاده می‌شود ----------
@@ -149,18 +154,24 @@ export async function loadVisibilityRules() {
   return sbOk(rows) ? rows.map((r) => ({ roleA: r.role_a, jobPositionIdA: r.job_position_id_a, roleB: r.role_b, jobPositionIdB: r.job_position_id_b })) : [];
 }
 
+// عنوان شغلی ادمین معمولاً خالی/null است — PostgREST برای مقایسه با NULL به
+// «is.null» نیاز دارد، نه «eq.» با رشته‌ی خالی؛ این تابع شرط درست را می‌سازد
+function jobPosCondition(field, value) {
+  return value ? `${field}=eq.${value}` : `${field}=is.null`;
+}
+
 export async function setVisibilityRule(roleA, jobPositionIdA, roleB, jobPositionIdB, blocked) {
   if (blocked) {
-    const existing = await sb(`chat_visibility_rules?role_a=eq.${roleA}&job_position_id_a=eq.${jobPositionIdA}&role_b=eq.${roleB}&job_position_id_b=eq.${jobPositionIdB}&select=id`);
+    const existing = await sb(`chat_visibility_rules?role_a=eq.${roleA}&${jobPosCondition("job_position_id_a", jobPositionIdA)}&role_b=eq.${roleB}&${jobPosCondition("job_position_id_b", jobPositionIdB)}&select=id`);
     if (sbOk(existing) && existing.length > 0) return { ok: true };
-    const reverseExisting = await sb(`chat_visibility_rules?role_a=eq.${roleB}&job_position_id_a=eq.${jobPositionIdB}&role_b=eq.${roleA}&job_position_id_b=eq.${jobPositionIdA}&select=id`);
+    const reverseExisting = await sb(`chat_visibility_rules?role_a=eq.${roleB}&${jobPosCondition("job_position_id_a", jobPositionIdB)}&role_b=eq.${roleA}&${jobPosCondition("job_position_id_b", jobPositionIdA)}&select=id`);
     if (sbOk(reverseExisting) && reverseExisting.length > 0) return { ok: true };
-    const result = await sb("chat_visibility_rules", { method: "POST", body: JSON.stringify([{ role_a: roleA, job_position_id_a: jobPositionIdA, role_b: roleB, job_position_id_b: jobPositionIdB, company_id: getCurrentCompanyId() }]) });
+    const result = await sb("chat_visibility_rules", { method: "POST", body: JSON.stringify([{ role_a: roleA, job_position_id_a: jobPositionIdA || null, role_b: roleB, job_position_id_b: jobPositionIdB || null, company_id: getCurrentCompanyId() }]) });
     if (!sbOk(result)) return { __error: true, message: "خطا در ذخیره‌سازی: " + (result?.message || "نامشخص") };
     return { ok: true };
   }
-  await sb(`chat_visibility_rules?role_a=eq.${roleA}&job_position_id_a=eq.${jobPositionIdA}&role_b=eq.${roleB}&job_position_id_b=eq.${jobPositionIdB}`, { method: "DELETE", prefer: "return=minimal" });
-  await sb(`chat_visibility_rules?role_a=eq.${roleB}&job_position_id_a=eq.${jobPositionIdB}&role_b=eq.${roleA}&job_position_id_b=eq.${jobPositionIdA}`, { method: "DELETE", prefer: "return=minimal" });
+  await sb(`chat_visibility_rules?role_a=eq.${roleA}&${jobPosCondition("job_position_id_a", jobPositionIdA)}&role_b=eq.${roleB}&${jobPosCondition("job_position_id_b", jobPositionIdB)}`, { method: "DELETE", prefer: "return=minimal" });
+  await sb(`chat_visibility_rules?role_a=eq.${roleB}&${jobPosCondition("job_position_id_a", jobPositionIdB)}&role_b=eq.${roleA}&${jobPosCondition("job_position_id_b", jobPositionIdA)}`, { method: "DELETE", prefer: "return=minimal" });
   return { ok: true };
 }
 
@@ -388,6 +399,18 @@ export async function leaveConversation(conversationId, me) {
 
   const result = await sb(`chat_participants?conversation_id=eq.${conversationId}&username=eq.${encodeURIComponent(me.username)}`, { method: "DELETE" });
   if (!sbOk(result)) return { __error: true, message: "خطا در خروج از گفتگو: " + (result?.message || "نامشخص") };
+  return { ok: true };
+}
+
+// ---------- حذف گفتگو فقط از پنل خودِ کاربر (Delete for Me) ----------
+
+// برخلاف leaveConversation، اینجا هیچ پیام سیستمی برای بقیه ثبت نمی‌شود —
+// این یک عمل کاملاً شخصی و بی‌صداست: فقط عضویت خودِ همین کاربر حذف
+// می‌شود (پس دیگر در لیست چت‌هایش نمی‌بیندش)، پیام‌ها و بقیه‌ی اعضا و کل
+// تاریخچه‌ی گفتگو برای طرف مقابل دقیقاً دست‌نخورده باقی می‌مانند.
+export async function deleteConversationForMe(conversationId, username) {
+  const result = await sb(`chat_participants?conversation_id=eq.${conversationId}&username=eq.${encodeURIComponent(username)}`, { method: "DELETE" });
+  if (!sbOk(result)) return { __error: true, message: "خطا در حذف گفتگو: " + (result?.message || "نامشخص") };
   return { ok: true };
 }
 

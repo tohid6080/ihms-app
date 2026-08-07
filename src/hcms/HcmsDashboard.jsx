@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { ShieldAlert, Plus, Trash2, Link as LinkIcon, Sparkles } from "lucide-react";
+import { ShieldAlert, Plus, Trash2, Link as LinkIcon } from "lucide-react";
 import { styles, THEME } from "../shared.js";
 import { toJalaliSafe } from "../personnel/jalaliDate.jsx";
 import {
   loadHcmsAssessments, saveHcmsAssessment, deleteHcmsAssessment, approveHcmsAssessment,
-  computeRiskLevel, worstLevel, RISK_LEVEL_META, parseRpnCode, generateAiScenarios,
+  computeRiskLevel, worstLevel, RISK_LEVEL_META, parseRpnCode,
 } from "./hcmsApi.js";
+import { loadFieldSuggestions, learnFromApprovedAssessment } from "../riskknowledge/riskKnowledgeApi.js";
 
 const EMPTY_FORM = {
   process: "", activity: "", activityType: "", unit: "", equipment: "",
@@ -29,9 +30,8 @@ export default function HcmsDashboard({ onBack, currentUser, focusAnomalyId }) {
   const [residualLevels, setResidualLevels] = useState({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState("");
-  const [aiScenarios, setAiScenarios] = useState(null);
+  const [suggestions, setSuggestions] = useState({ cause: [], consequence: [], existingControls: [], proposedControls: [] });
+  const isContractor = currentUser?.role === "CONTRACTOR";
 
   const load = async () => {
     const rows = await loadHcmsAssessments();
@@ -62,7 +62,40 @@ export default function HcmsDashboard({ onBack, currentUser, focusAnomalyId }) {
   const initialOverall = worstLevel(Object.values(initialLevels));
   const residualOverall = worstLevel(Object.values(residualLevels));
 
-  const openNew = () => { setForm(EMPTY_FORM); setEditingId(null); setError(""); setShowForm(true); };
+  // با هر تغییر در فعالیت/خطر/جنبه‌ی زیست‌محیطی، بانک اطلاعاتی جستجو می‌شود
+  // و پیشنهادهای هر فیلد (علت/پیامد/کنترل موجود/کنترل پیشنهادی) به‌روز
+  // می‌شوند — این پیشنهادها فقط راهنما هستند، کاربر آزاد است انتخاب کند،
+  // ویرایش کند، یا نادیده بگیرد.
+  useEffect(() => {
+    const query = { activity: form.activity, hazard: form.hazard, environmentalAspect: form.environmentalAspect };
+    if (!query.activity?.trim() && !query.hazard?.trim() && !query.environmentalAspect?.trim()) {
+      setSuggestions({ cause: [], consequence: [], existingControls: [], proposedControls: [] });
+      return;
+    }
+    (async () => {
+      const [cause, consequence, existingControls, proposedControls] = await Promise.all([
+        loadFieldSuggestions(query, "cause"),
+        loadFieldSuggestions(query, "consequence"),
+        loadFieldSuggestions(query, "existingControls"),
+        loadFieldSuggestions(query, "recommendedControls"),
+      ]);
+      setSuggestions({ cause, consequence, existingControls, proposedControls });
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.activity, form.hazard, form.environmentalAspect]);
+
+  // یک گزینه‌ی پیشنهادی را به فیلد فرم اضافه می‌کند (اگر از قبل نبود)، در
+  // یک خط جدید — کاربر بعداً می‌تواند آزادانه ویرایش یا حذفش کند
+  const applySuggestion = (fieldKey, value) => {
+    setForm((prev) => {
+      const current = prev[fieldKey] || "";
+      if (current.includes(value)) return prev;
+      const updated = current ? `${current}\n${value}` : value;
+      return { ...prev, [fieldKey]: updated };
+    });
+  };
+
+  const openNew = () => { setForm({ ...EMPTY_FORM, status: isContractor ? "pending_review" : "active" }); setEditingId(null); setError(""); setShowForm(true); };
   const openEdit = (rec) => {
     setForm({
       process: rec.process, activity: rec.activity, activityType: rec.activityType, unit: rec.unit, equipment: rec.equipment,
@@ -81,41 +114,6 @@ export default function HcmsDashboard({ onBack, currentUser, focusAnomalyId }) {
 
   const setRpnField = (which, category, value) => {
     setForm((prev) => ({ ...prev, [which]: { ...prev[which], [category]: value } }));
-  };
-
-  // فیلد هدف برای اعمال RPN پیشنهادی: اگر «جنبه‌های زیست‌محیطی» پر شده
-  // (و «خطر» خالی است)، روی دسته‌ی «محیط‌زیست» اعمال می‌شود؛ در غیر این
-  // صورت روی «انسان» — بقیه‌ی دسته‌ها (تجهیزات/اعتبار) دست‌نخورده می‌ماند
-  // تا کارشناس خودش تشخیص بدهد که آیا اصلاً مصداق دارند یا نه.
-  const targetCategory = () => (form.environmentalAspect.trim() && !form.hazard.trim() ? "environment" : "human");
-
-  const handleGenerateAi = async () => {
-    const hazardText = form.hazard.trim() || form.environmentalAspect.trim();
-    if (!hazardText) { setAiError("اول «خطر» یا «جنبه‌های زیست‌محیطی» را وارد کن، بعد دستیار هوشمند را بزن"); return; }
-    setAiLoading(true);
-    setAiError("");
-    setAiScenarios(null);
-    const result = await generateAiScenarios(hazardText, form.activity, currentUser);
-    setAiLoading(false);
-    if (result?.__error) { setAiError(result.message); return; }
-    setAiScenarios(result.scenarios);
-  };
-
-  const handleSelectScenario = (scenario) => {
-    const cat = targetCategory();
-    const initialCode = `${scenario.severity}${scenario.probabilityLetter}`;
-    const residualCode = (scenario.residualSeverity !== undefined && scenario.residualProbabilityLetter)
-      ? `${scenario.residualSeverity}${scenario.residualProbabilityLetter}` : "";
-    setForm((prev) => ({
-      ...prev,
-      cause: scenario.cause || prev.cause,
-      consequence: scenario.consequence || prev.consequence,
-      existingControls: scenario.existingControls || prev.existingControls,
-      proposedControls: scenario.proposedControls || prev.proposedControls,
-      initialRpn: { ...prev.initialRpn, [cat]: initialCode },
-      residualRpn: residualCode ? { ...prev.residualRpn, [cat]: residualCode } : prev.residualRpn,
-    }));
-    setAiScenarios(null);
   };
 
   const handleSave = async () => {
@@ -151,6 +149,13 @@ export default function HcmsDashboard({ onBack, currentUser, focusAnomalyId }) {
     const approveResult = await approveHcmsAssessment(editingId);
     setSaving(false);
     if (approveResult?.__error) { setError(approveResult.message); return; }
+    // بعد از تأیید نهایی، بانک اطلاعاتی از این ارزیابی «یاد می‌گیرد» — اگر
+    // سناریوی واقعاً جدیدی بود، به بانک اضافه می‌شود؛ اگر شکست بخورد،
+    // مانع ذخیره‌شدن خودِ ارزیابی نمی‌شود (best-effort)
+    learnFromApprovedAssessment(
+      { ...form, id: editingId, proposedControls: form.proposedControls, initialRpn: form.initialRpn?.human || form.initialRpn?.environment, residualRpn: form.residualRpn?.human || form.residualRpn?.environment },
+      currentUser?.name
+    ).catch(() => {});
     setShowForm(false);
     await load();
   };
@@ -170,7 +175,9 @@ export default function HcmsDashboard({ onBack, currentUser, focusAnomalyId }) {
         {form.status === "pending_review" && (
           <div style={{ background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 8, padding: "10px 14px", marginBottom: 14 }}>
             <p style={{ fontSize: 12, color: "#92400e", margin: 0, lineHeight: 1.8 }}>
-              این رکورد به‌صورت خودکار از یک آنومالی و بر اساس منطق پیشنهادی سامانه ساخته شده و <b>هنوز نهایی نیست</b>. لطفاً همه‌ی فیلدها را بررسی، در صورت نیاز اصلاح کن، سپس «تأیید نهایی» را بزن.
+              {isContractor
+                ? <>این ارزیابی پس از ذخیره برای بررسی و <b>تأیید کارفرما</b> ارسال می‌شود.</>
+                : <>این رکورد یا خودکار (از یک آنومالی) ساخته شده یا توسط پیمانکار ارسال شده و <b>هنوز نهایی نیست</b>. لطفاً همه‌ی فیلدها را بررسی، در صورت نیاز اصلاح کن، سپس «تأیید نهایی» را بزن.</>}
             </p>
           </div>
         )}
@@ -194,30 +201,15 @@ export default function HcmsDashboard({ onBack, currentUser, focusAnomalyId }) {
           <label style={styles.label}>جنبه‌های زیست‌محیطی</label>
           <textarea style={{ ...styles.input, minHeight: 60, fontFamily: "inherit" }} value={form.environmentalAspect} onChange={(e) => setForm({ ...form, environmentalAspect: e.target.value })} dir="rtl" />
 
-          <button type="button" style={{ ...styles.smallButton, background: "#7c3aed", display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }} onClick={handleGenerateAi} disabled={aiLoading}>
-            <Sparkles size={13} /> {aiLoading ? "در حال تولید پیشنهاد..." : "تولید پیشنهاد با هوش مصنوعی"}
-          </button>
-          {aiError && <p style={styles.error}>{aiError}</p>}
-
-          {aiScenarios && (
-            <div style={{ marginBottom: 14 }}>
-              <p style={{ fontSize: 11.5, color: THEME.text3, marginBottom: 8 }}>
-                {aiScenarios.length} سناریو پیشنهاد شد — یکی را انتخاب کن تا فیلدهای فرم پر شوند (بعداً هم می‌توانی هر بخش را ویرایش کنی). این فقط یک پیشنهاده؛ خودت تصمیم نهایی رو می‌گیری.
-              </p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {aiScenarios.map((sc, i) => (
-                  <AiScenarioCard key={i} scenario={sc} onSelect={() => handleSelectScenario(sc)} />
-                ))}
-              </div>
-            </div>
-          )}
-
           <label style={styles.label}>علت</label>
           <textarea style={{ ...styles.input, minHeight: 50, fontFamily: "inherit" }} value={form.cause} onChange={(e) => setForm({ ...form, cause: e.target.value })} dir="rtl" />
+          <SuggestionChips items={suggestions.cause} onPick={(v) => applySuggestion("cause", v)} />
           <label style={styles.label}>پیامد</label>
           <input style={styles.input} value={form.consequence} onChange={(e) => setForm({ ...form, consequence: e.target.value })} dir="rtl" />
+          <SuggestionChips items={suggestions.consequence} onPick={(v) => applySuggestion("consequence", v)} />
           <label style={styles.label}>کنترل‌های موجود</label>
           <textarea style={{ ...styles.input, minHeight: 50, fontFamily: "inherit" }} value={form.existingControls} onChange={(e) => setForm({ ...form, existingControls: e.target.value })} dir="rtl" />
+          <SuggestionChips items={suggestions.existingControls} onPick={(v) => applySuggestion("existingControls", v)} />
         </div>
 
         <div style={{ ...styles.card, width: "auto", marginBottom: 14 }}>
@@ -248,6 +240,7 @@ export default function HcmsDashboard({ onBack, currentUser, focusAnomalyId }) {
           </div>
           <label style={styles.label}>کنترل‌های پیشنهادی</label>
           <textarea style={{ ...styles.input, minHeight: 60, fontFamily: "inherit" }} value={form.proposedControls} onChange={(e) => setForm({ ...form, proposedControls: e.target.value })} dir="rtl" />
+          <SuggestionChips items={suggestions.proposedControls} onPick={(v) => applySuggestion("proposedControls", v)} />
           <label style={styles.label}>برنامه بازیابی (Recovery Plan)</label>
           <textarea style={{ ...styles.input, minHeight: 50, fontFamily: "inherit" }} value={form.recoveryPlan} onChange={(e) => setForm({ ...form, recoveryPlan: e.target.value })} dir="rtl" />
         </div>
@@ -285,8 +278,10 @@ export default function HcmsDashboard({ onBack, currentUser, focusAnomalyId }) {
 
         {error && <p style={styles.error}>{error}</p>}
         <div style={{ display: "flex", gap: 8 }}>
-          <button type="button" style={styles.button} onClick={handleSave} disabled={saving}>{saving ? "در حال ذخیره..." : "ذخیره‌ی ارزیابی ریسک"}</button>
-          {form.status === "pending_review" && (
+          <button type="button" style={styles.button} onClick={handleSave} disabled={saving}>
+            {saving ? "در حال ذخیره..." : (isContractor && form.status === "pending_review" ? "ارسال برای تأیید کارفرما" : "ذخیره‌ی ارزیابی ریسک")}
+          </button>
+          {!isContractor && form.status === "pending_review" && (
             <button type="button" style={{ ...styles.button, background: "#166534" }} onClick={handleApprove} disabled={saving}>تأیید نهایی</button>
           )}
         </div>
@@ -337,40 +332,25 @@ export default function HcmsDashboard({ onBack, currentUser, focusAnomalyId }) {
   );
 }
 
-function AiScenarioCard({ scenario, onSelect }) {
-  const [level, setLevel] = useState(null);
-  const [residualLevel, setResidualLevel] = useState(null);
-  const initialCode = `${scenario.severity}${scenario.probabilityLetter}`;
-  const residualCode = scenario.residualSeverity !== undefined && scenario.residualProbabilityLetter ? `${scenario.residualSeverity}${scenario.residualProbabilityLetter}` : "";
-
-  useEffect(() => {
-    computeRiskLevel(initialCode).then(setLevel);
-    if (residualCode) computeRiskLevel(residualCode).then(setResidualLevel);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialCode, residualCode]);
-
+function SuggestionChips({ items, onPick }) {
+  if (!items || items.length === 0) return null;
   return (
-    <div style={{ border: `1px solid ${THEME.border}`, borderRadius: 8, padding: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-        <span style={{ fontWeight: 700, fontSize: 13, color: THEME.navy }}>{scenario.title || "سناریوی پیشنهادی"}</span>
-        <button type="button" style={{ ...styles.smallButton, background: "#7c3aed" }} onClick={onSelect}>انتخاب این سناریو</button>
-      </div>
-      <div style={{ fontSize: 11.5, color: THEME.text2, lineHeight: 1.8 }}>
-        {scenario.cause && <div><b>علت:</b> {scenario.cause}</div>}
-        {scenario.consequence && <div><b>پیامد:</b> {scenario.consequence}</div>}
-        {scenario.existingControls && <div><b>کنترل‌های موجود:</b> {scenario.existingControls}</div>}
-        {scenario.proposedControls && <div><b>اقدامات پیشنهادی:</b> {scenario.proposedControls}</div>}
-      </div>
-      <div style={{ display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 11, color: THEME.text3 }}>RPN اولیه: <b style={{ direction: "ltr", display: "inline-block" }}>{initialCode}</b></span>
-        {level && <LevelBadge level={level} />}
-        {residualCode && (
-          <>
-            <span style={{ fontSize: 11, color: THEME.text3 }}>RPN باقیمانده: <b style={{ direction: "ltr", display: "inline-block" }}>{residualCode}</b></span>
-            {residualLevel && <LevelBadge level={residualLevel} />}
-          </>
-        )}
-      </div>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 6, marginBottom: 10 }}>
+      <span style={{ fontSize: 10, color: THEME.text3, alignSelf: "center" }}>پیشنهاد بانک اطلاعاتی:</span>
+      {items.map((item, i) => (
+        <button
+          key={i}
+          type="button"
+          onClick={() => onPick(item)}
+          title={item}
+          style={{
+            fontSize: 10.5, padding: "3px 9px", borderRadius: 999, background: "#eef1f5", color: THEME.navyMid,
+            border: `1px solid ${THEME.border}`, cursor: "pointer", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}
+        >
+          + {item}
+        </button>
+      ))}
     </div>
   );
 }

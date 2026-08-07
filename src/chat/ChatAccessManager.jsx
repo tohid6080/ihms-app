@@ -7,7 +7,11 @@ import {
   loadExtraIdentities, addExtraIdentity, removeExtraIdentity,
 } from "./chatApi.js";
 
-const ROLE_LABEL = { EMPLOYER: "کارفرما", CONTRACTOR: "پیمانکار" };
+const ROLE_LABEL = { ADMIN: "ادمین", EMPLOYER: "کارفرما", CONTRACTOR: "پیمانکار" };
+
+// ادمین معمولاً عنوان شغلی مشخصی ندارد، برای همین هویتش یک ردیف/ستون ثابت
+// در ماتریس است (jobPositionId=null)، نه چیزی که از «مدیریت عناوین شغلی» بیاید.
+const ADMIN_IDENTITY = { role: "ADMIN", jobPositionId: null, title: "ادمین" };
 
 /**
  * "مدیریت دسترسی چت" — ماتریس (نقش + عنوان‌شغلی) × (نقش + عنوان‌شغلی).
@@ -16,13 +20,14 @@ const ROLE_LABEL = { EMPLOYER: "کارفرما", CONTRACTOR: "پیمانکار" 
  * کارگاه» می‌تواند هم سمت کارفرما هم سمت پیمانکار استفاده شود — این دو نفر
  * باید بتوانند مستقل از هم بلاک شوند.
  *
- * لیست پایه‌ی ماتریس فقط عناوینی است که واقعاً حساب واقعی با آن نقش دارند
- * (تا شلوغ نشود) — اما چون گاهی لازم است عنوانی را زودتر از ساختن حساب
- * واقعی‌اش در ماتریس تنظیم کرد، امکان «افزودن دستی» هم هست (جدول
+ * لیست پایه‌ی ماتریس، «ادمین» (همیشه ثابت) + عناوینی است که واقعاً حساب
+ * واقعی با آن نقش دارند — اما چون گاهی لازم است عنوانی را زودتر از ساختن
+ * حساب واقعی‌اش در ماتریس تنظیم کرد، امکان «افزودن دستی» هم هست (جدول
  * chat_matrix_extra_identities).
  *
- * حساب‌های ادمین همیشه برای همه قابل‌مشاهده می‌مانند — عمداً در این ماتریس
- * نیستند.
+ * برخلاف نسخه‌ی قبلی، ادمین دیگر از بلاک‌شدن معاف نیست — اگر خانه‌ی
+ * تلاقی «ادمین» با یک (نقش+عنوان شغلی) خاص بلاک شود، آن افراد در «گفتگوی
+ * جدید» ادمین را نمی‌بینند و برعکس.
  */
 export default function ChatAccessManager({ onBack }) {
   const [positions, setPositions] = useState([]);
@@ -44,7 +49,7 @@ export default function ChatAccessManager({ onBack }) {
   };
   useEffect(() => { load(); }, []);
 
-  // پایه: عناوینی که واقعاً حساب دارند + عناوینی که دستی اضافه شده‌اند
+  // پایه: «ادمین» (ثابت) + عناوینی که واقعاً حساب دارند + عناوینی که دستی اضافه شده‌اند
   const identities = [];
   const seen = new Set();
   const addIdentity = (role, jobPositionId, title) => {
@@ -53,6 +58,7 @@ export default function ChatAccessManager({ onBack }) {
     seen.add(key);
     identities.push({ role, jobPositionId, title });
   };
+  addIdentity(ADMIN_IDENTITY.role, ADMIN_IDENTITY.jobPositionId, ADMIN_IDENTITY.title);
   positions.forEach((p) => {
     if (usedByRole.employerJobPositionIds.has(p.id)) addIdentity("EMPLOYER", p.id, p.title);
     if (usedByRole.contractorJobPositionIds.has(p.id)) addIdentity("CONTRACTOR", p.id, p.title);
@@ -96,17 +102,9 @@ export default function ChatAccessManager({ onBack }) {
     await load();
   };
 
-  // آیا این هویت جزو «دستی‌اضافه‌شده»هاست (نه خودکار از روی حساب واقعی)؟
-  const isExtra = (id) => extraIdentities.some((e) => e.jobPositionId === id.jobPositionId && e.role === id.role)
+  // آیا این هویت جزو «دستی‌اضافه‌شده»هاست (نه خودکار از روی حساب واقعی، نه خودِ ادمین)؟
+  const isExtra = (id) => id.role !== "ADMIN" && extraIdentities.some((e) => e.jobPositionId === id.jobPositionId && e.role === id.role)
     && !((id.role === "EMPLOYER" && usedByRole.employerJobPositionIds.has(id.jobPositionId)) || (id.role === "CONTRACTOR" && usedByRole.contractorJobPositionIds.has(id.jobPositionId)));
-
-  // عناوینی که هنوز توی ماتریس نیستن (برای فرم افزودن)
-  const availableToAdd = [];
-  positions.forEach((p) => {
-    ["EMPLOYER", "CONTRACTOR"].forEach((role) => {
-      if (!seen.has(`${role}-${p.id}`)) availableToAdd.push({ role, jobPositionId: p.id, title: p.title });
-    });
-  });
 
   if (loading) return <div style={{ padding: 24, textAlign: "center", color: THEME.text3 }}>در حال بارگذاری...</div>;
 
@@ -123,7 +121,7 @@ export default function ChatAccessManager({ onBack }) {
         </button>
       </div>
       <p style={{ color: THEME.text3, fontSize: 12.5, marginBottom: 14 }}>
-        روی خانه‌ی تلاقی دو مورد کلیک کن تا آن‌ها نتوانند برای همدیگر «گفتگوی جدید» شروع کنند. عناوینی که حساب واقعی دارند خودکار نشان داده می‌شوند؛ عناوینی که هنوز حسابی باهاشون نیست را می‌توانی با دکمه‌ی بالا دستی اضافه کنی (مثلاً برای تنظیم زودهنگام، قبل از ساختن حساب). ادمین همیشه برای همه قابل‌مشاهده می‌ماند.
+        روی خانه‌ی تلاقی دو مورد کلیک کن تا آن‌ها نتوانند برای همدیگر «گفتگوی جدید» شروع کنند. «ادمین» یک ردیف/ستون ثابت است (چون معمولاً عنوان شغلی ندارد) و — برخلاف قبل — قابل‌بلاک‌شدن است. عناوینی که حساب واقعی دارند خودکار نشان داده می‌شوند؛ عناوینی که هنوز حسابی باهاشون نیست را می‌توانی با دکمه‌ی بالا دستی اضافه کنی.
       </p>
 
       {showAdd && (
@@ -159,7 +157,7 @@ export default function ChatAccessManager({ onBack }) {
                 {identities.map((id) => (
                   <th key={`${id.role}-${id.jobPositionId}`} style={{ padding: "6px 8px", borderBottom: `1.5px solid ${THEME.border}`, minWidth: 70 }}>
                     <div style={{ writingMode: "vertical-rl", transform: "rotate(180deg)", fontSize: 10, color: THEME.text2, whiteSpace: "nowrap", margin: "0 auto", height: 110 }}>
-                      {id.title} ({ROLE_LABEL[id.role]})
+                      {id.title} {id.role !== "ADMIN" ? `(${ROLE_LABEL[id.role]})` : ""}
                     </div>
                   </th>
                 ))}
@@ -169,7 +167,7 @@ export default function ChatAccessManager({ onBack }) {
               {identities.map((rowId) => (
                 <tr key={`${rowId.role}-${rowId.jobPositionId}`} style={{ borderBottom: `1px solid ${THEME.border}` }}>
                   <td style={{ position: "sticky", insetInlineStart: 0, background: THEME.surface, padding: "6px 10px", fontWeight: 600, whiteSpace: "nowrap" }}>
-                    {rowId.title} ({ROLE_LABEL[rowId.role]})
+                    {rowId.title} {rowId.role !== "ADMIN" ? `(${ROLE_LABEL[rowId.role]})` : ""}
                     {isExtra(rowId) && (
                       <button type="button" onClick={() => handleRemoveExtra(rowId.jobPositionId, rowId.role)} title="حذف از ماتریس" style={{ background: "none", border: "none", cursor: "pointer", marginRight: 6, color: THEME.text3 }}>
                         <X size={11} />

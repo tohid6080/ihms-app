@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Archive, FileSpreadsheet, Trash2, Users, AlertTriangle, GitBranch, History, Truck, Tag } from "lucide-react";
+import { Archive, FileSpreadsheet, Trash2, Users, AlertTriangle, GitBranch, History, Truck, Tag, ShieldAlert } from "lucide-react";
 import * as XLSX from "xlsx";
 import { sb, sbOk, styles, THEME, getCurrentCompanyId } from "../shared.js";
 import { uploadBase64ToStorage, deleteFromStorage, parseStorageUrl } from "./storageUpload.js";
@@ -63,7 +63,7 @@ async function loadLastArchiveLogs() {
   return sbOk(rows) ? rows : [];
 }
 
-const MODULE_LABELS = { personnel: "پرسنل", anomaly: "آنومالی", bowtie: "BowTie" };
+const MODULE_LABELS = { personnel: "پرسنل", anomaly: "آنومالی", bowtie: "BowTie", machinery: "ماشین‌آلات", scaffold: "داربست", hcms: "HCMS" };
 
 // ================= Personnel =================
 
@@ -650,6 +650,68 @@ async function deleteScaffoldArchive(archived, setProgress) {
   }
 }
 
+// ================= HCMS (ارزیابی ریسک) =================
+// فقط ارزیابی‌های «تأییدشده» (status = active) آرشیو می‌شوند — همان قانون
+// تأیید قبل از آرشیو که برای بقیه‌ی ماژول‌ها هم اعمال شده. HCMS فایل
+// پیوست ندارد، پس این آرشیو فقط اکسل است، بدون ZIP.
+
+const HCMS_ARCHIVABLE_STATUS = "active";
+
+async function loadArchivableHcms() {
+  const companyFilter = getCurrentCompanyId() ? `&company_id=eq.${getCurrentCompanyId()}` : "";
+  const rows = await sb(`hcms_risk_assessments?status=eq.${HCMS_ARCHIVABLE_STATUS}&select=*&order=updated_at.asc${companyFilter}`);
+  return sbOk(rows) ? rows : [];
+}
+
+async function buildHcmsArchive(setProgress, performedBy) {
+  const records = await loadArchivableHcms();
+  setProgress("در حال ساخت فایل اکسل ارزیابی ریسک...");
+
+  const headers = [
+    "ردیف", "فرآیند", "فعالیت", "واحد", "تجهیز", "خطر", "جنبه‌های زیست‌محیطی", "علت", "پیامد",
+    "کنترل‌های موجود", "الزام قانونی",
+    "RPN اولیه - انسان", "RPN اولیه - تجهیزات", "RPN اولیه - محیط‌زیست", "RPN اولیه - اعتبار",
+    "سطح ریسک اولیه (کلی)",
+    "Permit to Work", "کنترل‌های پیشنهادی", "برنامه بازیابی", "مسئول اجرا",
+    "RPN باقیمانده - انسان", "RPN باقیمانده - تجهیزات", "RPN باقیمانده - محیط‌زیست", "RPN باقیمانده - اعتبار",
+    "سطح ریسک باقیمانده (کلی)",
+    "شرایط اضطرار", "Critical Element", "ثبت‌کننده", "تاریخ ایجاد", "تاریخ آخرین تغییر",
+  ];
+
+  const aoa = [headers, ...records.map((r, idx) => [
+    idx + 1, r.process || "—", r.activity || "—", r.unit || "—", r.equipment || "—",
+    r.hazard || "—", r.environmental_aspect || "—", r.cause || "—", r.consequence || "—",
+    r.existing_controls || "—", r.legal_requirement || "—",
+    r.initial_rpn_human || "—", r.initial_rpn_equipment || "—", r.initial_rpn_environment || "—", r.initial_rpn_reputation || "—",
+    r.initial_level_overall || "—",
+    r.permit_to_work || "—", r.proposed_controls || "—", r.recovery_plan || "—", r.responsible_person || "—",
+    r.residual_rpn_human || "—", r.residual_rpn_equipment || "—", r.residual_rpn_environment || "—", r.residual_rpn_reputation || "—",
+    r.residual_level_overall || "—",
+    r.emergency_condition || "—", r.critical_element || "—",
+    r.created_by || "—", toJalaliDateTime(r.created_at) || "—", toJalaliDateTime(r.updated_at) || "—",
+  ])];
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!cols"] = headers.map(() => ({ wch: 16 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "ارزیابی ریسک HCMS");
+  const stamp = jalaliFileTimestamp();
+  const excelFileName = `HCMS_Archive_${stamp}.xlsx`;
+  setProgress("در حال ساخت فایل ZIP آرشیو...");
+  await buildArchiveZip({ workbook: wb, excelFileName, attachments: [], zipFileName: `HCMS_Archive_${stamp}.zip` });
+
+  await logArchiveOperation({ module: "hcms", performedBy, recordCount: records.length, fileCount: 0, totalSizeMb: 0 });
+
+  return { recordIds: records.map((r) => r.id) };
+}
+
+async function deleteHcmsArchive(archived, setProgress) {
+  for (const id of archived.recordIds) {
+    setProgress("در حال حذف ارزیابی‌های ریسک...");
+    await sb(`hcms_risk_assessments?id=eq.${id}`, { method: "DELETE", prefer: "return=minimal" });
+  }
+}
+
 // ================= UI =================
 
 const TABS = [
@@ -658,11 +720,13 @@ const TABS = [
   { key: "bowtie", label: "BowTie", icon: GitBranch },
   { key: "machinery", label: "ماشین‌آلات", icon: Truck },
   { key: "scaffold", label: "داربست", icon: Tag },
+  { key: "hcms", label: "HCMS", icon: ShieldAlert },
 ];
 
 export default function ArchiveManager({ onBack, currentUser }) {
+  const isAdmin = currentUser?.role === "ADMIN";
   const [tab, setTab] = useState("personnel");
-  const [counts, setCounts] = useState({ personnel: 0, anomaly: 0, bowtie: 0, machinery: 0, scaffold: 0 });
+  const [counts, setCounts] = useState({ personnel: 0, anomaly: 0, bowtie: 0, machinery: 0, scaffold: 0, hcms: 0 });
   const [storageMb, setStorageMb] = useState(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -673,10 +737,10 @@ export default function ArchiveManager({ onBack, currentUser }) {
 
   const load = async () => {
     setLoading(true);
-    const [p, a, b, m, s, mb, logs] = await Promise.all([
-      loadArchivablePersonnel(), loadArchivableAnomalies(), loadArchivableBowties(), loadArchivableMachinery(), loadArchivableScaffoldTags(), fetchStorageSizeMB(), loadLastArchiveLogs(),
+    const [p, a, b, m, s, h, mb, logs] = await Promise.all([
+      loadArchivablePersonnel(), loadArchivableAnomalies(), loadArchivableBowties(), loadArchivableMachinery(), loadArchivableScaffoldTags(), loadArchivableHcms(), fetchStorageSizeMB(), loadLastArchiveLogs(),
     ]);
-    setCounts({ personnel: p.length, anomaly: a.length, bowtie: b.length, machinery: m.length, scaffold: s.length });
+    setCounts({ personnel: p.length, anomaly: a.length, bowtie: b.length, machinery: m.length, scaffold: s.length, hcms: h.length });
     setStorageMb(mb);
     setLastLogs(logs);
     setExported(null);
@@ -711,7 +775,8 @@ export default function ArchiveManager({ onBack, currentUser }) {
       else if (tab === "anomaly") result = await buildAnomalyArchive(setProgressText, performedByLabel);
       else if (tab === "bowtie") result = await buildBowtieArchive(setProgressText, diagramUrls, performedByLabel);
       else if (tab === "machinery") result = await buildMachineryArchive(setProgressText, performedByLabel);
-      else result = await buildScaffoldArchive(setProgressText, performedByLabel);
+      else if (tab === "scaffold") result = await buildScaffoldArchive(setProgressText, performedByLabel);
+      else result = await buildHcmsArchive(setProgressText, performedByLabel);
       setExported({ module: tab, ...result });
       setLastLogs(await loadLastArchiveLogs());
     } catch (e) {
@@ -723,6 +788,7 @@ export default function ArchiveManager({ onBack, currentUser }) {
   };
 
   const runDelete = async () => {
+    if (!isAdmin) { alert("حذف رکوردهای آرشیوشده فقط توسط ادمین قابل‌انجام است."); return; }
     if (!exported) return;
     const n = (exported.recordIds || []).length;
     if (!confirm(`${n} رکورد به‌همراه فایل‌های مرتبط از سرور حذف شود؟ لطفاً مطمئن شوید فایل اکسل را ذخیره کرده‌اید — این عمل قابل بازگشت نیست.`)) return;
@@ -732,7 +798,8 @@ export default function ArchiveManager({ onBack, currentUser }) {
       else if (exported.module === "anomaly") await deleteAnomalyArchive(exported, setProgressText);
       else if (exported.module === "bowtie") await deleteBowtieArchive(exported, setProgressText);
       else if (exported.module === "machinery") await deleteMachineryArchive(exported, setProgressText);
-      else await deleteScaffoldArchive(exported, setProgressText);
+      else if (exported.module === "scaffold") await deleteScaffoldArchive(exported, setProgressText);
+      else await deleteHcmsArchive(exported, setProgressText);
     } catch (e) {
       alert(`خطا در حذف: ${e?.message || "نامشخص"}`);
     }
@@ -755,7 +822,7 @@ export default function ArchiveManager({ onBack, currentUser }) {
       </div>
       <p style={{ color: THEME.text3, fontSize: 12.5, marginTop: 4, marginBottom: 14, lineHeight: 1.8 }}>
         فقط رکوردهای با تأیید نهایی وارد آرشیو می‌شوند (پرسنل: وضعیت «فعال»؛ آنومالی: وضعیت «بسته‌شده»؛ BowTie: «تأییدشده»/«بایگانی»).
-        کلیک روی هر لینک، همان فایل را دانلود می‌کند. حذف از سرور فقط بعد از دانلود موفق اکسل و تأیید شما انجام می‌شود.
+        کلیک روی هر لینک، همان فایل را دانلود می‌کند. {isAdmin ? "حذف از سرور فقط بعد از دانلود موفق اکسل و تأیید شما انجام می‌شود." : "خروجی‌گیری برای همه در دسترس است؛ حذف رکوردها از سرور فقط توسط ادمین انجام می‌شود."}
         {storageMb !== null && <> فضای فعلی Storage: <b style={{ color: THEME.text2 }}>{storageMb} مگابایت</b>.</>}
       </p>
 
@@ -822,7 +889,7 @@ export default function ArchiveManager({ onBack, currentUser }) {
           <FileSpreadsheet size={15} /> {processing && !exported ? progressText : "ساخت و دانلود فایل اکسل آرشیو"}
         </button>
 
-        {exported && exported.module === tab && (
+        {isAdmin && exported && exported.module === tab && (
           <button
             type="button"
             style={{ ...styles.button, background: THEME.danger, marginTop: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
@@ -831,6 +898,11 @@ export default function ArchiveManager({ onBack, currentUser }) {
           >
             <Trash2 size={15} /> {processing ? progressText : `حذف موارد آرشیوشده از سرور (${(exported.recordIds || []).length})`}
           </button>
+        )}
+        {!isAdmin && exported && exported.module === tab && (
+          <p style={{ fontSize: 11.5, color: THEME.text3, marginTop: 10, lineHeight: 1.8 }}>
+            فایل با موفقیت دانلود شد. حذف رکوردهای آرشیوشده از سرور فقط توسط ادمین انجام می‌شود.
+          </p>
         )}
       </div>
 

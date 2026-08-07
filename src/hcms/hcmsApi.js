@@ -1,4 +1,4 @@
-import { sb, sbOk, getCurrentCompanyId, SUPABASE_URL, SUPABASE_ANON_KEY } from "../shared.js";
+import { sb, sbOk, getCurrentCompanyId } from "../shared.js";
 
 /**
  * HCMS (سیستم مدیریت و کنترل خطرات) — پیاده‌سازی دقیق ساختار فایل مرجع
@@ -286,7 +286,7 @@ export async function createSuggestedHcmsFromAnomaly(anomaly, hazardText, create
 
   const isEnvironment = anomaly.category === "Environment";
   const draft = {
-    activity: anomaly.area || "",
+    activity: anomaly.category || "",
     hazard: isEnvironment ? "" : hazardText,
     environmentalAspect: isEnvironment ? hazardText : "",
     consequence: `پیشنهاد سیستم بر اساس دسته‌بندی «${anomaly.category || "—"}» و سطح ریسک «${anomaly.riskLevel || "—"}» ثبت‌شده در آنومالی — پیش از تأیید نهایی بررسی و در صورت نیاز اصلاح شود.`,
@@ -306,56 +306,18 @@ export async function approveHcmsAssessment(id) {
   return rowFromDb(rows[0]);
 }
 
+// ---------- یکپارچگی با آنومالی (ساخت دستی توسط ادمین/کارفرما از داخل HCMS) ----------
 // اگر برای این آنومالی از قبل ارزیابی HCMS ساخته شده، همان را برمی‌گرداند؛
 // وگرنه یک پیش‌نویس جدید می‌سازد و شرح آنومالی را — بر اساس دسته‌بندی‌اش —
 // در ستون «خطر» (ایمنی/بهداشت) یا «جنبه‌های زیست‌محیطی» (Environment) پر
 // می‌کند.
-// ---------- دستیار هوشمند تولید سناریو (فراخوانی Edge Function، هرگز مستقیم به هوش مصنوعی از مرورگر) ----------
-
-function matrixToSummaryText(grid) {
-  return grid.map((c) => `${c.severity}${c.letter}=${RISK_LEVEL_META[c.level]?.label || c.level}`).join("، ");
-}
-
-export async function generateAiScenarios(hazardText, activityContext, currentUser) {
-  const matrixSummary = matrixToSummaryText(await loadFullMatrix());
-  try {
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/hcms-ai-assistant`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        // دروازه‌ی Supabase قبل از رسیدن به کد خودِ تابع، وجود یک هدر
-        // Authorization معتبر را چک می‌کند؛ بدون این هدر، درخواست همان‌جا
-        // با یک خطای عمومیِ خودِ Supabase رد می‌شود (نه پیام خطای ما) —
-        // برای همین همان کلید publishable که همه‌جای برنامه استفاده می‌شود کافی است.
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        apikey: SUPABASE_ANON_KEY,
-      },
-      body: JSON.stringify({
-        username: currentUser?.username, password: currentUser?.password,
-        hazardText, activityContext, matrixSummary,
-      }),
-    });
-    let data;
-    try {
-      data = await res.json();
-    } catch {
-      const raw = await res.text().catch(() => "");
-      return { __error: true, message: `پاسخ نامعتبر از سرور (کد ${res.status}): ${raw.slice(0, 300)}` };
-    }
-    if (!res.ok) return { __error: true, message: data?.error || data?.message || `خطای سرور (کد ${res.status}): ${JSON.stringify(data)}` };
-    return { scenarios: data.scenarios };
-  } catch (e) {
-    return { __error: true, message: "سرویس دستیار هوشمند در دسترس نیست: " + (e?.message || "") };
-  }
-}
-// ---------- یکپارچگی با آنومالی (ساخت دستی توسط ادمین/کارفرما از داخل HCMS) ----------
 export async function getOrCreateHcmsForAnomaly(anomaly, createdBy) {
   const existing = await loadHcmsByAnomaly(anomaly.id);
   if (existing.length > 0) return existing[0];
 
   const isEnvironment = anomaly.category === "Environment";
   const draft = {
-    activity: anomaly.area || "",
+    activity: anomaly.category || "",
     hazard: isEnvironment ? "" : anomaly.description || "",
     environmentalAspect: isEnvironment ? anomaly.description || "" : "",
     consequence: "",

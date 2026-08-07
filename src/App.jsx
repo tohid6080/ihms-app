@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { AlertTriangle, Plus, X, ChevronRight, LogOut, CheckCircle2, Clock, Camera, ImagePlus, Trash2, FileSpreadsheet, FileText, User, Users, ShieldCheck, LayoutGrid, BarChart3, Briefcase, Settings, Archive, Truck, Tag, MessageCircle, GraduationCap, ShieldOff, ShieldAlert } from "lucide-react";
+import { AlertTriangle, Plus, X, ChevronRight, LogOut, CheckCircle2, Clock, Camera, ImagePlus, Trash2, FileSpreadsheet, FileText, User, Users, ShieldCheck, LayoutGrid, BarChart3, Briefcase, Settings, Archive, Truck, Tag, MessageCircle, GraduationCap, ShieldOff, ShieldAlert, Database } from "lucide-react";
 import * as XLSX from "xlsx";
 import BowTieDashboard from "./bowtie/BowTieDashboard.jsx";
 import HcmsDashboard from "./hcms/HcmsDashboard.jsx";
 import HcmsMatrixManager from "./hcms/HcmsMatrixManager.jsx";
+import RiskKnowledgeManager from "./riskknowledge/RiskKnowledgeManager.jsx";
+import AnomalyCategoryManager from "./anomalycategories/AnomalyCategoryManager.jsx";
+import { loadActiveAnomalyCategories } from "./anomalycategories/anomalyCategoriesApi.js";
 import { getOrCreateHcmsForAnomaly, createSuggestedHcmsFromAnomaly } from "./hcms/hcmsApi.js";
 import PersonnelForm from "./personnel/PersonnelForm.jsx";
 import PersonnelDashboard from "./personnel/PersonnelDashboard.jsx";
@@ -60,12 +63,6 @@ const RISK_LEVELS = [
   { value: "Low", label: "پایین (Low)", color: "#16a34a", bg: "#dcfce7" },
 ];
 
-const ANOMALY_CATEGORIES = [
-  "ماشین آلات", "Hygiene", "Environment", "Lifting", "PPE", "Work at Height",
-  "جوشکاری و برشکاری", "Scaffolding", "Excavation", "House Keeping", "Fire",
-  "Lighting", "Electricity", "Meeting", "Access Way", "Permit",
-];
-
 const ANOMALY_FORMATS = [
   "بازرسی", "مدیریت تغییر", "عوامل زیان‌آور محیط کار", "ممیزی", "معاینات ادواری", "گزارش روزانه", "سایر",
 ];
@@ -76,6 +73,7 @@ const ANOMALY_FORMATS = [
 // بقیه به‌عنوان جای‌نگه‌دار (Placeholder) نمایش داده می‌شوند تا در فازهای بعدی توسعه یابند.
 const HSE_MODULES = [
   { key: "chat", label: "چت" },
+  { key: "archiveManagement", label: "آرشیو فایل‌ها" },
   {
     key: "anomalyReport",
     label: "مدیریت عدم انطباق‌ها (Anomaly Report)",
@@ -89,10 +87,10 @@ const HSE_MODULES = [
     key: "riskAssessment",
     label: "مدیریت ارزیابی ریسک (Risk Assessment)",
     icon: true,
-    employerOnly: true,
     sub: [
       { key: "bowtieDashboard", label: "BowTie Risk Analysis" },
       { key: "hcmsDashboard", label: "HCMS - سیستم مدیریت و کنترل خطرات" },
+      { key: "riskKnowledgeManagement", label: "بانک اطلاعاتی ارزیابی ریسک", employerOnly: true },
     ],
   },
   {
@@ -1318,7 +1316,8 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
   const [date, setDate] = useState(todayISO());
   const [time, setTime] = useState(nowHM());
   const [riskLevel, setRiskLevel] = useState("Med");
-  const [category, setCategory] = useState(ANOMALY_CATEGORIES[0]);
+  const [category, setCategory] = useState("");
+  const [categoryOptions, setCategoryOptions] = useState([]);
   const [format, setFormat] = useState(ANOMALY_FORMATS[0]);
   const [description, setDescription] = useState("");
   const [follower, setFollower] = useState("");
@@ -1348,6 +1347,14 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
     (async () => {
       const records = await loadContractors();
       setContractorNames(records.map((r) => r.name));
+    })();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      const cats = await loadActiveAnomalyCategories();
+      setCategoryOptions(cats.map((c) => c.name));
+      if (cats.length > 0) setCategory((prev) => prev || cats[0].name);
     })();
   }, []);
 
@@ -1498,7 +1505,7 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
           <div>
             <label style={styles.label}>دسته‌بندی</label>
             <select style={styles.input} value={category} onChange={(e) => setCategory(e.target.value)} dir="rtl">
-              {ANOMALY_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              {categoryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div>
@@ -2354,6 +2361,8 @@ function AdminDashboard({ onLogout, currentUser }) {
             <MenuRow icon={GraduationCap} label="مدیریت آموزش‌های تخصصی" onClick={() => setView("trainingManagement")} />
             <MenuRow icon={ShieldOff} label="مدیریت دسترسی چت" onClick={() => setView("chatAccessManagement")} />
             <MenuRow icon={ShieldAlert} label="ماتریس ریسک HCMS" onClick={() => setView("hcmsMatrixManagement")} />
+            <MenuRow icon={Database} label="بانک اطلاعاتی ارزیابی ریسک" onClick={() => setView("riskKnowledgeManagement")} />
+            <MenuRow icon={Tag} label="دسته‌بندی‌های آنومالی" onClick={() => setView("anomalyCategoryManagement")} />
           </div>
         </div>
       )}
@@ -2361,6 +2370,8 @@ function AdminDashboard({ onLogout, currentUser }) {
       {view === "trainingManagement" && <TrainingManager onBack={() => setView("systemManagement")} />}
       {view === "chatAccessManagement" && <ChatAccessManager onBack={() => setView("systemManagement")} />}
       {view === "hcmsMatrixManagement" && <HcmsMatrixManager onBack={() => setView("systemManagement")} />}
+      {view === "riskKnowledgeManagement" && <RiskKnowledgeManager onBack={() => setView("systemManagement")} currentUser={currentUser} />}
+      {view === "anomalyCategoryManagement" && <AnomalyCategoryManager onBack={() => setView("systemManagement")} />}
 
       {view === "anomalyReport" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
@@ -2478,6 +2489,7 @@ function EmployerDashboard({ onLogout, currentUser }) {
   const openModule = (mod) => {
     if (mod.key === "profile") { setView("profile"); return; }
     if (mod.key === "chat") { setView("chat"); return; }
+    if (mod.key === "archiveManagement") { setView("archiveManagement"); return; }
     if (!isModuleVisible(permMap, mod.key)) { alert("شما مجوز دسترسی به این بخش را ندارید"); return; }
     if (mod.employerOnly && !canEdit) { alert("این بخش فقط با دسترسی کامل در دسترس است"); return; }
     if (mod.key === "managementDashboard") { setView("managementDashboard"); return; }
@@ -2591,10 +2603,12 @@ function EmployerDashboard({ onLogout, currentUser }) {
 
       {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel={canEdit ? "کارفرما" : "کارفرما (فقط مشاهده)"} />}
       {view === "chat" && <ChatDashboard onBack={() => setView("menu")} currentUser={currentUser} />}
+      {view === "riskKnowledgeManagement" && <RiskKnowledgeManager onBack={() => setView("riskAssessment")} currentUser={currentUser} />}
       {view === "anomalyForm" && anomalyCanEdit && <AnomalyForm onBack={() => setView("anomalyReport")} currentUser={currentUser} onSaved={() => setView("anomalyList")} />}
       {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="EMPLOYER" currentUser={currentUser} readOnly={!canEdit || getAccessLevel(permMap, "anomalyReport") === "view"} initialStatusFilter={navFilter?.module === "anomaly" ? navFilter.statusFilter : undefined} initialRiskFilter={navFilter?.module === "anomaly" ? navFilter.riskFilter : undefined} initialContractorFilter={navFilter?.module === "anomaly" ? navFilter.contractorFilter : undefined} />}
       {view === "bowtieDashboard" && <BowTieDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} readOnly={!canEdit || getAccessLevel(permMap, "riskAssessment") === "view"} />}
       {view === "hcmsDashboard" && <HcmsDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} />}
+      {view === "archiveManagement" && <ArchiveManager onBack={() => setView("menu")} currentUser={currentUser} />}
       {view === "personnelForm" && <PersonnelForm onBack={() => setView("personnelAccess")} currentUser={currentUser} onSaved={() => setView("personnelAccess")} />}
       {view === "personnelDashboard" && <PersonnelDashboard onBack={() => setView("personnelAccess")} currentUser={currentUser} role="EMPLOYER" readOnly={!canEdit || getAccessLevel(permMap, "personnelAccess") === "view"} initialStatusFilter={navFilter?.module === "personnel" ? navFilter.statusFilter : undefined} initialContractorFilter={navFilter?.module === "personnel" ? navFilter.contractorFilter : undefined} />}
       {view === "machineryDashboard" && <MachineryDashboard onBack={() => setView("machineryManagement")} currentUser={currentUser} role="EMPLOYER" readOnly={!canEdit || getAccessLevel(permMap, "machineryManagement") === "view"} initialApprovalFilter={navFilter?.module === "machinery" ? navFilter.approvalFilter : undefined} initialContractorFilter={navFilter?.module === "machinery" ? navFilter.contractorFilter : undefined} />}
@@ -2611,6 +2625,7 @@ function ContractorDashboard({ onLogout, currentUser }) {
   const [navFilter, setNavFilter] = useState(null);
   const [permMap, setPermMap] = useState({});
   const [smartItems, setSmartItems] = useState([]);
+  const riskMod = HSE_MODULES.find((m) => m.key === "riskAssessment");
   const [chatUnread, setChatUnread] = useState(0);
   useEffect(() => {
     const load = () => loadUnreadTotal(currentUser?.username).then(setChatUnread);
@@ -2637,6 +2652,7 @@ function ContractorDashboard({ onLogout, currentUser }) {
   const openModule = (mod) => {
     if (mod.key === "profile") { setView("profile"); return; }
     if (mod.key === "chat") { setView("chat"); return; }
+    if (mod.key === "archiveManagement") { setView("archiveManagement"); return; }
     if (!isModuleVisible(permMap, mod.key)) { alert("شما مجوز دسترسی به این بخش را ندارید"); return; }
     if (mod.employerOnly) { alert("این بخش فقط برای کارفرما/ادمین در دسترس است"); return; }
     if (mod.key === "managementDashboard") { setView("managementDashboard"); return; }
@@ -2734,8 +2750,23 @@ function ContractorDashboard({ onLogout, currentUser }) {
         </div>
       )}
 
+      {view === "riskAssessment" && (
+        <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
+          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{riskMod.label}</h3>
+          <div style={styles.menuList2}>
+            {riskMod.sub.filter((s) => !s.employerOnly).map((s) => (
+              <MenuRow key={s.key} icon={ShieldCheck} label={s.label} onClick={() => setView(s.key)} accent />
+            ))}
+          </div>
+        </div>
+      )}
+
       {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel="پیمانکار" />}
       {view === "chat" && <ChatDashboard onBack={() => setView("menu")} currentUser={currentUser} />}
+      {view === "hcmsDashboard" && <HcmsDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} />}
+      {view === "bowtieDashboard" && <BowTieDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} readOnly={getAccessLevel(permMap, "riskAssessment") === "view"} />}
+      {view === "archiveManagement" && <ArchiveManager onBack={() => setView("menu")} currentUser={currentUser} />}
       {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="CONTRACTOR" currentUser={currentUser} readOnly={getAccessLevel(permMap, "anomalyReport") === "view"} initialStatusFilter={navFilter?.module === "anomaly" ? navFilter.statusFilter : undefined} initialRiskFilter={navFilter?.module === "anomaly" ? navFilter.riskFilter : undefined} />}
       {view === "personnelForm" && getAccessLevel(permMap, "personnelAccess") !== "view" && <PersonnelForm onBack={() => setView("personnelAccess")} currentUser={currentUser} onSaved={() => setView("personnelAccess")} />}
       {view === "personnelDashboard" && <PersonnelDashboard onBack={() => setView("personnelAccess")} currentUser={currentUser} role="CONTRACTOR" readOnly={getAccessLevel(permMap, "personnelAccess") === "view"} initialStatusFilter={navFilter?.module === "personnel" ? navFilter.statusFilter : undefined} />}

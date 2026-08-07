@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { MessageCircle, Plus, Users, Paperclip } from "lucide-react";
+import { MessageCircle, Plus, Users, Paperclip, Trash2 } from "lucide-react";
 import { styles, THEME } from "../shared.js";
 import { toJalaliDateTime } from "../personnel/jalaliDate.jsx";
-import { loadMyConversations, loadChatDirectory, findOrCreateDirectConversation, createConversation } from "./chatApi.js";
+import { loadMyConversations, loadChatDirectory, findOrCreateDirectConversation, createConversation, deleteConversationForMe } from "./chatApi.js";
 import ChatThread from "./ChatThread.jsx";
 
 const ROLE_LABEL = { ADMIN: "ادمین", EMPLOYER: "کارفرما", CONTRACTOR: "پیمانکار" };
@@ -73,6 +73,15 @@ export default function ChatDashboard({ onBack, currentUser }) {
     if (convId?.__error) { console.error("[chat-ui] startGroup: خطا", convId.message); alert(convId.message); return; }
     setShowNew(false);
     setOpenConvId(convId);
+    await load();
+  };
+
+  // حذف گفتگو فقط از پنل خودِ کاربر — بی‌صدا، بدون تاثیر روی طرف مقابل یا پیام‌ها
+  const handleDeleteConversation = async (e, conversationId) => {
+    e.stopPropagation();
+    if (!confirm("آیا از حذف این گفتگو مطمئن هستید؟")) return;
+    const result = await deleteConversationForMe(conversationId, currentUser.username);
+    if (result?.__error) { alert(result.message); return; }
     await load();
   };
 
@@ -175,6 +184,14 @@ export default function ChatDashboard({ onBack, currentUser }) {
                 {c.unreadCount}
               </span>
             )}
+            <button
+              type="button"
+              title="حذف گفتگو"
+              onClick={(e) => handleDeleteConversation(e, c.id)}
+              style={{ background: "none", border: "none", cursor: "pointer", padding: 6, display: "flex", alignItems: "center", flexShrink: 0 }}
+            >
+              <Trash2 size={14} color={THEME.text3} />
+            </button>
           </div>
         );
       })}
