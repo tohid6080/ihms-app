@@ -47,9 +47,9 @@ export default function NotificationPanel({ smartItems = [], onNavigate }) {
       {open && (
         <div
           style={{
-            position: "absolute", top: 44, insetInlineEnd: 0, width: 320, maxHeight: 420, overflowY: "auto",
+            position: "fixed", top: 58, insetInlineEnd: 8, width: "calc(100vw - 16px)", maxWidth: 320, maxHeight: "70vh", overflowY: "auto",
             background: THEME.surface, border: `1px solid ${THEME.border}`, borderRadius: 12,
-            boxShadow: "0 10px 30px -8px rgba(15,42,63,0.25)", zIndex: 30, padding: 10,
+            boxShadow: "0 10px 30px -8px rgba(15,42,63,0.25)", zIndex: 30, padding: 10, boxSizing: "border-box",
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>

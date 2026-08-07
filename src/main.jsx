@@ -8,7 +8,13 @@ import App from "./App.jsx";
 // در Explorer در برابر d:/projects که Vite داخلی می‌بیند)، پلاگین
 // html-inline-proxy در resolve کردن ماژول مجازی <style> شکست می‌خورد.
 const baseStyle = document.createElement("style");
-baseStyle.textContent = "* { box-sizing: border-box; } body { margin: 0; -webkit-font-smoothing: antialiased; }";
+baseStyle.textContent = `
+  * { box-sizing: border-box; }
+  html, body { margin: 0; overflow-x: hidden; -webkit-font-smoothing: antialiased; }
+  #root { min-height: 100vh; }
+  img { max-width: 100%; }
+  input, select, textarea, button { max-width: 100%; }
+`;
 document.head.appendChild(baseStyle);
 
 if ("serviceWorker" in navigator) {

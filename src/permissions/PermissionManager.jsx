@@ -78,7 +78,7 @@ export default function PermissionManager({ onBack }) {
         برای هر ماژول، سطح دسترسی حساب را مشخص کنید: بدون دسترسی (پنهان)، فقط مشاهده، یا ویرایش کامل.
       </p>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         <button type="button" onClick={() => setAccountType("employer")} style={tabBtnStyle(accountType === "employer")}>
           <Users size={14} /> حساب‌های کارفرما
         </button>

@@ -214,10 +214,10 @@ export default function HomeDashboard({ role, currentUser, onNavigate, onBack })
           <MiniStat icon={Bell} label="اعلان مهم" value={summary.notifications} color="#1d4ed8" />
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.7fr) minmax(0, 1fr)", gap: 10, marginBottom: 10 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))", gap: 10, marginBottom: 10 }}>
           <Panel title="وضعیت HSE پیمانکاران" icon={ShieldCheck}>
             <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5, minWidth: 480 }}>
                 <thead>
                   <tr style={{ borderBottom: `1.5px solid ${THEME.border}`, color: THEME.text3 }}>
                     <th style={{ textAlign: "right", padding: "5px 6px", fontWeight: 600 }}>پیمانکار</th>

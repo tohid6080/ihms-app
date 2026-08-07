@@ -22,6 +22,7 @@ import { offlineWrite, offlineWriteFile } from "./offline/offlineWrite.js";
 import DbSizeWarningBanner from "./offline/DbSizeWarningBanner.jsx";
 import { checkUploadAllowed } from "./offline/dbSizeMonitor.js";
 import ArchiveManager from "./offline/ArchiveManager.jsx";
+import { LanguageProvider, useLanguage } from "./i18n/LanguageContext.jsx";
 import AdminAnalytics from "./admin/AdminAnalytics.jsx";
 import ChatDashboard from "./chat/ChatDashboard.jsx";
 import TrainingManager from "./training/TrainingManager.jsx";
@@ -147,6 +148,7 @@ function contractorFromRow(r) {
     companyId: r.company_id || "",
     phone: r.phone || "",
     email: r.email || "",
+    preferredLanguage: r.preferred_language || "fa",
     createdAt: r.created_at || "",
   };
 }
@@ -160,6 +162,7 @@ async function updateMyProfile(role, id, patch) {
   const dbPatch = {};
   if ("phone" in patch) dbPatch.phone = patch.phone;
   if ("email" in patch) dbPatch.email = patch.email;
+  if ("preferredLanguage" in patch) dbPatch.preferred_language = patch.preferredLanguage;
   const rows = await sb(`${table}?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(dbPatch) });
   if (!sbOk(rows)) return { __error: true, message: sbErrMsg(rows) };
   return rows[0];
@@ -225,6 +228,7 @@ function employerAccountFromRow(r) {
     companyId: r.company_id || "",
     phone: r.phone || "",
     email: r.email || "",
+    preferredLanguage: r.preferred_language || "fa",
     createdAt: r.created_at || "",
   };
 }
@@ -816,6 +820,7 @@ function IhmsLogo({ size = 96 }) {
 }
 
 function LoginScreen({ onLogin }) {
+  const { lang, setLang, t, dir } = useLanguage();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -834,6 +839,7 @@ function LoginScreen({ onLogin }) {
       setError("");
       setCurrentCompanyId(employerMatch.companyId);
       trackLogin(employerMatch);
+      if (employerMatch.preferredLanguage) setLang(employerMatch.preferredLanguage);
       onLogin(employerMatch);
       return;
     }
@@ -846,6 +852,7 @@ function LoginScreen({ onLogin }) {
       setError("");
       setCurrentCompanyId(found.companyId);
       trackLogin(found);
+      if (found.preferredLanguage) setLang(found.preferredLanguage);
       onLogin(found);
       return;
     }
@@ -862,42 +869,69 @@ function LoginScreen({ onLogin }) {
       trackLogin(seedUser);
       onLogin(seedUser);
     } else {
-      setError("نام کاربری یا رمز عبور اشتباه است");
+      setError(t("invalidCredentials"));
     }
   };
 
   return (
     <div style={styles.centerScreen}>
-      <div style={{ ...styles.card, width: 360 }}>
+      <div style={{ ...styles.card, width: 360, direction: dir }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+          <LanguageToggle lang={lang} setLang={setLang} />
+        </div>
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
           <IhmsLogo size={120} />
         </div>
         <h2 style={{ textAlign: "center", marginBottom: 2, fontSize: 18, direction: "ltr", color: THEME.navy, fontWeight: 700, letterSpacing: "-0.01em" }}>{APP_NAME}</h2>
         <p style={{ textAlign: "center", color: THEME.text3, fontSize: 12.5, marginTop: 4, marginBottom: 22, fontWeight: 500 }}>
-          ورود به سامانه مدیریت یکپارچه ایمنی، بهداشت و محیط زیست
+          {t("loginTagline")}
         </p>
 
-        <label style={styles.label}>نام کاربری</label>
-        <input style={styles.input} value={username} onChange={(e) => setUsername(e.target.value)} dir="rtl" />
+        <label style={{ ...styles.label, textAlign: dir === "rtl" ? "right" : "left" }}>{t("username")}</label>
+        <input style={styles.input} value={username} onChange={(e) => setUsername(e.target.value)} dir={dir} />
 
-        <label style={styles.label}>رمز عبور</label>
+        <label style={{ ...styles.label, textAlign: dir === "rtl" ? "right" : "left" }}>{t("password")}</label>
         <input
           style={styles.input}
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
-          dir="rtl"
+          dir={dir}
         />
 
         {error && <p style={styles.error}>{error}</p>}
 
         <button type="button" style={{ ...styles.button, opacity: loading ? 0.75 : 1 }} onClick={handleSubmit} disabled={loading}>
-          {loading ? "در حال بررسی..." : "ورود"}
+          {loading ? t("loggingIn") : t("loginButton")}
         </button>
 
-        <p style={styles.hint}>Designed by: Tohid Mirasadi</p>
+        <p style={styles.hint}>{t("designedBy")}</p>
       </div>
+    </div>
+  );
+}
+
+// تعویض فارسی/English — روی صفحه‌ی ورود و توی تنظیمات پروفایل استفاده می‌شود
+function LanguageToggle({ lang, setLang, compact }) {
+  const btn = (value, label) => (
+    <button
+      type="button"
+      onClick={() => setLang(value)}
+      style={{
+        padding: compact ? "6px 12px" : "5px 11px", borderRadius: 7, fontSize: compact ? 12.5 : 11.5, fontWeight: 600, cursor: "pointer",
+        border: `1.5px solid ${lang === value ? THEME.teal : THEME.border}`,
+        background: lang === value ? THEME.teal : "#fff", color: lang === value ? "#fff" : THEME.text2,
+        fontFamily: THEME.font,
+      }}
+    >
+      {label}
+    </button>
+  );
+  return (
+    <div style={{ display: "flex", gap: 6 }}>
+      {btn("fa", "فارسی")}
+      {btn("en", "English")}
     </div>
   );
 }
@@ -925,6 +959,7 @@ function Avatar({ name, size = 40, bg }) {
 }
 
 function ProfileView({ onBack, currentUser, roleLabel }) {
+  const { lang, setLang, t, dir } = useLanguage();
   const [companyName, setCompanyName] = useState("");
   const [lastLogin, setLastLogin] = useState(null);
   const [phone, setPhone] = useState(currentUser?.phone || "");
@@ -954,6 +989,16 @@ function ProfileView({ onBack, currentUser, roleLabel }) {
     setTimeout(() => setSaved(false), 2500);
   };
 
+  // انتخاب زبان بلافاصله روی هدر/این صفحه اعمال می‌شود (setLang)، و همزمان
+  // به‌عنوان ترجیح دائمی همین کاربر در دیتابیس ذخیره می‌شود — دفعه‌ی بعد که
+  // از هر دستگاهی وارد شود، همین زبان روی هدرش اعمال خواهد شد.
+  const handleLanguageChange = async (value) => {
+    setLang(value);
+    if (currentUser?.role && currentUser?.id) {
+      await updateMyProfile(currentUser.role, currentUser.id, { preferredLanguage: value });
+    }
+  };
+
   const Field = ({ label, value }) => (
     <div style={{ marginBottom: 12 }}>
       <div style={{ fontSize: 11, color: THEME.text3, fontWeight: 600, marginBottom: 3 }}>{label}</div>
@@ -962,8 +1007,8 @@ function ProfileView({ onBack, currentUser, roleLabel }) {
   );
 
   return (
-    <div style={{ maxWidth: 460, margin: "0 auto", padding: 24 }}>
-      {onBack && <div style={styles.backLink} onClick={onBack}>← بازگشت به منو</div>}
+    <div style={{ maxWidth: 460, margin: "0 auto", padding: 24, direction: dir }}>
+      {onBack && <div style={styles.backLink} onClick={onBack}>{t("backToMenu")}</div>}
       <div style={{ ...styles.card, width: "auto" }}>
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
           <Avatar name={currentUser?.name} size={64} />
@@ -972,32 +1017,37 @@ function ProfileView({ onBack, currentUser, roleLabel }) {
         <p style={{ textAlign: "center", color: THEME.text3, fontSize: 12.5, marginTop: 0, marginBottom: 20 }}>{roleLabel}</p>
 
         <div style={{ borderTop: `1px solid ${THEME.border}`, paddingTop: 14, marginBottom: 6 }}>
-          <p style={{ fontSize: 11, color: THEME.text3, fontWeight: 700, marginBottom: 10 }}>اطلاعات سازمانی (فقط ادمین تغییر می‌دهد)</p>
+          <p style={{ fontSize: 11, color: THEME.text3, fontWeight: 700, marginBottom: 10 }}>{t("orgInfoTitle")}</p>
           <div style={styles.formGrid}>
-            <Field label="نام و نام خانوادگی" value={currentUser?.name} />
-            <Field label={currentUser?.role === "CONTRACTOR" ? "پیمانکار" : "شرکت"} value={companyName} />
+            <Field label={t("fullName")} value={currentUser?.name} />
+            <Field label={currentUser?.role === "CONTRACTOR" ? t("contractorLabel") : t("companyLabel")} value={companyName} />
           </div>
           <div style={styles.formGrid}>
-            <Field label="سمت سازمانی" value={currentUser?.jobPositionTitle} />
-            <Field label="نقش کاربری" value={roleLabel} />
+            <Field label={t("jobTitle")} value={currentUser?.jobPositionTitle} />
+            <Field label={t("userRole")} value={roleLabel} />
           </div>
           <div style={styles.formGrid}>
-            <Field label="تاریخ عضویت" value={isoToJalaliDisplay(currentUser?.createdAt)} />
-            <Field label="آخرین ورود قبلی" value={lastLogin ? isoToJalaliDisplay(lastLogin) : "اولین ورود شماست"} />
+            <Field label={t("joinDate")} value={isoToJalaliDisplay(currentUser?.createdAt)} />
+            <Field label={t("lastLogin")} value={lastLogin ? isoToJalaliDisplay(lastLogin) : t("firstLogin")} />
           </div>
         </div>
 
         <div style={{ borderTop: `1px solid ${THEME.border}`, paddingTop: 14, marginTop: 8 }}>
-          <p style={{ fontSize: 11, color: THEME.text3, fontWeight: 700, marginBottom: 10 }}>اطلاعات تماس (قابل ویرایش توسط شما)</p>
-          <label style={styles.label}>شماره موبایل</label>
+          <p style={{ fontSize: 11, color: THEME.text3, fontWeight: 700, marginBottom: 10 }}>{t("systemLanguage")}</p>
+          <LanguageToggle lang={lang} setLang={handleLanguageChange} compact />
+        </div>
+
+        <div style={{ borderTop: `1px solid ${THEME.border}`, paddingTop: 14, marginTop: 14 }}>
+          <p style={{ fontSize: 11, color: THEME.text3, fontWeight: 700, marginBottom: 10 }}>{t("contactInfoTitle")}</p>
+          <label style={styles.label}>{t("mobileNumber")}</label>
           <input style={styles.input} value={phone} onChange={(e) => setPhone(e.target.value)} dir="ltr" placeholder="09xxxxxxxxx" />
-          <label style={styles.label}>ایمیل سازمانی</label>
+          <label style={styles.label}>{t("orgEmail")}</label>
           <input style={styles.input} value={email} onChange={(e) => setEmail(e.target.value)} dir="ltr" placeholder="name@company.com" type="email" />
 
           {error && <p style={styles.error}>{error}</p>}
-          {saved && <p style={{ color: "#166534", fontSize: 12.5, marginTop: 6 }}>ذخیره شد.</p>}
+          {saved && <p style={{ color: "#166534", fontSize: 12.5, marginTop: 6 }}>{t("savedConfirm")}</p>}
           <button type="button" style={{ ...styles.button, marginTop: 10 }} onClick={handleSave} disabled={saving}>
-            {saving ? "در حال ذخیره..." : "ذخیره‌ی تغییرات"}
+            {saving ? t("saving") : t("saveChanges")}
           </button>
         </div>
 
@@ -2231,26 +2281,27 @@ const headerIconBtnStyle = {
   background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 9, cursor: "pointer",
 };
 
-function DashboardHeader({ panelLabel, currentUser, onLogout, onOpenSettings, smartItems, onNavigate }) {
+function DashboardHeader({ panelLabelKey, currentUser, onLogout, onOpenSettings, smartItems, onNavigate }) {
+  const { t, dir } = useLanguage();
   return (
-    <div style={styles.topBar}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    <div style={{ ...styles.topBar, direction: dir }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: "1 1 auto" }}>
         <Avatar name={currentUser?.name} size={38} bg="rgba(255,255,255,0.18)" />
-        <div>
-          <div style={styles.appNameTag}>{panelLabel}</div>
-          <div style={{ fontSize: 14.5, fontWeight: 700, color: "#fff" }}>{currentUser?.name || "—"}</div>
+        <div style={{ minWidth: 0, lineHeight: 1.35 }}>
+          <div style={styles.appNameTag}>{t(panelLabelKey)}</div>
+          <div style={{ fontSize: 14.5, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "60vw" }}>{currentUser?.name || "—"}</div>
           {currentUser?.jobPositionTitle && (
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", marginTop: 1 }}>{currentUser.jobPositionTitle}</div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "60vw" }}>{currentUser.jobPositionTitle}</div>
           )}
         </div>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
         <OnlineIndicator />
         {smartItems && <NotificationPanel smartItems={smartItems} onNavigate={onNavigate} />}
-        <button type="button" onClick={onOpenSettings} style={headerIconBtnStyle} title="تنظیمات">
+        <button type="button" onClick={onOpenSettings} style={headerIconBtnStyle} title={t("settingsTooltip")}>
           <Settings size={16} color="#fff" />
         </button>
-        <button style={styles.logoutButton} onClick={onLogout}><LogOut size={14} style={{ marginLeft: 6 }} />خروج</button>
+        <button style={{ ...styles.logoutButton, padding: "8px clamp(10px, 3vw, 16px)" }} onClick={onLogout}><LogOut size={14} style={{ marginLeft: 6 }} />{t("logout")}</button>
       </div>
     </div>
   );
@@ -2330,7 +2381,7 @@ function AdminDashboard({ onLogout, currentUser }) {
 
   return (
     <div style={styles.dashboardWrapper}>
-      <DashboardHeader panelLabel="پنل ادمین" currentUser={currentUser} onLogout={onLogout} onOpenSettings={() => setView("profile")} />
+      <DashboardHeader panelLabelKey="panelAdmin" currentUser={currentUser} onLogout={onLogout} onOpenSettings={() => setView("profile")} />
 
       {view === "menu" && (
         <div style={styles.menuList}>
@@ -2516,7 +2567,7 @@ function EmployerDashboard({ onLogout, currentUser }) {
   return (
     <div style={styles.dashboardWrapper}>
       <DashboardHeader
-        panelLabel={`پنل کارفرما${!canEdit ? " (فقط مشاهده)" : ""}`}
+        panelLabelKey={canEdit ? "panelEmployer" : "panelEmployerViewOnly"}
         currentUser={currentUser}
         onLogout={onLogout}
         onOpenSettings={() => setView("profile")}
@@ -2677,7 +2728,7 @@ function ContractorDashboard({ onLogout, currentUser }) {
   return (
     <div style={styles.dashboardWrapper}>
       <DashboardHeader
-        panelLabel="پنل پیمانکار"
+        panelLabelKey="panelContractor"
         currentUser={currentUser}
         onLogout={onLogout}
         onOpenSettings={() => setView("profile")}
@@ -2837,7 +2888,9 @@ export default function App() {
   const isSuperAdminRoute = typeof window !== "undefined" && window.location.hash === "#super-admin";
   return (
     <ErrorBoundary>
-      {isSuperAdminRoute ? <SuperAdminRoot /> : <AppInner />}
+      <LanguageProvider>
+        {isSuperAdminRoute ? <SuperAdminRoot /> : <AppInner />}
+      </LanguageProvider>
     </ErrorBoundary>
   );
 }

@@ -826,17 +826,17 @@ export default function ArchiveManager({ onBack, currentUser }) {
         {storageMb !== null && <> فضای فعلی Storage: <b style={{ color: THEME.text2 }}>{storageMb} مگابایت</b>.</>}
       </p>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         {TABS.map((t) => (
           <button
             key={t.key}
             type="button"
             onClick={() => { setTab(t.key); setExported(null); }}
             style={{
-              display: "flex", alignItems: "center", gap: 6, flex: 1, justifyContent: "center",
+              display: "flex", alignItems: "center", gap: 6, flex: "1 1 auto", minWidth: 108, justifyContent: "center",
               background: tab === t.key ? THEME.teal : "#fff", color: tab === t.key ? "#fff" : THEME.text2,
               border: `1.5px solid ${tab === t.key ? THEME.teal : THEME.border}`, borderRadius: 9,
-              padding: "9px 8px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: THEME.font,
+              padding: "9px 8px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: THEME.font, whiteSpace: "nowrap",
             }}
           >
             <t.icon size={14} /> {t.label} ({counts[t.key]})
