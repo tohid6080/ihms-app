@@ -4,6 +4,7 @@ import {
   FileClock, Bell, TrendingUp, Sparkles, RadioTower,
 } from "lucide-react";
 import { THEME } from "../shared.js";
+import { useLanguage } from "../i18n/LanguageContext.jsx";
 import { loadPersonnelList, loadNotifications } from "../personnel/personnelApi.js";
 import { loadDashboardAnomalies, loadDashboardContractors, loadDashboardMachinery, loadDashboardScaffold, loadDashboardBowties } from "./homeDashboardApi.js";
 
@@ -27,6 +28,7 @@ function daysUntil(iso) {
 }
 
 export default function HomeDashboard({ role, currentUser, onNavigate, onBack }) {
+  const { t, dir } = useLanguage();
   const [personnel, setPersonnel] = useState([]);
   const [anomalies, setAnomalies] = useState([]);
   const [contractors, setContractors] = useState([]);
@@ -172,61 +174,61 @@ export default function HomeDashboard({ role, currentUser, onNavigate, onBack })
   }, [scopedAnomalies]);
 
   const healthStatusData = [
-    { label: "فعال", value: scopedPersonnel.filter((p) => p.status === "active").length, color: "#16a34a" },
-    { label: "نیازمند مراجعه", value: scopedPersonnel.filter((p) => p.status === "pending_health_visit" || p.status === "pending_health_result").length, color: "#d97706" },
-    { label: "منقضی", value: scopedPersonnel.filter((p) => p.status === "health_expired").length, color: "#c92a2a" },
+    { label: t("chartActive"), value: scopedPersonnel.filter((p) => p.status === "active").length, color: "#16a34a" },
+    { label: t("chartNeedsVisit"), value: scopedPersonnel.filter((p) => p.status === "pending_health_visit" || p.status === "pending_health_result").length, color: "#d97706" },
+    { label: t("chartExpired"), value: scopedPersonnel.filter((p) => p.status === "health_expired").length, color: "#c92a2a" },
   ];
   const machineryStatusData = [
-    { label: "تأییدشده", value: scopedMachinery.filter((m) => m.approval_status === "approved").length, color: "#16a34a" },
-    { label: "در انتظار", value: scopedMachinery.filter((m) => m.approval_status === "pending").length, color: "#d97706" },
-    { label: "نیاز به اصلاح/رد", value: scopedMachinery.filter((m) => m.approval_status === "needs_correction" || m.approval_status === "rejected").length, color: "#c92a2a" },
+    { label: t("chartApproved"), value: scopedMachinery.filter((m) => m.approval_status === "approved").length, color: "#16a34a" },
+    { label: t("chartPending"), value: scopedMachinery.filter((m) => m.approval_status === "pending").length, color: "#d97706" },
+    { label: t("chartNeedsCorrection"), value: scopedMachinery.filter((m) => m.approval_status === "needs_correction" || m.approval_status === "rejected").length, color: "#c92a2a" },
   ];
   const perfChartData = contractorRows.slice(0, 6).map((c) => ({ label: c.name, value: c.score, color: c.level === "green" ? "#16a34a" : c.level === "yellow" ? "#d97706" : "#c92a2a" }));
   const anomalyRiskData = [
-    { label: "بالا", value: scopedAnomalies.filter((a) => a.riskLevel === "High").length, color: "#c92a2a" },
-    { label: "متوسط", value: scopedAnomalies.filter((a) => a.riskLevel === "Med").length, color: "#d97706" },
-    { label: "پایین", value: scopedAnomalies.filter((a) => a.riskLevel === "Low").length, color: "#16a34a" },
+    { label: t("chartHigh"), value: scopedAnomalies.filter((a) => a.riskLevel === "High").length, color: "#c92a2a" },
+    { label: t("chartMed"), value: scopedAnomalies.filter((a) => a.riskLevel === "Med").length, color: "#d97706" },
+    { label: t("chartLow"), value: scopedAnomalies.filter((a) => a.riskLevel === "Low").length, color: "#16a34a" },
   ];
 
-  if (loading) return <div style={{ padding: 40, textAlign: "center", color: THEME.text3 }}>در حال بارگذاری داشبورد...</div>;
+  if (loading) return <div style={{ padding: 40, textAlign: "center", color: THEME.text3, direction: dir }}>{t("loadingDashboard")}</div>;
 
   return (
-    <div style={{ background: THEME.bg, minHeight: "100%" }}>
+    <div style={{ background: THEME.bg, minHeight: "100%", direction: dir }}>
       <div style={{ background: THEME.navy, color: "#fff", padding: "12px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {onBack && <div style={{ cursor: "pointer", fontSize: 12.5, opacity: 0.85 }} onClick={onBack}>← بازگشت</div>}
+          {onBack && <div style={{ cursor: "pointer", fontSize: 12.5, opacity: 0.85 }} onClick={onBack}>{t("dashboardBack")}</div>}
           <RadioTower size={17} />
-          <h1 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>داشبورد مدیریتی IHMS</h1>
+          <h1 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>{t("dashboardTitle")}</h1>
         </div>
-        <span style={{ fontSize: 11, opacity: 0.75 }}>{isContractor ? currentUser?.name : "نمای کلی همه‌ی پیمانکاران"}</span>
+        <span style={{ fontSize: 11, opacity: 0.75 }}>{isContractor ? currentUser?.name : t("dashboardAllContractorsOverview")}</span>
       </div>
 
       <div style={{ padding: 14, maxWidth: 1600, margin: "0 auto" }}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 1, background: THEME.surface, borderRadius: 10, border: `1px solid ${THEME.border}`, overflow: "hidden", marginBottom: 10 }}>
-          <MiniStat icon={Building2} label="پیمانکاران" value={summary.contractors} />
-          <MiniStat icon={Users} label="پرسنل فعال" value={summary.activePersonnel} onClick={() => onNavigate({ module: "personnel", statusFilter: "active" })} />
-          <MiniStat icon={AlertTriangle} label="آنومالی باز" value={summary.openAnomalies} onClick={() => onNavigate({ module: "anomaly", statusFilter: "not_closed" })} />
-          <MiniStat icon={AlertTriangle} label="بحرانی" value={summary.criticalAnomalies} color="#c92a2a" onClick={() => onNavigate({ module: "anomaly", riskFilter: "High" })} />
-          <MiniStat icon={Truck} label="ماشین‌آلات فعال" value={summary.activeMachinery} onClick={() => onNavigate({ module: "machinery", approvalFilter: "approved" })} />
-          <MiniStat icon={Tag} label="داربست فعال" value={summary.activeScaffold} onClick={() => onNavigate({ module: "scaffold", statusFilter: "tag_issued" })} />
-          <MiniStat icon={GitBranch} label="BowTie" value={summary.bowties} />
-          <MiniStat icon={FileClock} label="در انتظار تأیید" value={summary.pendingDocs} color="#d97706" />
-          <MiniStat icon={Bell} label="اعلان مهم" value={summary.notifications} color="#1d4ed8" />
+          <MiniStat icon={Building2} label={t("kpiContractors")} value={summary.contractors} />
+          <MiniStat icon={Users} label={t("kpiActivePersonnel")} value={summary.activePersonnel} onClick={() => onNavigate({ module: "personnel", statusFilter: "active" })} />
+          <MiniStat icon={AlertTriangle} label={t("kpiOpenAnomalies")} value={summary.openAnomalies} onClick={() => onNavigate({ module: "anomaly", statusFilter: "not_closed" })} />
+          <MiniStat icon={AlertTriangle} label={t("kpiCritical")} value={summary.criticalAnomalies} color="#c92a2a" onClick={() => onNavigate({ module: "anomaly", riskFilter: "High" })} />
+          <MiniStat icon={Truck} label={t("kpiActiveMachinery")} value={summary.activeMachinery} onClick={() => onNavigate({ module: "machinery", approvalFilter: "approved" })} />
+          <MiniStat icon={Tag} label={t("kpiActiveScaffold")} value={summary.activeScaffold} onClick={() => onNavigate({ module: "scaffold", statusFilter: "tag_issued" })} />
+          <MiniStat icon={GitBranch} label={t("kpiBowtie")} value={summary.bowties} />
+          <MiniStat icon={FileClock} label={t("kpiPendingApproval")} value={summary.pendingDocs} color="#d97706" />
+          <MiniStat icon={Bell} label={t("kpiImportantNotifications")} value={summary.notifications} color="#1d4ed8" />
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))", gap: 10, marginBottom: 10 }}>
-          <Panel title="وضعیت HSE پیمانکاران" icon={ShieldCheck}>
+          <Panel title={t("panelContractorHse")} icon={ShieldCheck}>
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5, minWidth: 480 }}>
                 <thead>
                   <tr style={{ borderBottom: `1.5px solid ${THEME.border}`, color: THEME.text3 }}>
-                    <th style={{ textAlign: "right", padding: "5px 6px", fontWeight: 600 }}>پیمانکار</th>
-                    <th style={{ textAlign: "center", padding: "5px 6px", fontWeight: 600 }}>امتیاز</th>
-                    <th style={{ textAlign: "center", padding: "5px 6px", fontWeight: 600 }}>آنومالی باز</th>
-                    <th style={{ textAlign: "center", padding: "5px 6px", fontWeight: 600 }}>نیازمند طب کار</th>
-                    <th style={{ textAlign: "center", padding: "5px 6px", fontWeight: 600 }}>ماشین ناقص</th>
-                    <th style={{ textAlign: "center", padding: "5px 6px", fontWeight: 600 }}>داربست نیازمند بازدید</th>
-                    <th style={{ textAlign: "center", padding: "5px 6px", fontWeight: 600 }}>وضعیت</th>
+                    <th style={{ textAlign: "right", padding: "5px 6px", fontWeight: 600 }}>{t("colContractor")}</th>
+                    <th style={{ textAlign: "center", padding: "5px 6px", fontWeight: 600 }}>{t("colScore")}</th>
+                    <th style={{ textAlign: "center", padding: "5px 6px", fontWeight: 600 }}>{t("colOpenAnomalies")}</th>
+                    <th style={{ textAlign: "center", padding: "5px 6px", fontWeight: 600 }}>{t("colNeedsHealthVisit")}</th>
+                    <th style={{ textAlign: "center", padding: "5px 6px", fontWeight: 600 }}>{t("colFaultyMachinery")}</th>
+                    <th style={{ textAlign: "center", padding: "5px 6px", fontWeight: 600 }}>{t("colScaffoldNeedsVisit")}</th>
+                    <th style={{ textAlign: "center", padding: "5px 6px", fontWeight: 600 }}>{t("colStatus")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -242,7 +244,7 @@ export default function HomeDashboard({ role, currentUser, onNavigate, onBack })
                     </tr>
                   ))}
                   {contractorRows.length === 0 && (
-                    <tr><td colSpan={7} style={{ padding: 14, textAlign: "center", color: THEME.text3 }}>پیمانکاری ثبت نشده است</td></tr>
+                    <tr><td colSpan={7} style={{ padding: 14, textAlign: "center", color: THEME.text3 }}>{t("noContractorsRegistered")}</td></tr>
                   )}
                 </tbody>
               </table>
@@ -250,8 +252,8 @@ export default function HomeDashboard({ role, currentUser, onNavigate, onBack })
           </Panel>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <Panel title="هشدارهای فوری" icon={Bell} compact>
-              {urgentAlerts.length === 0 && <p style={{ fontSize: 11.5, color: THEME.text3, margin: 0 }}>هشدار فوری فعالی وجود ندارد.</p>}
+            <Panel title={t("panelUrgentAlerts")} icon={Bell} compact>
+              {urgentAlerts.length === 0 && <p style={{ fontSize: 11.5, color: THEME.text3, margin: 0 }}>{t("noUrgentAlerts")}</p>}
               {urgentAlerts.map((a, i) => (
                 <div key={i} onClick={a.onClick} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 0", borderBottom: i < urgentAlerts.length - 1 ? `1px solid ${THEME.border}` : "none", cursor: a.onClick ? "pointer" : "default" }}>
                   <span style={{ width: 6, height: 6, borderRadius: "50%", background: a.severity === 3 ? "#c92a2a" : "#d97706", flexShrink: 0 }} />
@@ -260,8 +262,8 @@ export default function HomeDashboard({ role, currentUser, onNavigate, onBack })
               ))}
             </Panel>
 
-            <Panel title="تحلیل هوشمند" icon={Sparkles} compact>
-              {insights.length === 0 && <p style={{ fontSize: 11.5, color: THEME.text3, margin: 0 }}>داده‌ی کافی برای تحلیل وجود ندارد.</p>}
+            <Panel title={t("panelSmartInsights")} icon={Sparkles} compact>
+              {insights.length === 0 && <p style={{ fontSize: 11.5, color: THEME.text3, margin: 0 }}>{t("noSmartInsights")}</p>}
               {insights.map((ins, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, padding: "4px 0", fontSize: 11, color: THEME.text2, lineHeight: 1.7 }}>
                   <span style={{ color: ins.type === "danger" ? "#c92a2a" : ins.type === "good" ? "#16a34a" : "#d97706", flexShrink: 0 }}>●</span>
@@ -273,19 +275,19 @@ export default function HomeDashboard({ role, currentUser, onNavigate, onBack })
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
-          <Panel title="روند آنومالی (۶ ماه اخیر)" icon={TrendingUp} compact>
+          <Panel title={t("panelAnomalyTrend")} icon={TrendingUp} compact>
             <MiniBarChart data={monthlyAnomalyTrend.map(([m, c]) => ({ label: m.slice(5), value: c, color: THEME.navy }))} />
           </Panel>
-          <Panel title="وضعیت طب کار" icon={Users} compact>
+          <Panel title={t("panelHealthStatus")} icon={Users} compact>
             <MiniDonut data={healthStatusData} />
           </Panel>
-          <Panel title="وضعیت ماشین‌آلات" icon={Truck} compact>
+          <Panel title={t("panelMachineryStatus")} icon={Truck} compact>
             <MiniDonut data={machineryStatusData} />
           </Panel>
-          <Panel title="آنومالی بر اساس ریسک" icon={AlertTriangle} compact>
+          <Panel title={t("panelAnomalyByRisk")} icon={AlertTriangle} compact>
             <MiniDonut data={anomalyRiskData} />
           </Panel>
-          <Panel title="امتیاز عملکرد پیمانکاران" icon={ShieldCheck} compact>
+          <Panel title={t("panelContractorPerformance")} icon={ShieldCheck} compact>
             <MiniBarChart data={perfChartData} suffix="%" />
           </Panel>
         </div>

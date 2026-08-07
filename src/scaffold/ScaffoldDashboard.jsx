@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Tag, Plus, Trash2, Printer } from "lucide-react";
 import { styles, THEME } from "../shared.js";
 import DataView, { StatusPill } from "../shared/DataView.jsx";
@@ -28,6 +28,7 @@ export default function ScaffoldDashboard({ onBack, currentUser, role, initialSt
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter || "all");
   const [showForm, setShowForm] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
+  const expandedPanelRef = useRef(null);
   const [correctionNote, setCorrectionNote] = useState("");
   const [correctionDeadline, setCorrectionDeadline] = useState("");
   const [correctionDeadlineTime, setCorrectionDeadlineTime] = useState("18:00");
@@ -227,6 +228,16 @@ export default function ScaffoldDashboard({ onBack, currentUser, role, initialSt
 
   const expandedItem = sorted.find((t) => t.id === expandedId || `removal-${t.id}` === expandedId);
 
+  // پنل جزئیات (درخواست برچیدن / ثبت اصلاح) همیشه زیر کل لیست رندر می‌شود؛
+  // اگر کاربر روی کارتی وسط یک لیست بلند کلیک کند، بدون این اسکرول خودکار،
+  // پنل باز می‌شود ولی بیرون از دید کاربر می‌ماند و به‌نظر می‌رسد «هیچ
+  // اتفاقی نیفتاده».
+  useEffect(() => {
+    if (expandedId && expandedPanelRef.current) {
+      expandedPanelRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [expandedId]);
+
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: 24 }}>
       {onBack && <div style={styles.backLink} onClick={onBack}>← بازگشت به منو</div>}
@@ -339,7 +350,7 @@ export default function ScaffoldDashboard({ onBack, currentUser, role, initialSt
       />
 
       {expandedItem && (
-        <div style={{ ...styles.card, width: "auto", marginTop: 14 }}>
+        <div ref={expandedPanelRef} style={{ ...styles.card, width: "auto", marginTop: 14 }}>
           <h3 style={{ fontSize: 14, color: THEME.navy, margin: "0 0 10px", fontWeight: 700, direction: "ltr", textAlign: "right" }}>{expandedItem.tagNumber}</h3>
 
           {expandedId === expandedItem.id && !isContractor && (

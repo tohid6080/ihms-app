@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
+import { hideSplashWhenReady } from "./splashScreenControl.js";
 
 // این استایل قبلاً یک <style> درون‌خطی در index.html بود. تزریقش از طریق
 // جاوااسکریپت (به‌جای HTML) باگ شناخته‌شده‌ی Vite روی ویندوز را دور می‌زند:
@@ -28,3 +29,8 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     <App />
   </React.StrictMode>
 );
+
+// بعد از رندر اولیه‌ی اپ (که همان صفحه‌ی ورود خواهد بود، مگر نشستی از
+// قبل ذخیره شده باشد)، Splash Screen بومی را با یک محو شدن نرم کنار
+// می‌زند. این تابع کاملاً مستقل از هر منطق Login/احراز هویتی است.
+hideSplashWhenReady();

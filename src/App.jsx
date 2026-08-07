@@ -23,6 +23,12 @@ import DbSizeWarningBanner from "./offline/DbSizeWarningBanner.jsx";
 import { checkUploadAllowed } from "./offline/dbSizeMonitor.js";
 import ArchiveManager from "./offline/ArchiveManager.jsx";
 import { LanguageProvider, useLanguage } from "./i18n/LanguageContext.jsx";
+import {
+  isBiometricAvailable, isBiometricEnabledFor,
+  enableBiometricLogin, disableBiometricLogin, invalidateBiometricOnLogout,
+  verifyBiometricAndGetCredentials,
+} from "./biometricAuth.js";
+import { checkLoginLockout, recordLoginAttempt, validatePasswordLength, MIN_PASSWORD_LENGTH } from "./loginSecurity.js";
 import AdminAnalytics from "./admin/AdminAnalytics.jsx";
 import ChatDashboard from "./chat/ChatDashboard.jsx";
 import TrainingManager from "./training/TrainingManager.jsx";
@@ -73,55 +79,61 @@ const ANOMALY_FORMATS = [
 // فقط "مدیریت عدم انطباق‌ها (Anomaly Report)" و "ایجاد حساب کاربری" فعلاً پیاده‌سازی شده‌اند؛
 // بقیه به‌عنوان جای‌نگه‌دار (Placeholder) نمایش داده می‌شوند تا در فازهای بعدی توسعه یابند.
 const HSE_MODULES = [
-  { key: "chat", label: "چت" },
-  { key: "archiveManagement", label: "آرشیو فایل‌ها" },
+  { key: "chat", label: "چت", labelKey: "moduleChat" },
+  { key: "archiveManagement", label: "آرشیو فایل‌ها", labelKey: "moduleArchive" },
   {
     key: "anomalyReport",
     label: "مدیریت عدم انطباق‌ها (Anomaly Report)",
+    labelKey: "moduleAnomalyReport",
     icon: true,
     sub: [
-      { key: "anomalyForm", label: "ثبت آنومالی", employerOnly: true },
-      { key: "anomalyList", label: "لیست آنومالی‌ها" },
+      { key: "anomalyForm", label: "ثبت آنومالی", labelKey: "subAnomalyForm", employerOnly: true },
+      { key: "anomalyList", label: "لیست آنومالی‌ها", labelKey: "subAnomalyList" },
     ],
   },
   {
     key: "riskAssessment",
     label: "مدیریت ارزیابی ریسک (Risk Assessment)",
+    labelKey: "moduleRiskAssessment",
     icon: true,
     sub: [
-      { key: "bowtieDashboard", label: "BowTie Risk Analysis" },
-      { key: "hcmsDashboard", label: "HCMS - سیستم مدیریت و کنترل خطرات" },
-      { key: "riskKnowledgeManagement", label: "بانک اطلاعاتی ارزیابی ریسک", employerOnly: true },
+      { key: "bowtieDashboard", label: "BowTie Risk Analysis", labelKey: "subBowtie" },
+      { key: "hcmsDashboard", label: "HCMS - سیستم مدیریت و کنترل خطرات", labelKey: "subHcms" },
+      { key: "riskKnowledgeManagement", label: "بانک اطلاعاتی ارزیابی ریسک", labelKey: "subRiskKnowledge", employerOnly: true },
     ],
   },
   {
     key: "personnelAccess",
     label: "مدیریت ورود و تردد پرسنل",
+    labelKey: "modulePersonnelAccess",
     icon: true,
     sub: [
-      { key: "personnelDashboard", label: "لیست پرسنل" },
-      { key: "personnelForm", label: "ثبت پرسنل جدید" },
+      { key: "personnelDashboard", label: "لیست پرسنل", labelKey: "subPersonnelList" },
+      { key: "personnelForm", label: "ثبت پرسنل جدید", labelKey: "subPersonnelForm" },
     ],
   },
   {
     key: "machineryManagement",
     label: "مدیریت ماشین‌آلات و تجهیزات",
+    labelKey: "moduleMachinery",
     icon: true,
     sub: [
-      { key: "machineryDashboard", label: "لیست ماشین‌آلات" },
+      { key: "machineryDashboard", label: "لیست ماشین‌آلات", labelKey: "subMachineryList" },
     ],
   },
   {
     key: "scaffoldManagement",
     label: "مدیریت داربست",
+    labelKey: "moduleScaffold",
     icon: true,
     sub: [
-      { key: "scaffoldDashboard", label: "لیست تگ داربست" },
+      { key: "scaffoldDashboard", label: "لیست تگ داربست", labelKey: "subScaffoldList" },
     ],
   },
   {
     key: "managementDashboard",
     label: "داشبورد مدیریتی و گزارش‌های تحلیلی",
+    labelKey: "moduleManagementDashboard",
     icon: true,
   },
 ];
@@ -819,6 +831,35 @@ function IhmsLogo({ size = 96 }) {
   );
 }
 
+// منطق واقعی تطبیق اعتبارنامه — عیناً از داخل LoginScreen بیرون کشیده شده
+// تا هم فرم ورود عادی، هم گیت ورود بیومتریک (که باید همان اعتبارسنجی
+// واقعی را دوباره اجرا کند، نه صرفاً به یک نشست ذخیره‌شده اعتماد کند) از
+// یک منبع واحد استفاده کنند. هیچ رفتاری نسبت به قبل تغییر نکرده است.
+async function attemptCredentialLogin(username, password) {
+  // اول حساب‌های واقعی (کارفرما/ادمین) که به یک شرکت واقعی متعلق‌اند بررسی
+  // می‌شوند — including admin و karfarma که بعد از مهاجرت فاز ۲ دیگر
+  // ردیف واقعی دارند، نه فقط مقدار هاردکد بدون company_id.
+  const employerAccounts = await loadEmployerAccounts();
+  const employerMatch = employerAccounts.find((u) => u.username === username.trim() && u.password === password);
+  if (employerMatch) return { user: employerMatch };
+
+  // سپس حساب‌های پیمانکار
+  const contractors = await loadContractors();
+  const found = contractors.find((u) => u.username && u.username === username.trim() && u.password === password);
+  if (found) return { user: found };
+
+  // fallback ایمنی — فقط اگر SQL مهاجرت هنوز اجرا نشده؛ بدون company_id
+  // واقعی، بخش‌های شرکت‌محور داده‌ای نشان نمی‌دهند تا وقتی مهاجرت انجام شود.
+  const seedMatch = SEED_USERS.find((u) => u.username === username.trim() && u.password === password);
+  if (seedMatch) {
+    console.warn("ورود از طریق حساب موقت SEED_USERS — لطفاً SQL مهاجرت فاز ۲ را اجرا کنید.");
+    const seedUser = { ...seedMatch, canEdit: true, name: seedMatch.role === "EMPLOYER" ? "کارفرما (حساب اصلی)" : seedMatch.username };
+    return { user: seedUser };
+  }
+
+  return { error: true };
+}
+
 function LoginScreen({ onLogin }) {
   const { lang, setLang, t, dir } = useLanguage();
   const [username, setUsername] = useState("");
@@ -828,46 +869,27 @@ function LoginScreen({ onLogin }) {
 
   const handleSubmit = async () => {
     setLoading(true);
+    setError("");
 
-    // اول حساب‌های واقعی (کارفرما/ادمین) که به یک شرکت واقعی متعلق‌اند بررسی
-    // می‌شوند — including admin و karfarma که بعد از مهاجرت فاز ۲ دیگر
-    // ردیف واقعی دارند، نه فقط مقدار هاردکد بدون company_id.
-    const employerAccounts = await loadEmployerAccounts();
-    const employerMatch = employerAccounts.find((u) => u.username === username.trim() && u.password === password);
-    if (employerMatch) {
+    // اول: آیا این نام‌کاربری به‌خاطر تلاش‌های ناموفق اخیر قفل است؟ این
+    // بررسی واقعاً سمت سرور انجام می‌شود (نه یک شمارنده‌ی قابل‌پاک‌شدن در
+    // مرورگر خودِ کاربر).
+    const lockStatus = await checkLoginLockout(username);
+    if (lockStatus?.locked) {
       setLoading(false);
-      setError("");
-      setCurrentCompanyId(employerMatch.companyId);
-      trackLogin(employerMatch);
-      if (employerMatch.preferredLanguage) setLang(employerMatch.preferredLanguage);
-      onLogin(employerMatch);
+      setError(t("accountTemporarilyLocked"));
       return;
     }
 
-    // سپس حساب‌های پیمانکار
-    const contractors = await loadContractors();
-    const found = contractors.find((u) => u.username && u.username === username.trim() && u.password === password);
-    if (found) {
-      setLoading(false);
-      setError("");
-      setCurrentCompanyId(found.companyId);
-      trackLogin(found);
-      if (found.preferredLanguage) setLang(found.preferredLanguage);
-      onLogin(found);
-      return;
-    }
-
-    // fallback ایمنی — فقط اگر SQL مهاجرت هنوز اجرا نشده؛ بدون company_id
-    // واقعی، بخش‌های شرکت‌محور داده‌ای نشان نمی‌دهند تا وقتی مهاجرت انجام شود.
-    const seedMatch = SEED_USERS.find((u) => u.username === username.trim() && u.password === password);
+    const { user } = await attemptCredentialLogin(username, password);
+    recordLoginAttempt(username, !!user); // نتیجه را برای شمارنده ثبت کن؛ منتظر پاسخش نمی‌مانیم تا ورود موفق کندتر نشود
     setLoading(false);
-    if (seedMatch) {
-      console.warn("ورود از طریق حساب موقت SEED_USERS — لطفاً SQL مهاجرت فاز ۲ را اجرا کنید.");
+    if (user) {
       setError("");
-      setCurrentCompanyId(null);
-      const seedUser = { ...seedMatch, canEdit: true, name: seedMatch.role === "EMPLOYER" ? "کارفرما (حساب اصلی)" : seedMatch.username };
-      trackLogin(seedUser);
-      onLogin(seedUser);
+      setCurrentCompanyId(user.companyId);
+      trackLogin(user);
+      if (user.preferredLanguage) setLang(user.preferredLanguage);
+      onLogin(user);
     } else {
       setError(t("invalidCredentials"));
     }
@@ -907,6 +929,72 @@ function LoginScreen({ onLogin }) {
         </button>
 
         <p style={styles.hint}>{t("designedBy")}</p>
+      </div>
+    </div>
+  );
+}
+
+// گیت ورود بیومتریک — وقتی نشستی از قبل ذخیره شده (currentUser در
+// localStorage) و کاربر قبلاً ورود با اثر انگشت را فعال کرده، این صفحه
+// جای رفتن مستقیم به داشبورد می‌آید. بدون این گیت، هرکسی که گوشیِ
+// بازشده را در دست بگیرد، بدون هیچ احراز هویتی مستقیم وارد سامانه
+// می‌شد — این دقیقاً همان لایه‌ی امنیتی‌ست که این قابلیت اضافه می‌کند.
+function BiometricGateScreen({ currentUser, onUnlocked, onFallbackToPassword }) {
+  const { t, dir } = useLanguage();
+  const [checking, setChecking] = useState(true);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const attempt = async () => {
+    setChecking(true);
+    setErrorMsg("");
+    const bioResult = await verifyBiometricAndGetCredentials();
+    if (bioResult?.__error) {
+      setChecking(false);
+      setErrorMsg(bioResult.message || "");
+      return;
+    }
+    const lockStatus = await checkLoginLockout(bioResult.username);
+    if (lockStatus?.locked) {
+      setChecking(false);
+      setErrorMsg(t("accountTemporarilyLocked"));
+      return;
+    }
+    // بیومتریک تأیید شد؛ حالا همان اعتبارسنجی واقعی ورود دوباره اجرا
+    // می‌شود — اگر مثلاً ادمین رمز را عوض کرده یا حساب را غیرفعال کرده
+    // باشد، ورود بیومتریک هم دیگر کار نمی‌کند، دقیقاً مثل ورود عادی.
+    const { user } = await attemptCredentialLogin(bioResult.username, bioResult.password);
+    recordLoginAttempt(bioResult.username, !!user);
+    setChecking(false);
+    if (user) {
+      setCurrentCompanyId(user.companyId);
+      trackLogin(user);
+      onUnlocked(user);
+    } else {
+      setErrorMsg(t("biometricStaleCredentials"));
+    }
+  };
+
+  useEffect(() => {
+    attempt();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div style={{ ...styles.centerScreen, direction: dir }}>
+      <div style={{ ...styles.card, width: 340, textAlign: "center" }}>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+          <IhmsLogo size={80} />
+        </div>
+        <h3 style={{ marginBottom: 4, color: THEME.navy }}>{currentUser?.name || "—"}</h3>
+        <p style={{ color: errorMsg ? THEME.danger : THEME.text3, fontSize: 12.5, marginBottom: 20, minHeight: 32 }}>
+          {checking ? t("biometricGateChecking") : errorMsg || t("biometricGateWaiting")}
+        </p>
+        {!checking && errorMsg && (
+          <>
+            <button type="button" style={{ ...styles.button, marginBottom: 10 }} onClick={attempt}>{t("biometricRetry")}</button>
+            <button type="button" style={{ ...styles.button, background: THEME.text3 }} onClick={onFallbackToPassword}>{t("biometricUsePassword")}</button>
+          </>
+        )}
       </div>
     </div>
   );
@@ -967,6 +1055,10 @@ function ProfileView({ onBack, currentUser, roleLabel }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [bioEnabled, setBioEnabled] = useState(false);
+  const [bioBusy, setBioBusy] = useState(false);
+  const [bioError, setBioError] = useState("");
+  const [bioSupported, setBioSupported] = useState(true);
 
   useEffect(() => {
     if (currentUser?.role === "CONTRACTOR") {
@@ -975,6 +1067,8 @@ function ProfileView({ onBack, currentUser, roleLabel }) {
       loadMyCompanyName(currentUser?.companyId).then(setCompanyName);
     }
     loadMyLastLogin(currentUser?.username).then(setLastLogin);
+    setBioEnabled(isBiometricEnabledFor(currentUser?.username));
+    isBiometricAvailable().then((r) => setBioSupported(!!r.available));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -997,6 +1091,21 @@ function ProfileView({ onBack, currentUser, roleLabel }) {
     if (currentUser?.role && currentUser?.id) {
       await updateMyProfile(currentUser.role, currentUser.id, { preferredLanguage: value });
     }
+  };
+
+  const handleToggleBiometric = async () => {
+    setBioError("");
+    setBioBusy(true);
+    if (bioEnabled) {
+      await disableBiometricLogin();
+      setBioEnabled(false);
+      setBioBusy(false);
+      return;
+    }
+    const result = await enableBiometricLogin(currentUser?.username, currentUser?.password);
+    setBioBusy(false);
+    if (result?.__error) { setBioError(result.message); return; }
+    setBioEnabled(true);
   };
 
   const Field = ({ label, value }) => (
@@ -1035,6 +1144,37 @@ function ProfileView({ onBack, currentUser, roleLabel }) {
         <div style={{ borderTop: `1px solid ${THEME.border}`, paddingTop: 14, marginTop: 8 }}>
           <p style={{ fontSize: 11, color: THEME.text3, fontWeight: 700, marginBottom: 10 }}>{t("systemLanguage")}</p>
           <LanguageToggle lang={lang} setLang={handleLanguageChange} compact />
+        </div>
+
+        <div style={{ borderTop: `1px solid ${THEME.border}`, paddingTop: 14, marginTop: 14 }}>
+          <p style={{ fontSize: 11, color: THEME.text3, fontWeight: 700, marginBottom: 10 }}>{t("securitySectionTitle")}</p>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: THEME.text }}>{t("biometricToggleLabel")}</div>
+              <div style={{ fontSize: 11, color: bioError ? THEME.danger : THEME.text3, marginTop: 2 }}>
+                {!bioSupported
+                  ? t("biometricNativeOnly")
+                  : bioBusy
+                  ? (bioEnabled ? t("biometricDisabling") : t("biometricEnabling"))
+                  : bioError || (bioEnabled ? t("biometricEnabledHint") : t("biometricDisabledHint"))}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleToggleBiometric}
+              disabled={bioBusy || !bioSupported}
+              style={{
+                width: 46, height: 26, borderRadius: 13, border: "none", cursor: (bioBusy || !bioSupported) ? "default" : "pointer",
+                background: bioEnabled ? THEME.teal : "#d5dbe1", position: "relative", flexShrink: 0, opacity: (bioBusy || !bioSupported) ? 0.5 : 1,
+                transition: "background 0.15s",
+              }}
+            >
+              <span style={{
+                position: "absolute", top: 3, insetInlineStart: bioEnabled ? 23 : 3, width: 20, height: 20, borderRadius: "50%",
+                background: "#fff", transition: "inset-inline-start 0.15s", boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
+              }} />
+            </button>
+          </div>
         </div>
 
         <div style={{ borderTop: `1px solid ${THEME.border}`, paddingTop: 14, marginTop: 14 }}>
@@ -1089,6 +1229,7 @@ function ContractorManager({ onBack }) {
   const handleAdd = async () => {
     const uname = username.trim();
     if (!name.trim() || !uname || !password || !jobPositionId) { setFormError("نام پیمانکار، عنوان شغلی، نام کاربری و رمز عبور الزامی است"); return; }
+    if (!validatePasswordLength(password)) { setFormError(`رمز عبور باید حداقل ${MIN_PASSWORD_LENGTH} کاراکتر باشد`); return; }
     if (usernameTaken(uname, null)) { setFormError("این نام کاربری قبلاً استفاده شده است"); return; }
     const inserted = await insertContractor({ name: name.trim(), contactPersonName: contactPersonName.trim(), startDate, contractDetails: contractDetails.trim(), username: uname, password, jobPositionId });
     if (!inserted || inserted.__error) { setFormError(`خطا در ذخیره‌سازی: ${inserted?.message || "نامشخص"}`); return; }
@@ -1107,6 +1248,7 @@ function ContractorManager({ onBack }) {
   const saveEdit = async (id) => {
     const uname = (editData.username || "").trim();
     if (!editData.name?.trim() || !uname || !editData.password || !editData.jobPositionId) { alert("نام پیمانکار، عنوان شغلی، نام کاربری و رمز عبور نمی‌توانند خالی باشند"); return; }
+    if (!validatePasswordLength(editData.password)) { alert(`رمز عبور باید حداقل ${MIN_PASSWORD_LENGTH} کاراکتر باشد`); return; }
     if (usernameTaken(uname, id)) { alert("این نام کاربری قبلاً برای پیمانکار دیگری استفاده شده است"); return; }
     const updated = await updateContractorDB(id, { ...editData, name: editData.name.trim(), username: uname });
     if (!updated || updated.__error) { alert(`خطا در ذخیره‌سازی: ${updated?.message || "نامشخص"}`); return; }
@@ -1150,6 +1292,7 @@ function ContractorManager({ onBack }) {
           <input style={styles.input} value={username} onChange={(e) => setUsername(e.target.value)} dir="rtl" />
           <label style={styles.label}>رمز عبور</label>
           <input style={styles.input} value={password} onChange={(e) => setPassword(e.target.value)} dir="rtl" />
+          <p style={{ fontSize: 10.5, color: THEME.text3, margin: "-8px 0 8px" }}>حداقل {MIN_PASSWORD_LENGTH} کاراکتر</p>
           {formError && <p style={styles.error}>{formError}</p>}
           <button type="button" style={styles.button} onClick={handleAdd}>افزودن پیمانکار</button>
         </div>
@@ -1178,6 +1321,7 @@ function ContractorManager({ onBack }) {
             <input style={styles.input} value={editData.username} onChange={(e) => setEditData({ ...editData, username: e.target.value })} dir="rtl" />
             <label style={styles.label}>رمز عبور</label>
             <input style={styles.input} value={editData.password} onChange={(e) => setEditData({ ...editData, password: e.target.value })} dir="rtl" />
+            <p style={{ fontSize: 10.5, color: THEME.text3, margin: "-8px 0 8px" }}>حداقل {MIN_PASSWORD_LENGTH} کاراکتر</p>
             <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
               <button type="button" style={styles.button} onClick={() => saveEdit(c.id)}>ذخیره</button>
               <button type="button" style={{ ...styles.button, background: "#5b6b7d" }} onClick={cancelEdit}>انصراف</button>
@@ -1237,6 +1381,7 @@ function EmployerAccountManager({ onBack }) {
   const handleAdd = async () => {
     const uname = username.trim();
     if (!name.trim() || !uname || !password || !jobPositionId) { setFormError("نام، عنوان شغلی، نام کاربری و رمز عبور الزامی است"); return; }
+    if (!validatePasswordLength(password)) { setFormError(`رمز عبور باید حداقل ${MIN_PASSWORD_LENGTH} کاراکتر باشد`); return; }
     if (usernameTaken(uname, null)) { setFormError("این نام کاربری قبلاً استفاده شده است"); return; }
     const inserted = await insertEmployerAccount({ name: name.trim(), companyName: companyName.trim(), username: uname, password, canEdit, jobPositionId });
     if (!inserted || inserted.__error) { setFormError(`خطا در ذخیره‌سازی: ${inserted?.message || "نامشخص"}`); return; }
@@ -1252,6 +1397,7 @@ function EmployerAccountManager({ onBack }) {
   const saveEdit = async (id) => {
     const uname = (editData.username || "").trim();
     if (!editData.name?.trim() || !uname || !editData.password || !editData.jobPositionId) { alert("نام، عنوان شغلی، نام کاربری و رمز عبور نمی‌توانند خالی باشند"); return; }
+    if (!validatePasswordLength(editData.password)) { alert(`رمز عبور باید حداقل ${MIN_PASSWORD_LENGTH} کاراکتر باشد`); return; }
     if (usernameTaken(uname, id)) { alert("این نام کاربری قبلاً برای حساب دیگری استفاده شده است"); return; }
     const updated = await updateEmployerAccountDB(id, { ...editData, name: editData.name.trim(), username: uname });
     if (!updated || updated.__error) { alert(`خطا در ذخیره‌سازی: ${updated?.message || "نامشخص"}`); return; }
@@ -1292,6 +1438,7 @@ function EmployerAccountManager({ onBack }) {
           <input style={styles.input} value={username} onChange={(e) => setUsername(e.target.value)} dir="rtl" />
           <label style={styles.label}>رمز عبور</label>
           <input style={styles.input} value={password} onChange={(e) => setPassword(e.target.value)} dir="rtl" />
+          <p style={{ fontSize: 10.5, color: THEME.text3, margin: "-8px 0 8px" }}>حداقل {MIN_PASSWORD_LENGTH} کاراکتر</p>
           <label style={styles.label}>سطح دسترسی</label>
           <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
             <button type="button" onClick={() => setCanEdit(true)} style={{ flex: 1, padding: "10px 6px", borderRadius: 8, border: canEdit ? "2px solid #0d8f8a" : "1px solid #e3e8ee", background: canEdit ? "#e3f5f4" : "#fff", color: "#0d8f8a", fontSize: 13, cursor: "pointer", fontWeight: canEdit ? "bold" : "normal" }}>دسترسی کامل (ثبت و تأیید)</button>
@@ -1321,6 +1468,7 @@ function EmployerAccountManager({ onBack }) {
             <input style={styles.input} value={editData.username} onChange={(e) => setEditData({ ...editData, username: e.target.value })} dir="rtl" />
             <label style={styles.label}>رمز عبور</label>
             <input style={styles.input} value={editData.password} onChange={(e) => setEditData({ ...editData, password: e.target.value })} dir="rtl" />
+            <p style={{ fontSize: 10.5, color: THEME.text3, margin: "-8px 0 8px" }}>حداقل {MIN_PASSWORD_LENGTH} کاراکتر</p>
             <label style={styles.label}>سطح دسترسی</label>
             <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
               <button type="button" onClick={() => setEditData({ ...editData, canEdit: true })} style={{ flex: 1, padding: "10px 6px", borderRadius: 8, border: editData.canEdit ? "2px solid #0d8f8a" : "1px solid #e3e8ee", background: editData.canEdit ? "#e3f5f4" : "#fff", color: "#0d8f8a", fontSize: 13, cursor: "pointer" }}>دسترسی کامل</button>
@@ -2350,6 +2498,8 @@ function MenuRow({ icon: IconEl, label, onClick, accent, muted, sub, badge }) {
 }
 
 function AdminDashboard({ onLogout, currentUser }) {
+  const { t, dir } = useLanguage();
+  const mt = (m) => (m?.labelKey ? t(m.labelKey) : m?.label);
   const [view, setView] = usePersistedState("ihms_view_admin", "menu");
   useEffect(() => { trackPageView(currentUser, view); }, [view]);
   const [navFilter, setNavFilter] = useState(null);
@@ -2357,8 +2507,8 @@ function AdminDashboard({ onLogout, currentUser }) {
   useEffect(() => {
     const load = () => loadUnreadTotal(currentUser?.username).then(setChatUnread);
     load();
-    const t = setInterval(load, 15000);
-    return () => clearInterval(t);
+    const timer = setInterval(load, 15000);
+    return () => clearInterval(timer);
   }, [currentUser?.username]);
   const anomalyMod = HSE_MODULES.find((m) => m.key === "anomalyReport");
   const riskMod = HSE_MODULES.find((m) => m.key === "riskAssessment");
@@ -2380,40 +2530,40 @@ function AdminDashboard({ onLogout, currentUser }) {
   };
 
   return (
-    <div style={styles.dashboardWrapper}>
+    <div style={{ ...styles.dashboardWrapper, direction: dir }}>
       <DashboardHeader panelLabelKey="panelAdmin" currentUser={currentUser} onLogout={onLogout} onOpenSettings={() => setView("profile")} />
 
       {view === "menu" && (
         <div style={styles.menuList}>
           <DbSizeWarningBanner />
-          <MenuRow icon={MessageCircle} label="چت" onClick={() => setView("chat")} badge={chatUnread} />
-          <MenuRow icon={AlertTriangle} label={anomalyMod.label} onClick={() => setView("anomalyReport")} accent sub />
-          <MenuRow icon={ShieldCheck} label={riskMod.label} onClick={() => setView("riskAssessment")} accent sub />
-          <MenuRow icon={Users} label={personnelMod.label} onClick={() => setView("personnelAccess")} accent sub />
-          <MenuRow icon={Truck} label={machineryMod.label} onClick={() => setView("machineryManagement")} accent sub />
-          <MenuRow icon={Tag} label={scaffoldMod.label} onClick={() => setView("scaffoldManagement")} accent sub />
-          <MenuRow icon={BarChart3} label={managementMod.label} onClick={() => setView("managementDashboard")} accent />
-          <MenuRow icon={BarChart3} label="داشبورد فعالیت کاربران" onClick={() => setView("adminAnalytics")} />
-          <MenuRow icon={Settings} label="مدیریت سیستم" onClick={() => setView("systemManagement")} accent sub />
+          <MenuRow icon={MessageCircle} label={t("moduleChat")} onClick={() => setView("chat")} badge={chatUnread} />
+          <MenuRow icon={AlertTriangle} label={mt(anomalyMod)} onClick={() => setView("anomalyReport")} accent sub />
+          <MenuRow icon={ShieldCheck} label={mt(riskMod)} onClick={() => setView("riskAssessment")} accent sub />
+          <MenuRow icon={Users} label={mt(personnelMod)} onClick={() => setView("personnelAccess")} accent sub />
+          <MenuRow icon={Truck} label={mt(machineryMod)} onClick={() => setView("machineryManagement")} accent sub />
+          <MenuRow icon={Tag} label={mt(scaffoldMod)} onClick={() => setView("scaffoldManagement")} accent sub />
+          <MenuRow icon={BarChart3} label={mt(managementMod)} onClick={() => setView("managementDashboard")} accent />
+          <MenuRow icon={BarChart3} label={t("moduleAdminAnalytics")} onClick={() => setView("adminAnalytics")} />
+          <MenuRow icon={Settings} label={t("moduleSystemManagement")} onClick={() => setView("systemManagement")} accent sub />
         </div>
       )}
 
       {view === "systemManagement" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
-          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
-          <h3 style={{ marginBottom: 12, color: THEME.navy }}>مدیریت سیستم</h3>
+          <div style={styles.backLink} onClick={() => setView("menu")}>{t("backToMenu")}</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{t("moduleSystemManagement")}</h3>
           <div style={styles.menuList2}>
-            <MenuRow icon={Users} label="مدیریت حساب‌های کارفرما/همکاران" onClick={() => setView("employers")} />
-            <MenuRow icon={ShieldCheck} label="مدیریت پیمانکاران" onClick={() => setView("contractors")} />
-            <MenuRow icon={ShieldCheck} label="مدیریت نقش‌ها و دسترسی‌ها" onClick={() => setView("permissionManagement")} />
-            <MenuRow icon={Briefcase} label="مدیریت عناوین شغلی" onClick={() => setView("jobPositionManagement")} />
-            <MenuRow icon={Archive} label="آرشیو فایل‌ها" onClick={() => setView("archiveManagement")} />
-            <MenuRow icon={Tag} label="کد تگ داربست پیمانکاران" onClick={() => setView("scaffoldCodeManagement")} />
-            <MenuRow icon={GraduationCap} label="مدیریت آموزش‌های تخصصی" onClick={() => setView("trainingManagement")} />
-            <MenuRow icon={ShieldOff} label="مدیریت دسترسی چت" onClick={() => setView("chatAccessManagement")} />
-            <MenuRow icon={ShieldAlert} label="ماتریس ریسک HCMS" onClick={() => setView("hcmsMatrixManagement")} />
-            <MenuRow icon={Database} label="بانک اطلاعاتی ارزیابی ریسک" onClick={() => setView("riskKnowledgeManagement")} />
-            <MenuRow icon={Tag} label="دسته‌بندی‌های آنومالی" onClick={() => setView("anomalyCategoryManagement")} />
+            <MenuRow icon={Users} label={t("subEmployerAccounts")} onClick={() => setView("employers")} />
+            <MenuRow icon={ShieldCheck} label={t("subContractors")} onClick={() => setView("contractors")} />
+            <MenuRow icon={ShieldCheck} label={t("subPermissions")} onClick={() => setView("permissionManagement")} />
+            <MenuRow icon={Briefcase} label={t("subJobPositions")} onClick={() => setView("jobPositionManagement")} />
+            <MenuRow icon={Archive} label={t("moduleArchive")} onClick={() => setView("archiveManagement")} />
+            <MenuRow icon={Tag} label={t("subScaffoldCodes")} onClick={() => setView("scaffoldCodeManagement")} />
+            <MenuRow icon={GraduationCap} label={t("subTraining")} onClick={() => setView("trainingManagement")} />
+            <MenuRow icon={ShieldOff} label={t("subChatAccess")} onClick={() => setView("chatAccessManagement")} />
+            <MenuRow icon={ShieldAlert} label={t("subHcmsMatrix")} onClick={() => setView("hcmsMatrixManagement")} />
+            <MenuRow icon={Database} label={t("subRiskKnowledge")} onClick={() => setView("riskKnowledgeManagement")} />
+            <MenuRow icon={Tag} label={t("subAnomalyCategories")} onClick={() => setView("anomalyCategoryManagement")} />
           </div>
         </div>
       )}
@@ -2426,11 +2576,11 @@ function AdminDashboard({ onLogout, currentUser }) {
 
       {view === "anomalyReport" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
-          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
-          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{anomalyMod.label}</h3>
+          <div style={styles.backLink} onClick={() => setView("menu")}>{t("backToMenu")}</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{mt(anomalyMod)}</h3>
           <div style={styles.menuList2}>
             {anomalyMod.sub.map((s) => (
-              <MenuRow key={s.key} icon={AlertTriangle} label={s.label} onClick={() => setView(s.key)} accent />
+              <MenuRow key={s.key} icon={AlertTriangle} label={mt(s)} onClick={() => setView(s.key)} accent />
             ))}
           </div>
         </div>
@@ -2438,11 +2588,11 @@ function AdminDashboard({ onLogout, currentUser }) {
 
       {view === "riskAssessment" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
-          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
-          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{riskMod.label}</h3>
+          <div style={styles.backLink} onClick={() => setView("menu")}>{t("backToMenu")}</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{mt(riskMod)}</h3>
           <div style={styles.menuList2}>
             {riskMod.sub.map((s) => (
-              <MenuRow key={s.key} icon={ShieldCheck} label={s.label} onClick={() => setView(s.key)} accent />
+              <MenuRow key={s.key} icon={ShieldCheck} label={mt(s)} onClick={() => setView(s.key)} accent />
             ))}
           </div>
         </div>
@@ -2450,11 +2600,11 @@ function AdminDashboard({ onLogout, currentUser }) {
 
       {view === "personnelAccess" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
-          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
-          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{personnelMod.label}</h3>
+          <div style={styles.backLink} onClick={() => setView("menu")}>{t("backToMenu")}</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{mt(personnelMod)}</h3>
           <div style={styles.menuList2}>
             {personnelMod.sub.map((s) => (
-              <MenuRow key={s.key} icon={Users} label={s.label} onClick={() => setView(s.key)} accent />
+              <MenuRow key={s.key} icon={Users} label={mt(s)} onClick={() => setView(s.key)} accent />
             ))}
           </div>
         </div>
@@ -2462,11 +2612,11 @@ function AdminDashboard({ onLogout, currentUser }) {
 
       {view === "machineryManagement" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
-          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
-          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{machineryMod.label}</h3>
+          <div style={styles.backLink} onClick={() => setView("menu")}>{t("backToMenu")}</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{mt(machineryMod)}</h3>
           <div style={styles.menuList2}>
             {machineryMod.sub.map((s) => (
-              <MenuRow key={s.key} icon={Truck} label={s.label} onClick={() => setView(s.key)} accent />
+              <MenuRow key={s.key} icon={Truck} label={mt(s)} onClick={() => setView(s.key)} accent />
             ))}
           </div>
         </div>
@@ -2474,17 +2624,17 @@ function AdminDashboard({ onLogout, currentUser }) {
 
       {view === "scaffoldManagement" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
-          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
-          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{scaffoldMod.label}</h3>
+          <div style={styles.backLink} onClick={() => setView("menu")}>{t("backToMenu")}</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{mt(scaffoldMod)}</h3>
           <div style={styles.menuList2}>
             {scaffoldMod.sub.map((s) => (
-              <MenuRow key={s.key} icon={Tag} label={s.label} onClick={() => setView(s.key)} accent />
+              <MenuRow key={s.key} icon={Tag} label={mt(s)} onClick={() => setView(s.key)} accent />
             ))}
           </div>
         </div>
       )}
 
-      {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel="ادمین" />}
+      {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel={t("roleLabelAdmin")} />}
       {view === "chat" && <ChatDashboard onBack={() => setView("menu")} currentUser={currentUser} />}
       {view === "employers" && <EmployerAccountManager onBack={() => setView("systemManagement")} />}
       {view === "contractors" && <ContractorManager onBack={() => setView("systemManagement")} />}
@@ -2508,6 +2658,8 @@ function AdminDashboard({ onLogout, currentUser }) {
 
 // ---------- پنل کارفرما ----------
 function EmployerDashboard({ onLogout, currentUser }) {
+  const { t, dir } = useLanguage();
+  const mt = (m) => (m?.labelKey ? t(m.labelKey) : m?.label);
   const [view, setView] = usePersistedState("ihms_view_employer", "menu");
   useEffect(() => { trackPageView(currentUser, view); }, [view]);
   const [navFilter, setNavFilter] = useState(null);
@@ -2517,8 +2669,8 @@ function EmployerDashboard({ onLogout, currentUser }) {
   useEffect(() => {
     const load = () => loadUnreadTotal(currentUser?.username).then(setChatUnread);
     load();
-    const t = setInterval(load, 15000);
-    return () => clearInterval(t);
+    const timer = setInterval(load, 15000);
+    return () => clearInterval(timer);
   }, [currentUser?.username]);
   const canEdit = currentUser?.canEdit !== false;
 
@@ -2545,7 +2697,7 @@ function EmployerDashboard({ onLogout, currentUser }) {
     if (mod.employerOnly && !canEdit) { alert("این بخش فقط با دسترسی کامل در دسترس است"); return; }
     if (mod.key === "managementDashboard") { setView("managementDashboard"); return; }
     if (mod.sub) { setView(mod.key); return; }
-    alert(`ماژول «${mod.label}» به‌زودی اضافه می‌شود`);
+    alert(`ماژول «${mt(mod)}» به‌زودی اضافه می‌شود`);
   };
 
   const handleHomeNavigate = (target) => {
@@ -2565,7 +2717,7 @@ function EmployerDashboard({ onLogout, currentUser }) {
   const scaffoldMod = HSE_MODULES.find((m) => m.key === "scaffoldManagement");
 
   return (
-    <div style={styles.dashboardWrapper}>
+    <div style={{ ...styles.dashboardWrapper, direction: dir }}>
       <DashboardHeader
         panelLabelKey={canEdit ? "panelEmployer" : "panelEmployerViewOnly"}
         currentUser={currentUser}
@@ -2581,7 +2733,7 @@ function EmployerDashboard({ onLogout, currentUser }) {
             <MenuRow
               key={mod.key}
               icon={MODULE_ICON[mod.key] || LayoutGrid}
-              label={mod.label}
+              label={mt(mod)}
               onClick={() => openModule(mod)}
               accent={!!mod.icon}
               muted={mod.employerOnly && !canEdit}
@@ -2594,11 +2746,11 @@ function EmployerDashboard({ onLogout, currentUser }) {
 
       {view === "anomalyReport" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
-          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
-          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{anomalyMod.label}</h3>
+          <div style={styles.backLink} onClick={() => setView("menu")}>{t("backToMenu")}</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{mt(anomalyMod)}</h3>
           <div style={styles.menuList2}>
             {anomalySub.map((s) => (
-              <MenuRow key={s.key} icon={AlertTriangle} label={s.label} onClick={() => setView(s.key)} accent />
+              <MenuRow key={s.key} icon={AlertTriangle} label={mt(s)} onClick={() => setView(s.key)} accent />
             ))}
           </div>
         </div>
@@ -2606,11 +2758,11 @@ function EmployerDashboard({ onLogout, currentUser }) {
 
       {view === "riskAssessment" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
-          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
-          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{riskMod.label}</h3>
+          <div style={styles.backLink} onClick={() => setView("menu")}>{t("backToMenu")}</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{mt(riskMod)}</h3>
           <div style={styles.menuList2}>
             {riskMod.sub.map((s) => (
-              <MenuRow key={s.key} icon={ShieldCheck} label={s.label} onClick={() => setView(s.key)} accent />
+              <MenuRow key={s.key} icon={ShieldCheck} label={mt(s)} onClick={() => setView(s.key)} accent />
             ))}
           </div>
         </div>
@@ -2618,11 +2770,11 @@ function EmployerDashboard({ onLogout, currentUser }) {
 
       {view === "personnelAccess" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
-          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
-          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{personnelMod.label}</h3>
+          <div style={styles.backLink} onClick={() => setView("menu")}>{t("backToMenu")}</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{mt(personnelMod)}</h3>
           <div style={styles.menuList2}>
             {personnelMod.sub.map((s) => (
-              <MenuRow key={s.key} icon={Users} label={s.label} onClick={() => setView(s.key)} accent />
+              <MenuRow key={s.key} icon={Users} label={mt(s)} onClick={() => setView(s.key)} accent />
             ))}
           </div>
         </div>
@@ -2630,11 +2782,11 @@ function EmployerDashboard({ onLogout, currentUser }) {
 
       {view === "machineryManagement" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
-          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
-          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{machineryMod.label}</h3>
+          <div style={styles.backLink} onClick={() => setView("menu")}>{t("backToMenu")}</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{mt(machineryMod)}</h3>
           <div style={styles.menuList2}>
             {machineryMod.sub.map((s) => (
-              <MenuRow key={s.key} icon={Truck} label={s.label} onClick={() => setView(s.key)} accent />
+              <MenuRow key={s.key} icon={Truck} label={mt(s)} onClick={() => setView(s.key)} accent />
             ))}
           </div>
         </div>
@@ -2642,17 +2794,17 @@ function EmployerDashboard({ onLogout, currentUser }) {
 
       {view === "scaffoldManagement" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
-          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
-          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{scaffoldMod.label}</h3>
+          <div style={styles.backLink} onClick={() => setView("menu")}>{t("backToMenu")}</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{mt(scaffoldMod)}</h3>
           <div style={styles.menuList2}>
             {scaffoldMod.sub.map((s) => (
-              <MenuRow key={s.key} icon={Tag} label={s.label} onClick={() => setView(s.key)} accent />
+              <MenuRow key={s.key} icon={Tag} label={mt(s)} onClick={() => setView(s.key)} accent />
             ))}
           </div>
         </div>
       )}
 
-      {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel={canEdit ? "کارفرما" : "کارفرما (فقط مشاهده)"} />}
+      {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel={canEdit ? t("roleLabelEmployer") : t("roleLabelEmployerViewOnly")} />}
       {view === "chat" && <ChatDashboard onBack={() => setView("menu")} currentUser={currentUser} />}
       {view === "riskKnowledgeManagement" && <RiskKnowledgeManager onBack={() => setView("riskAssessment")} currentUser={currentUser} />}
       {view === "anomalyForm" && anomalyCanEdit && <AnomalyForm onBack={() => setView("anomalyReport")} currentUser={currentUser} onSaved={() => setView("anomalyList")} />}
@@ -2671,6 +2823,8 @@ function EmployerDashboard({ onLogout, currentUser }) {
 
 // ---------- پنل پیمانکار ----------
 function ContractorDashboard({ onLogout, currentUser }) {
+  const { t, dir } = useLanguage();
+  const mt = (m) => (m?.labelKey ? t(m.labelKey) : m?.label);
   const [view, setView] = usePersistedState("ihms_view_contractor", "menu");
   useEffect(() => { trackPageView(currentUser, view); }, [view]);
   const [navFilter, setNavFilter] = useState(null);
@@ -2681,8 +2835,8 @@ function ContractorDashboard({ onLogout, currentUser }) {
   useEffect(() => {
     const load = () => loadUnreadTotal(currentUser?.username).then(setChatUnread);
     load();
-    const t = setInterval(load, 15000);
-    return () => clearInterval(t);
+    const timer = setInterval(load, 15000);
+    return () => clearInterval(timer);
   }, [currentUser?.username]);
 
   useEffect(() => {
@@ -2708,7 +2862,7 @@ function ContractorDashboard({ onLogout, currentUser }) {
     if (mod.employerOnly) { alert("این بخش فقط برای کارفرما/ادمین در دسترس است"); return; }
     if (mod.key === "managementDashboard") { setView("managementDashboard"); return; }
     if (mod.sub) { setView(mod.key); return; }
-    alert(`ماژول «${mod.label}» به‌زودی اضافه می‌شود`);
+    alert(`ماژول «${mt(mod)}» به‌زودی اضافه می‌شود`);
   };
 
   const handleHomeNavigate = (target) => {
@@ -2726,7 +2880,7 @@ function ContractorDashboard({ onLogout, currentUser }) {
   const scaffoldMod = HSE_MODULES.find((m) => m.key === "scaffoldManagement");
 
   return (
-    <div style={styles.dashboardWrapper}>
+    <div style={{ ...styles.dashboardWrapper, direction: dir }}>
       <DashboardHeader
         panelLabelKey="panelContractor"
         currentUser={currentUser}
@@ -2742,7 +2896,7 @@ function ContractorDashboard({ onLogout, currentUser }) {
             <MenuRow
               key={mod.key}
               icon={MODULE_ICON[mod.key] || LayoutGrid}
-              label={mod.label}
+              label={mt(mod)}
               onClick={() => openModule(mod)}
               accent={!!mod.icon}
               muted={!!mod.employerOnly}
@@ -2755,11 +2909,11 @@ function ContractorDashboard({ onLogout, currentUser }) {
 
       {view === "anomalyReport" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
-          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
-          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{anomalyMod.label}</h3>
+          <div style={styles.backLink} onClick={() => setView("menu")}>{t("backToMenu")}</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{mt(anomalyMod)}</h3>
           <div style={styles.menuList2}>
             {anomalySub.map((s) => (
-              <MenuRow key={s.key} icon={AlertTriangle} label={s.label} onClick={() => setView(s.key)} accent />
+              <MenuRow key={s.key} icon={AlertTriangle} label={mt(s)} onClick={() => setView(s.key)} accent />
             ))}
           </div>
         </div>
@@ -2767,11 +2921,11 @@ function ContractorDashboard({ onLogout, currentUser }) {
 
       {view === "personnelAccess" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
-          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
-          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{personnelMod.label}</h3>
+          <div style={styles.backLink} onClick={() => setView("menu")}>{t("backToMenu")}</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{mt(personnelMod)}</h3>
           <div style={styles.menuList2}>
             {personnelMod.sub.map((s) => (
-              <MenuRow key={s.key} icon={Users} label={s.label} onClick={() => setView(s.key)} accent />
+              <MenuRow key={s.key} icon={Users} label={mt(s)} onClick={() => setView(s.key)} accent />
             ))}
           </div>
         </div>
@@ -2779,11 +2933,11 @@ function ContractorDashboard({ onLogout, currentUser }) {
 
       {view === "machineryManagement" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
-          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
-          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{machineryMod.label}</h3>
+          <div style={styles.backLink} onClick={() => setView("menu")}>{t("backToMenu")}</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{mt(machineryMod)}</h3>
           <div style={styles.menuList2}>
             {machineryMod.sub.map((s) => (
-              <MenuRow key={s.key} icon={Truck} label={s.label} onClick={() => setView(s.key)} accent />
+              <MenuRow key={s.key} icon={Truck} label={mt(s)} onClick={() => setView(s.key)} accent />
             ))}
           </div>
         </div>
@@ -2791,11 +2945,11 @@ function ContractorDashboard({ onLogout, currentUser }) {
 
       {view === "scaffoldManagement" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
-          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
-          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{scaffoldMod.label}</h3>
+          <div style={styles.backLink} onClick={() => setView("menu")}>{t("backToMenu")}</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{mt(scaffoldMod)}</h3>
           <div style={styles.menuList2}>
             {scaffoldMod.sub.map((s) => (
-              <MenuRow key={s.key} icon={Tag} label={s.label} onClick={() => setView(s.key)} accent />
+              <MenuRow key={s.key} icon={Tag} label={mt(s)} onClick={() => setView(s.key)} accent />
             ))}
           </div>
         </div>
@@ -2803,17 +2957,17 @@ function ContractorDashboard({ onLogout, currentUser }) {
 
       {view === "riskAssessment" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
-          <div style={styles.backLink} onClick={() => setView("menu")}>← بازگشت به منو</div>
-          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{riskMod.label}</h3>
+          <div style={styles.backLink} onClick={() => setView("menu")}>{t("backToMenu")}</div>
+          <h3 style={{ marginBottom: 12, color: THEME.navy }}>{mt(riskMod)}</h3>
           <div style={styles.menuList2}>
             {riskMod.sub.filter((s) => !s.employerOnly).map((s) => (
-              <MenuRow key={s.key} icon={ShieldCheck} label={s.label} onClick={() => setView(s.key)} accent />
+              <MenuRow key={s.key} icon={ShieldCheck} label={mt(s)} onClick={() => setView(s.key)} accent />
             ))}
           </div>
         </div>
       )}
 
-      {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel="پیمانکار" />}
+      {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel={t("roleLabelContractor")} />}
       {view === "chat" && <ChatDashboard onBack={() => setView("menu")} currentUser={currentUser} />}
       {view === "hcmsDashboard" && <HcmsDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} />}
       {view === "bowtieDashboard" && <BowTieDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} readOnly={getAccessLevel(permMap, "riskAssessment") === "view"} />}
@@ -2859,6 +3013,11 @@ class ErrorBoundary extends React.Component {
 // ---------- کامپوننت اصلی ----------
 function AppInner() {
   const [currentUser, setCurrentUser] = usePersistedState("ihms_current_user", null);
+  // آیا در همین اجرای برنامه (از باز شدن اپ تا الان)، اگر بیومتریک برای
+  // این کاربر فعال بود، قبلاً با موفقیت تأیید شده؟ با هر بار setCurrentUser
+  // (ورود جدید یا خروج) دوباره false می‌شود، پس هر نشست تازه دوباره از
+  // گیت بیومتریک رد می‌شود.
+  const [biometricUnlocked, setBiometricUnlocked] = useState(false);
 
   // متغیر ماژولی «شرکت فعلی» با رفرش صفحه پاک می‌شود؛ ولی currentUser از
   // localStorage بازیابی می‌شود، پس همین‌جا دوباره تنظیمش می‌کنیم. همچنین
@@ -2868,10 +3027,39 @@ function AppInner() {
     setCurrentCompanyId(currentUser ? currentUser.companyId || null : null);
   }, [currentUser]);
 
-  if (!currentUser) return <LoginScreen onLogin={setCurrentUser} />;
-  if (currentUser.role === "ADMIN") return <AdminDashboard onLogout={() => { trackLogout(currentUser); setCurrentUser(null); }} currentUser={currentUser} />;
-  if (currentUser.role === "EMPLOYER") return <EmployerDashboard onLogout={() => { trackLogout(currentUser); setCurrentUser(null); }} currentUser={currentUser} />;
-  return <ContractorDashboard onLogout={() => { trackLogout(currentUser); setCurrentUser(null); }} currentUser={currentUser} />;
+  const handleLogin = (user) => {
+    setBiometricUnlocked(false);
+    setCurrentUser(user);
+  };
+
+  // خروج کامل: طبق الزام صریح، باید اعتبار ورود بیومتریک را هم باطل کند
+  // (نه فقط نشست جاری را پاک کند) — یعنی بعد از خروج، حتی با اثر انگشت
+  // هم دیگر بدون وارد کردن دوباره‌ی رمز عبور نمی‌شود وارد شد.
+  const handleLogout = () => {
+    trackLogout(currentUser);
+    invalidateBiometricOnLogout();
+    setBiometricUnlocked(false);
+    setCurrentUser(null);
+  };
+
+  if (!currentUser) return <LoginScreen onLogin={handleLogin} />;
+
+  // نشستِ ذخیره‌شده وجود دارد؛ اگر برای همین کاربر بیومتریک فعال است و
+  // هنوز در این اجرای برنامه تأیید نشده، به‌جای رفتن مستقیم به داشبورد،
+  // اول باید اثر انگشت/چهره تأیید شود.
+  if (isBiometricEnabledFor(currentUser.username) && !biometricUnlocked) {
+    return (
+      <BiometricGateScreen
+        currentUser={currentUser}
+        onUnlocked={(user) => { setCurrentUser(user); setBiometricUnlocked(true); }}
+        onFallbackToPassword={() => setCurrentUser(null)}
+      />
+    );
+  }
+
+  if (currentUser.role === "ADMIN") return <AdminDashboard onLogout={handleLogout} currentUser={currentUser} />;
+  if (currentUser.role === "EMPLOYER") return <EmployerDashboard onLogout={handleLogout} currentUser={currentUser} />;
+  return <ContractorDashboard onLogout={handleLogout} currentUser={currentUser} />;
 }
 
 // مسیر Super Admin کاملاً جدا از درخت بالاست — هیچ حساب کارفرما/پیمانکار/ادمین
