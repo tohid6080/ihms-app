@@ -7,6 +7,7 @@ import {
   computeRiskLevel, worstLevel, RISK_LEVEL_META, parseRpnCode,
 } from "./hcmsApi.js";
 import { loadFieldSuggestions, learnFromApprovedAssessment } from "../riskknowledge/riskKnowledgeApi.js";
+import RiskMatrixPreview from "./RiskMatrixPreview.jsx";
 
 const EMPTY_FORM = {
   process: "", activity: "", activityType: "", unit: "", equipment: "",
@@ -215,6 +216,7 @@ export default function HcmsDashboard({ onBack, currentUser, focusAnomalyId }) {
         <div style={{ ...styles.card, width: "auto", marginBottom: 14 }}>
           <h3 style={{ fontSize: 13, color: THEME.navy, margin: "0 0 4px", fontWeight: 700 }}>ریسک اولیه</h3>
           <p style={{ fontSize: 11, color: THEME.text3, margin: "0 0 10px" }}>فقط کد RPN را وارد کن (مثال: «4C» = شدت ۴، احتمال C) — سطح ریسک خودکار محاسبه می‌شود.</p>
+          <RiskMatrixPreview />
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
             {Object.keys(CATEGORY_LABELS).map((k) => (
               <div key={k}>
