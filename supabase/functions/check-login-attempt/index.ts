@@ -18,7 +18,7 @@
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-const MAX_ATTEMPTS = 5;
+const MAX_ATTEMPTS = 3;
 const LOCKOUT_MINUTES = 15;
 
 const CORS_HEADERS = {

@@ -25,7 +25,7 @@ import ArchiveManager from "./offline/ArchiveManager.jsx";
 import { LanguageProvider, useLanguage } from "./i18n/LanguageContext.jsx";
 import {
   isBiometricAvailable, isBiometricEnabledFor,
-  enableBiometricLogin, disableBiometricLogin, invalidateBiometricOnLogout,
+  enableBiometricLogin, disableBiometricLogin,
   verifyBiometricAndGetCredentials,
 } from "./biometricAuth.js";
 import { checkLoginLockout, recordLoginAttempt, validatePasswordLength, MIN_PASSWORD_LENGTH } from "./loginSecurity.js";
@@ -3027,17 +3027,26 @@ function AppInner() {
     setCurrentCompanyId(currentUser ? currentUser.companyId || null : null);
   }, [currentUser]);
 
+  // ورود تازه و صریح با رمز عبور، خودش یک احراز هویت کامل است — نیازی
+  // نیست بلافاصله بعدش دوباره گیت بیومتریک هم نشان داده شود. گیت
+  // بیومتریک فقط برای زمانی است که نشست، بدون تایپ دوباره‌ی رمز، از
+  // localStorage با باز شدن اپ بازیابی می‌شود (همان‌جا که biometricUnlocked
+  // با مقدار اولیه‌ی false شروع می‌شود).
   const handleLogin = (user) => {
-    setBiometricUnlocked(false);
+    setBiometricUnlocked(true);
     setCurrentUser(user);
   };
 
   // خروج کامل: طبق الزام صریح، باید اعتبار ورود بیومتریک را هم باطل کند
   // (نه فقط نشست جاری را پاک کند) — یعنی بعد از خروج، حتی با اثر انگشت
   // هم دیگر بدون وارد کردن دوباره‌ی رمز عبور نمی‌شود وارد شد.
+  // خروج معمولی («خروج» در هدر) فقط همین نشست را می‌بندد — بیومتریک را
+  // باطل نمی‌کند، وگرنه کاربر باید بعد از هر بار خروج دوباره فعالش کند و
+  // کل قابلیت عملاً بی‌فایده می‌شد (دقیقاً مثل اپ‌های بانکی: خروج معمولی
+  // چیزی به Face ID/اثر انگشت کاری ندارد). ابطال بیومتریک، یک اقدام
+  // صریح و جداست: فقط با خاموش‌کردن کلید در «پروفایل → امنیت» اتفاق می‌افتد.
   const handleLogout = () => {
     trackLogout(currentUser);
-    invalidateBiometricOnLogout();
     setBiometricUnlocked(false);
     setCurrentUser(null);
   };
