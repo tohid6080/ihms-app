@@ -6,6 +6,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,10 +30,12 @@ jobs:
 
       - name: Add Android platform
         run: npx cap add android
-- name: Generate app icons
-  run: |
-    npm install @capacitor/assets --save-dev
-    npx capacitor-assets generate
+
+      - name: Generate app icons
+        run: |
+          npm install @capacitor/assets --save-dev
+          npx capacitor-assets generate
+
       - name: Sync Capacitor
         run: npx cap sync android
 
