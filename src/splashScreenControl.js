@@ -2,11 +2,19 @@ import { Capacitor } from "@capacitor/core";
 import { SplashScreen } from "@capacitor/splash-screen";
 
 // حداقل زمانی که Splash Screen باید دیده شود — طبق خواسته حدود ۳ ثانیه.
-// چون capacitor.config.json با launchAutoHide:false تنظیم شده، Splash تا
-// وقتی این تابع صدا زده نشود، خودش را مخفی نمی‌کند — یعنی این عدد دقیقاً
-// همان مدت‌زمان واقعی نمایش است، نه یک تخمین.
 const MIN_DISPLAY_MS = 3000;
 const appStartTime = Date.now();
+
+// launchAutoHide:false در تنظیمات، در برخی نسخه‌ها/دستگاه‌های اندروید یک
+// باگ شناخته‌شده و قدیمی خودِ پلاگین Capacitor است — یعنی گاهی نادیده
+// گرفته می‌شود و splash طبق مقدار پیش‌فرض (~۵۰۰ میلی‌ثانیه) خودش را مخفی
+// می‌کند، مستقل از تنظیمات ما. راهکار مستندشده‌ی خودِ Capacitor برای این
+// مشکل: علاوه بر تنظیمات فایل کانفیگ، صریحاً هم از طریق کد یک‌بار
+// SplashScreen.show({ autoHide: false }) صدا زده شود تا مطمئن شویم واقعاً
+// تا فراخوانی صریح hide() باز می‌ماند.
+if (Capacitor.isNativePlatform()) {
+  SplashScreen.show({ autoHide: false }).catch(() => {});
+}
 
 // این تابع باید یک‌بار، از نقطه‌ی راه‌اندازی اپ (main.jsx) صدا زده شود —
 // کاملاً مستقل از صفحه‌ی ورود یا احراز هویت؛ فقط منتظر می‌ماند تا هم
