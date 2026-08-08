@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { AlertTriangle, Plus, X, ChevronRight, LogOut, CheckCircle2, Clock, Camera, ImagePlus, Trash2, FileSpreadsheet, FileText, User, Users, ShieldCheck, LayoutGrid, BarChart3, Briefcase, Settings, Archive, Truck, Tag, MessageCircle, GraduationCap, ShieldOff, ShieldAlert, Database, Fingerprint } from "lucide-react";
+import { AlertTriangle, Plus, X, ChevronRight, LogOut, CheckCircle2, Clock, Camera, ImagePlus, Trash2, FileSpreadsheet, FileText, User, Users, ShieldCheck, LayoutGrid, BarChart3, Briefcase, Settings, Archive, Truck, Tag, MessageCircle, GraduationCap, ShieldOff, ShieldAlert, Database, Fingerprint, Info } from "lucide-react";
 import * as XLSX from "xlsx";
 import BowTieDashboard from "./bowtie/BowTieDashboard.jsx";
 import HcmsDashboard from "./hcms/HcmsDashboard.jsx";
@@ -1259,6 +1259,55 @@ function ProfileView({ onBack, currentUser, roleLabel }) {
         </div>
 
         <p style={{ textAlign: "center", color: "#aaa", fontSize: 11, marginTop: 20, direction: "ltr" }}>{APP_NAME}</p>
+      </div>
+    </div>
+  );
+}
+
+// ---------- درباره‌ی IHMS ----------
+function AboutIhms({ onBack }) {
+  const { t, dir, lang } = useLanguage();
+
+  const todayDisplay = lang === "en"
+    ? new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+    : isoToJalaliDisplay(new Date().toISOString().slice(0, 10));
+
+  const buildDisplay = typeof __BUILD_TIME__ !== "undefined"
+    ? (lang === "en"
+        ? new Date(__BUILD_TIME__).toLocaleString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+        : `${isoToJalaliDisplay(__BUILD_TIME__.slice(0, 10))} - ${new Date(__BUILD_TIME__).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`)
+    : "—";
+
+  const Row = ({ label, value, ltr }) => (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${THEME.border}`, gap: 12 }}>
+      <span style={{ fontSize: 12, color: THEME.text3, fontWeight: 600, flexShrink: 0 }}>{label}</span>
+      <span style={{ fontSize: 13, color: THEME.text, fontWeight: 600, direction: ltr ? "ltr" : dir, textAlign: dir === "rtl" ? "left" : "right" }}>{value}</span>
+    </div>
+  );
+
+  return (
+    <div style={{ maxWidth: 440, margin: "0 auto", padding: 24, direction: dir }}>
+      {onBack && <div style={styles.backLink} onClick={onBack}>{t("backToMenu")}</div>}
+      <div style={{ ...styles.card, width: "auto", textAlign: "center" }}>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
+          <IhmsLogo size={88} />
+        </div>
+        <h2 style={{ margin: 0, fontSize: 20, direction: "ltr", color: THEME.navy, fontWeight: 700, letterSpacing: "-0.01em" }}>{APP_NAME}</h2>
+        <p style={{ color: THEME.text3, fontSize: 12.5, marginTop: 4, marginBottom: 22, fontWeight: 500 }}>{t("aboutFullTitleValue")}</p>
+
+        <div style={{ textAlign: dir === "rtl" ? "right" : "left" }}>
+          <Row label={t("aboutVersion")} value="v1.0.0" ltr />
+          <Row label={t("aboutLastUpdate")} value={todayDisplay} />
+          <Row label={t("aboutBuild")} value={buildDisplay} />
+          <Row label={t("aboutDeveloper")} value="Tohid Mirasadi" ltr />
+          <Row
+            label={t("aboutStatus")}
+            value={<span style={{ background: "#dcfce7", color: "#166534", padding: "3px 10px", borderRadius: 999, fontSize: 11.5 }}>{t("aboutStatusValue")}</span>}
+          />
+          <Row label={t("aboutLanguageLabel")} value={t("aboutLanguageValue")} />
+        </div>
+
+        <p style={{ textAlign: "center", color: "#aaa", fontSize: 11, marginTop: 20 }}>{t("aboutCopyright")}</p>
       </div>
     </div>
   );
@@ -2631,6 +2680,7 @@ function AdminDashboard({ onLogout, currentUser }) {
             <MenuRow icon={ShieldAlert} label={t("subHcmsMatrix")} onClick={() => setView("hcmsMatrixManagement")} />
             <MenuRow icon={Database} label={t("subRiskKnowledge")} onClick={() => setView("riskKnowledgeManagement")} />
             <MenuRow icon={Tag} label={t("subAnomalyCategories")} onClick={() => setView("anomalyCategoryManagement")} />
+            <MenuRow icon={Info} label={t("aboutMenuLabel")} onClick={() => setView("aboutIhms")} />
           </div>
         </div>
       )}
@@ -2640,6 +2690,7 @@ function AdminDashboard({ onLogout, currentUser }) {
       {view === "hcmsMatrixManagement" && <HcmsMatrixManager onBack={() => setView("systemManagement")} />}
       {view === "riskKnowledgeManagement" && <RiskKnowledgeManager onBack={() => setView("systemManagement")} currentUser={currentUser} />}
       {view === "anomalyCategoryManagement" && <AnomalyCategoryManager onBack={() => setView("systemManagement")} />}
+      {view === "aboutIhms" && <AboutIhms onBack={() => setView("systemManagement")} />}
 
       {view === "anomalyReport" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>

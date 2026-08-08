@@ -142,6 +142,21 @@ export const translations = {
   passwordTooShort: { fa: "رمز عبور باید حداقل ۸ کاراکتر باشد.", en: "Password must be at least 8 characters." },
   failedAttemptWarning: { fa: "توجه: در صورت تکرار بیش از ۳ تلاش ناموفق، حساب به مدت ۱۵ دقیقه قفل خواهد شد.", en: "Note: after more than 3 failed attempts, the account will be locked for 15 minutes." },
   biometricQuickLogin: { fa: "ورود سریع با اثر انگشت", en: "Quick Login with Fingerprint" },
+
+  // ---------- درباره‌ی IHMS ----------
+  aboutMenuLabel: { fa: "درباره IHMS", en: "About IHMS" },
+  aboutSystemName: { fa: "نام سامانه", en: "System Name" },
+  aboutFullTitle: { fa: "عنوان کامل", en: "Full Title" },
+  aboutFullTitleValue: { fa: "سامانه یکپارچه مدیریت ایمنی، بهداشت و محیط‌زیست", en: "Integrated HSE Management System" },
+  aboutVersion: { fa: "نسخه", en: "Version" },
+  aboutLastUpdate: { fa: "آخرین به‌روزرسانی", en: "Last Updated" },
+  aboutBuild: { fa: "شماره‌ی Build", en: "Build" },
+  aboutDeveloper: { fa: "طراح و توسعه‌دهنده", en: "Designed & Developed by" },
+  aboutStatus: { fa: "وضعیت", en: "Status" },
+  aboutStatusValue: { fa: "پایدار (Production)", en: "Production / Stable" },
+  aboutLanguageLabel: { fa: "زبان سامانه", en: "System Language" },
+  aboutLanguageValue: { fa: "فارسی / English", en: "Persian / English" },
+  aboutCopyright: { fa: "© ۲۰۲۶ IHMS — تمامی حقوق محفوظ است", en: "© 2026 IHMS — All rights reserved" },
 };
 
 export function translate(lang, key) {
