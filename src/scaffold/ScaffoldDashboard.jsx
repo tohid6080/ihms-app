@@ -48,6 +48,19 @@ export default function ScaffoldDashboard({ onBack, currentUser, role, initialSt
   };
   useEffect(() => { load(); }, []);
 
+  // پنل جزئیات (درخواست برچیدن / ثبت اصلاح) همیشه زیر کل لیست رندر می‌شود؛
+  // اگر کاربر روی کارتی وسط یک لیست بلند کلیک کند، بدون این اسکرول خودکار،
+  // پنل باز می‌شود ولی بیرون از دید کاربر می‌ماند و به‌نظر می‌رسد «هیچ
+  // اتفاقی نیفتاده». این useEffect عمداً همین‌جا، کنار بقیه‌ی hookها و قبل
+  // از هر return شرطی قرار دارد — قرار دادنش بعد از یک early return باعث
+  // نقض قانون Hooks در ری‌اکت می‌شود (تعداد hookهای فراخوانی‌شده بین
+  // رندرهای مختلف فرق می‌کند) که دقیقاً همان خطای #310 را ایجاد می‌کرد.
+  useEffect(() => {
+    if (expandedId && expandedPanelRef.current) {
+      expandedPanelRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [expandedId]);
+
   const myName = (currentUser?.name || "").trim().toLowerCase();
   const scoped = isContractor ? list.filter((t) => (t.contractorName || "").trim().toLowerCase() === myName) : list;
   const contractorScoped = !isContractor && initialContractorFilter && initialContractorFilter !== "all"
@@ -227,16 +240,6 @@ export default function ScaffoldDashboard({ onBack, currentUser, role, initialSt
   );
 
   const expandedItem = sorted.find((t) => t.id === expandedId || `removal-${t.id}` === expandedId);
-
-  // پنل جزئیات (درخواست برچیدن / ثبت اصلاح) همیشه زیر کل لیست رندر می‌شود؛
-  // اگر کاربر روی کارتی وسط یک لیست بلند کلیک کند، بدون این اسکرول خودکار،
-  // پنل باز می‌شود ولی بیرون از دید کاربر می‌ماند و به‌نظر می‌رسد «هیچ
-  // اتفاقی نیفتاده».
-  useEffect(() => {
-    if (expandedId && expandedPanelRef.current) {
-      expandedPanelRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }, [expandedId]);
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: 24 }}>

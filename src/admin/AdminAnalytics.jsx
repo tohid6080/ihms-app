@@ -30,8 +30,9 @@ function computeAttendance(rows) {
   const byUser = {};
   rows.forEach((r) => {
     if (!r.username) return;
-    if (!byUser[r.username]) byUser[r.username] = { username: r.username, fullName: r.full_name || r.username, role: r.role || "", events: [] };
+    if (!byUser[r.username]) byUser[r.username] = { username: r.username, fullName: r.full_name || r.username, role: r.role || "", events: [], failedCount: 0 };
     if (r.event_type === "login" || r.event_type === "logout") byUser[r.username].events.push(r);
+    if (r.event_type === "failed_login") byUser[r.username].failedCount += 1;
   });
 
   return Object.values(byUser).map((u) => {
@@ -60,8 +61,18 @@ function computeAttendance(rows) {
       lastLogoutAt: lastSession?.logout ? lastSession.logout.created_at : null,
       durationMs,
       loginCount,
+      failedCount: u.failedCount,
     };
   }).sort((a, b) => (b.lastLoginAt || "").localeCompare(a.lastLoginAt || ""));
+}
+
+// فهرست جداگانه‌ی تلاش‌های ناموفق اخیر — چون ممکن است روی نام‌کاربری‌ای
+// باشد که اصلاً هیچ‌وقت وارد نشده (پس در جدول حضور اصلاً ردیفی ندارد)
+function computeRecentFailedAttempts(rows) {
+  return rows
+    .filter((r) => r.event_type === "failed_login")
+    .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))
+    .slice(0, 20);
 }
 
 export default function AdminAnalytics({ onBack, currentUser }) {
@@ -79,6 +90,7 @@ export default function AdminAnalytics({ onBack, currentUser }) {
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const attendance = useMemo(() => computeAttendance(rawRows), [rawRows]);
+  const recentFailed = useMemo(() => computeRecentFailedAttempts(rawRows), [rawRows]);
 
   const userOptions = useMemo(() => {
     const map = {};
@@ -131,6 +143,7 @@ export default function AdminAnalytics({ onBack, currentUser }) {
                 <th style={{ textAlign: "center", padding: "8px 10px" }}>ساعت خروج</th>
                 <th style={{ textAlign: "center", padding: "8px 10px" }}>مدت حضور</th>
                 <th style={{ textAlign: "center", padding: "8px 10px" }}>تعداد دفعات ورود</th>
+                <th style={{ textAlign: "center", padding: "8px 10px" }}>تلاش ناموفق</th>
               </tr>
             </thead>
             <tbody>
@@ -144,13 +157,26 @@ export default function AdminAnalytics({ onBack, currentUser }) {
                   <td style={{ padding: "8px 10px", textAlign: "center" }}>{a.lastLogoutAt ? formatTime(a.lastLogoutAt) : "—"}</td>
                   <td style={{ padding: "8px 10px", textAlign: "center" }}>{formatDuration(a.durationMs)}</td>
                   <td style={{ padding: "8px 10px", textAlign: "center", fontWeight: 700 }}>{a.loginCount}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "center", fontWeight: 700, color: a.failedCount >= 3 ? THEME.danger : a.failedCount > 0 ? "#d97706" : THEME.text3 }}>{a.failedCount}</td>
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={8} style={{ padding: 20, textAlign: "center", color: THEME.text3 }}>در این بازه فعالیتی ثبت نشده است</td></tr>
+                <tr><td colSpan={9} style={{ padding: 20, textAlign: "center", color: THEME.text3 }}>در این بازه فعالیتی ثبت نشده است</td></tr>
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {!loading && recentFailed.length > 0 && (
+        <div style={{ background: THEME.surface, borderRadius: 10, border: `1px solid ${THEME.border}`, marginTop: 16, padding: 14 }}>
+          <p style={{ fontSize: 12.5, fontWeight: 700, color: THEME.navy, marginTop: 0, marginBottom: 10 }}>تلاش‌های ناموفق ورود اخیر</p>
+          {recentFailed.map((r, i) => (
+            <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: i < recentFailed.length - 1 ? `1px solid ${THEME.border}` : "none", fontSize: 12 }}>
+              <span style={{ color: THEME.text, fontWeight: 600 }}>{r.username}</span>
+              <span style={{ color: THEME.text3 }}>{toJalaliSafe(r.created_at)} — {formatTime(r.created_at)}</span>
+            </div>
+          ))}
         </div>
       )}
     </div>

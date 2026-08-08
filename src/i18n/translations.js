@@ -140,6 +140,8 @@ export const translations = {
   // ---------- امنیت ورود ----------
   accountTemporarilyLocked: { fa: "به‌دلیل تلاش‌های ناموفق مکرر، امکان ورود موقتاً مسدود شده است. لطفاً چند دقیقه‌ی دیگر دوباره امتحان کنید.", en: "Due to repeated failed attempts, sign-in is temporarily locked. Please try again in a few minutes." },
   passwordTooShort: { fa: "رمز عبور باید حداقل ۸ کاراکتر باشد.", en: "Password must be at least 8 characters." },
+  failedAttemptWarning: { fa: "توجه: در صورت تکرار بیش از ۳ تلاش ناموفق، حساب به مدت ۱۵ دقیقه قفل خواهد شد.", en: "Note: after more than 3 failed attempts, the account will be locked for 15 minutes." },
+  biometricQuickLogin: { fa: "ورود سریع با اثر انگشت", en: "Quick Login with Fingerprint" },
 };
 
 export function translate(lang, key) {

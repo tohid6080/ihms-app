@@ -30,6 +30,12 @@ export function trackLogout(user) {
   track("logout", { username: user?.username || "", full_name: user?.name || "", role: user?.role || "" });
 }
 
+// تلاش ناموفق ورود — برای اینکه ادمین در «حضور و فعالیت کاربران» بتواند
+// الگوهای مشکوک (چند تلاش پشت‌سرهم ناموفق روی یک حساب) را ببیند
+export function trackFailedLogin(username) {
+  track("failed_login", { username: username || "", full_name: "", role: "" });
+}
+
 export function trackPageView(user, page) {
   if (!page) return;
   track("page_view", { username: user?.username || "", full_name: user?.name || "", role: user?.role || "", page });

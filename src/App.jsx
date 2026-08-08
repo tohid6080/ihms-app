@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { AlertTriangle, Plus, X, ChevronRight, LogOut, CheckCircle2, Clock, Camera, ImagePlus, Trash2, FileSpreadsheet, FileText, User, Users, ShieldCheck, LayoutGrid, BarChart3, Briefcase, Settings, Archive, Truck, Tag, MessageCircle, GraduationCap, ShieldOff, ShieldAlert, Database } from "lucide-react";
+import { AlertTriangle, Plus, X, ChevronRight, LogOut, CheckCircle2, Clock, Camera, ImagePlus, Trash2, FileSpreadsheet, FileText, User, Users, ShieldCheck, LayoutGrid, BarChart3, Briefcase, Settings, Archive, Truck, Tag, MessageCircle, GraduationCap, ShieldOff, ShieldAlert, Database, Fingerprint } from "lucide-react";
 import * as XLSX from "xlsx";
 import BowTieDashboard from "./bowtie/BowTieDashboard.jsx";
 import HcmsDashboard from "./hcms/HcmsDashboard.jsx";
@@ -24,7 +24,7 @@ import { checkUploadAllowed } from "./offline/dbSizeMonitor.js";
 import ArchiveManager from "./offline/ArchiveManager.jsx";
 import { LanguageProvider, useLanguage } from "./i18n/LanguageContext.jsx";
 import {
-  isBiometricAvailable, isBiometricEnabledFor,
+  isBiometricAvailable, isBiometricEnabledFor, getBiometricEnabledUsername,
   enableBiometricLogin, disableBiometricLogin,
   verifyBiometricAndGetCredentials,
 } from "./biometricAuth.js";
@@ -36,7 +36,7 @@ import ChatAccessManager from "./chat/ChatAccessManager.jsx";
 import { loadUnreadTotal } from "./chat/chatApi.js";
 import ChatThread from "./chat/ChatThread.jsx";
 import { findOrCreateLinkedConversation, resolveContractorUsername } from "./chat/chatApi.js";
-import { trackLogin, trackLogout, trackPageView } from "./admin/activityApi.js";
+import { trackLogin, trackLogout, trackPageView, trackFailedLogin } from "./admin/activityApi.js";
 import SuperAdminLogin from "./superadmin/SuperAdminLogin.jsx";
 import SuperAdminPanel from "./superadmin/SuperAdminPanel.jsx";
 import DataView, { StatusPill } from "./shared/DataView.jsx";
@@ -865,11 +865,47 @@ function LoginScreen({ onLogin }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [warning, setWarning] = useState("");
   const [loading, setLoading] = useState(false);
+  const [bioAvailable, setBioAvailable] = useState(false);
+  const [bioChecking, setBioChecking] = useState(false);
+
+  // دکمه‌ی «ورود سریع با اثر انگشت» فقط وقتی نشون داده می‌شه که هم روی
+  // این دستگاه از قبل برای یکی فعال شده، هم واقعاً سخت‌افزارش پشتیبانی
+  // بشه — این باعث می‌شه بعد از زدن «خروج» هم (نه فقط با باز کردن دوباره‌ی
+  // اپ)، بشه با اثر انگشت وارد شد.
+  useEffect(() => {
+    if (getBiometricEnabledUsername()) {
+      isBiometricAvailable().then((r) => setBioAvailable(!!r.available));
+    }
+  }, []);
+
+  const finishLogin = async (matchedUsername, user) => {
+    const record = await recordLoginAttempt(matchedUsername, !!user);
+    if (user) {
+      setError("");
+      setWarning("");
+      setCurrentCompanyId(user.companyId);
+      trackLogin(user);
+      if (user.preferredLanguage) setLang(user.preferredLanguage);
+      onLogin(user);
+      return true;
+    }
+    trackFailedLogin(matchedUsername);
+    if (record?.locked) {
+      setError(t("accountTemporarilyLocked"));
+      setWarning("");
+    } else {
+      setError(t("invalidCredentials"));
+      setWarning(t("failedAttemptWarning"));
+    }
+    return false;
+  };
 
   const handleSubmit = async () => {
     setLoading(true);
     setError("");
+    setWarning("");
 
     // اول: آیا این نام‌کاربری به‌خاطر تلاش‌های ناموفق اخیر قفل است؟ این
     // بررسی واقعاً سمت سرور انجام می‌شود (نه یک شمارنده‌ی قابل‌پاک‌شدن در
@@ -882,17 +918,35 @@ function LoginScreen({ onLogin }) {
     }
 
     const { user } = await attemptCredentialLogin(username, password);
-    recordLoginAttempt(username, !!user); // نتیجه را برای شمارنده ثبت کن؛ منتظر پاسخش نمی‌مانیم تا ورود موفق کندتر نشود
+    await finishLogin(username, user);
     setLoading(false);
-    if (user) {
-      setError("");
-      setCurrentCompanyId(user.companyId);
-      trackLogin(user);
-      if (user.preferredLanguage) setLang(user.preferredLanguage);
-      onLogin(user);
-    } else {
-      setError(t("invalidCredentials"));
+  };
+
+  const handleBiometricLogin = async () => {
+    setBioChecking(true);
+    setError("");
+    setWarning("");
+    const bioResult = await verifyBiometricAndGetCredentials();
+    if (bioResult?.__error) {
+      setBioChecking(false);
+      if (!bioResult.cancelled) setError(bioResult.message || "");
+      return;
     }
+    const lockStatus = await checkLoginLockout(bioResult.username);
+    if (lockStatus?.locked) {
+      setBioChecking(false);
+      setError(t("accountTemporarilyLocked"));
+      return;
+    }
+    const { user } = await attemptCredentialLogin(bioResult.username, bioResult.password);
+    if (!user) {
+      setBioChecking(false);
+      await finishLogin(bioResult.username, null);
+      setError(t("biometricStaleCredentials"));
+      return;
+    }
+    await finishLogin(bioResult.username, user);
+    setBioChecking(false);
   };
 
   return (
@@ -923,10 +977,22 @@ function LoginScreen({ onLogin }) {
         />
 
         {error && <p style={styles.error}>{error}</p>}
+        {!error && warning && <p style={{ fontSize: 11, color: "#b45309", marginTop: -6, marginBottom: 10, lineHeight: 1.7 }}>{warning}</p>}
 
         <button type="button" style={{ ...styles.button, opacity: loading ? 0.75 : 1 }} onClick={handleSubmit} disabled={loading}>
           {loading ? t("loggingIn") : t("loginButton")}
         </button>
+
+        {bioAvailable && (
+          <button
+            type="button"
+            onClick={handleBiometricLogin}
+            disabled={bioChecking}
+            style={{ ...styles.button, background: THEME.tealDeep, marginTop: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: bioChecking ? 0.75 : 1 }}
+          >
+            <Fingerprint size={16} /> {bioChecking ? t("biometricGateChecking") : t("biometricQuickLogin")}
+          </button>
+        )}
 
         <p style={styles.hint}>{t("designedBy")}</p>
       </div>
@@ -970,6 +1036,7 @@ function BiometricGateScreen({ currentUser, onUnlocked, onFallbackToPassword }) 
       trackLogin(user);
       onUnlocked(user);
     } else {
+      trackFailedLogin(bioResult.username);
       setErrorMsg(t("biometricStaleCredentials"));
     }
   };
