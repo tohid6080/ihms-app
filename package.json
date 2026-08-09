@@ -21,7 +21,7 @@
     "@capacitor/core": "^6.1.2",
     "@capacitor/android": "^6.1.2",
     "@capacitor/splash-screen": "^6.0.3",
-    "@capgo/capacitor-native-biometric": "^6.0.4",
+    "@capgo/capacitor-native-biometric": "^8.3.6",
     "@capacitor/filesystem": "^6.0.1",
     "@capacitor/share": "^6.0.2"
   },
