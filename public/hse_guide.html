@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>راهنمای اجرایی شاخص‌های اکتیو و بینابینی HSE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#EAECEC;
+    --paper:#FFFFFF;
+    --ink:#201F1D;
+    --ink-soft:#5B5851;
+    --ink-faint:#8B8880;
+    --rule:#DAD7CD;
+    --rule-soft:#EAE8E1;
+
+    --red:#AE2A2E;
+    --red-deep:#7E1E22;
+    --red-soft:#F4DEDD;
+    --red-line:#D9A9A8;
+
+    --blue:#2C4A6B;
+    --blue-soft:#DCE6EE;
+    --blue-line:#AEC3D4;
+
+    --teal:#2F6E5D;
+    --teal-soft:#DCEAE4;
+    --teal-line:#A9CBBE;
+
+    --amber:#9C6B22;
+    --amber-soft:#F1E4CC;
+    --amber-line:#D9BD86;
+
+    --radius:10px;
+    --shadow: 0 1px 2px rgba(32,31,29,.06), 0 8px 24px -12px rgba(32,31,29,.18);
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    font-family:'Vazirmatn', sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+    line-height:1.9;
+    font-feature-settings:"tnum" 1, "ss01" 1;
+  }
+  h1,h2,h3,h4{font-family:'Vazirmatn', sans-serif; margin:0; font-weight:900;}
+  p{margin:0 0 14px;}
+  a{color:inherit;}
+
+  /* ---------- HERO ---------- */
+  .hero{
+    background:
+      radial-gradient(1100px 420px at 85% -10%, rgba(174,42,46,.14), transparent 60%),
+      linear-gradient(180deg, #FBFAF8 0%, var(--bg) 100%);
+    border-bottom:1px solid var(--rule);
+    padding:56px 24px 34px;
+  }
+  .hero-inner{max-width:1180px; margin:0 auto;}
+
+  .hero h1{
+    font-size:clamp(28px, 4vw, 44px);
+    line-height:1.35;
+    margin-bottom:14px;
+  }
+  .hero .lede{
+    font-size:16.5px; color:var(--ink-soft); margin-bottom:0;
+  }
+
+  /* ---------- LAYOUT ---------- */
+  .layout{
+    max-width:1180px; margin:0 auto; padding:40px 24px 80px;
+    display:grid; grid-template-columns:190px 1fr; gap:36px;
+    align-items:start;
+  }
+  @media (max-width: 880px){ .layout{grid-template-columns:1fr;} .toc{position:static; order:-1;} }
+
+  .toc{
+    position:sticky; top:20px;
+    background:var(--paper); border:1px solid var(--rule); border-radius:var(--radius);
+    padding:16px 12px; box-shadow:var(--shadow);
+  }
+  .toc h4{font-size:11.5px; color:var(--ink-faint); font-weight:700; margin-bottom:10px;}
+  .toc ol{list-style:none; margin:0; padding:0; counter-reset:toc;}
+  .toc li{counter-increment:toc; margin-bottom:2px;}
+  .toc a{
+    display:flex; gap:6px; align-items:baseline;
+    font-size:12px; line-height:1.6; padding:6px 5px; border-radius:6px; text-decoration:none; color:var(--ink-soft);
+  }
+  .toc a::before{
+    content: counter(toc, persian) "";
+    font-size:11px; color:var(--ink-faint); flex:none;
+  }
+  .toc a:hover, .toc a.active{background:var(--rule-soft); color:var(--ink); font-weight:700;}
+
+  /* ---------- MAIN CONTENT ---------- */
+  main{min-width:0;}
+  section{margin-bottom:56px; scroll-margin-top:20px;}
+
+  .sec-head{display:flex; align-items:flex-start; gap:14px; margin-bottom:6px;}
+  .sec-num{
+    font-size:13px; font-weight:800; color:var(--paper);
+    background:var(--ink); width:34px; height:34px; border-radius:8px;
+    display:flex; align-items:center; justify-content:center; flex:none;
+  }
+  section h2{font-size:24px;}
+  .sec-sub{color:var(--ink-faint); font-size:13.5px; margin:6px 0 22px 48px;}
+
+  .card{
+    background:var(--paper); border:1px solid var(--rule); border-radius:var(--radius);
+    box-shadow:var(--shadow); padding:26px 26px 22px; margin-bottom:20px;
+  }
+
+  .meta-row{
+    display:grid; grid-template-columns:repeat(3, 1fr); gap:14px; margin-bottom:22px;
+  }
+  @media (max-width:700px){.meta-row{grid-template-columns:1fr;}}
+  .meta{
+    background:var(--rule-soft); border:1px solid var(--rule); border-radius:8px; padding:12px 14px;
+  }
+  .meta .k{font-size:11px; color:var(--ink-faint); font-weight:700; margin-bottom:4px;}
+  .meta .v{font-size:13.5px; font-weight:600;}
+
+  h3.h{font-size:16px; margin:26px 0 10px; padding-right:12px; border-right:3px solid var(--red);}
+  h4.h{font-size:14px; margin:20px 0 8px; color:var(--ink-soft); font-weight:700;}
+
+  table{width:100%; border-collapse:collapse; font-size:13.5px; margin:12px 0 22px;}
+  caption{text-align:right; font-size:12px; color:var(--ink-faint); margin-bottom:6px; caption-side:top;}
+  th,td{border:1px solid var(--rule); padding:9px 12px; text-align:right; vertical-align:top;}
+  th{background:var(--rule-soft); font-weight:700; font-size:12.5px; color:var(--ink-soft);}
+  tr:nth-child(even) td{background:#FCFCFB;}
+  td.num, th.num{text-align:center;}
+
+  .badge{display:inline-block; padding:2px 9px; border-radius:999px; font-size:11.5px; font-weight:700;}
+  .b-low{background:var(--red-soft); color:var(--red-deep); border:1px solid var(--red-line);}
+  .b-mid{background:var(--amber-soft); color:var(--amber); border:1px solid var(--amber-line);}
+  .b-high{background:var(--teal-soft); color:var(--teal); border:1px solid var(--teal-line);}
+  .b-vhigh{background:var(--blue-soft); color:var(--blue); border:1px solid var(--blue-line);}
+
+  ol.steps{margin:0 0 8px; padding-right:0; list-style:none; counter-reset:step;}
+  ol.steps > li{
+    counter-increment:step;
+    position:relative;
+    padding:2px 0 18px 0; margin-right:0;
+    padding-right:46px;
+    border-right:2px solid var(--rule);
+    margin-right:16px;
+  }
+  ol.steps > li:last-child{border-color:transparent; padding-bottom:2px;}
+  ol.steps > li::before{
+    content: counter(step);
+    position:absolute; right:-16px; top:0;
+    width:32px; height:32px; border-radius:50%;
+    background:var(--paper); border:2px solid var(--ink); color:var(--ink);
+    font-weight:800; font-size:13px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  ol.steps > li b{display:block; font-size:14.5px; margin-bottom:4px;}
+  ol.steps > li p{margin:0; color:var(--ink-soft); font-size:13.5px;}
+
+  .callout{
+    display:flex; gap:12px; align-items:flex-start;
+    background:var(--red-soft); border:1px solid var(--red-line); border-radius:8px;
+    padding:14px 16px; margin:16px 0; font-size:13.5px;
+  }
+  .callout .ico{font-size:16px; flex:none;}
+  .callout b{color:var(--red-deep);}
+
+  .callout.note{background:var(--rule-soft); border-color:var(--rule);}
+  .callout.note b{color:var(--ink);}
+
+  .formula{
+    background:#22221F; color:#F1EFE8; border-radius:8px; padding:16px 18px;
+    font-size:13px; line-height:2; direction:ltr; text-align:left;
+    overflow-x:auto; margin:12px 0 18px; unicode-bidi:embed;
+  }
+  .formula .label{display:block; direction:rtl; text-align:right; color:#B7B4A9; font-size:11.5px; margin-bottom:8px;}
+
+  .example{
+    border:1px dashed var(--rule); border-radius:8px; padding:14px 16px; font-size:13.5px;
+    background:#FCFCFB; margin:12px 0 18px;
+  }
+  .example b{color:var(--ink);}
+
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
+  @media (max-width:700px){.grid2{grid-template-columns:1fr;}}
+
+  .taglist{display:flex; flex-wrap:wrap; gap:8px; margin:8px 0 4px;}
+  .tag{font-size:12px; background:var(--rule-soft); border:1px solid var(--rule); border-radius:999px; padding:4px 11px; color:var(--ink-soft);}
+
+  @media print{
+    .toc, .hero{display:none;}
+    .layout{grid-template-columns:1fr; padding:0;}
+    .card{box-shadow:none; break-inside:avoid;}
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <h1>راهنمای اجرایی شاخص‌های اکتیو و بینابینی HSE</h1>
+    <p class="lede">
+      این صفحه توضیح می‌دهد که پرسشنامه‌های <b>HSE Climate</b> و <b>استعداد حادثه‌پذیری</b>، و همچنین
+      طرح نمونه‌برداری از رفتارهای ایمنی (<b>SBS</b>) چگونه، توسط چه کسانی، و در چه بازه‌های زمانی
+      تکمیل و محاسبه می‌شوند.
+    </p>
+  </div>
+</header>
+
+<div class="layout">
+
+  <nav class="toc">
+    <h4>فهرست راهنما</h4>
+    <ol>
+      <li><a href="#intro">کلیات و تعاریف</a></li>
+      <li><a href="#climate">پرسشنامهٔ HSE Climate</a></li>
+      <li><a href="#accident">استعداد حادثه‌پذیری</a></li>
+      <li><a href="#sbs">نمونه‌برداری SBS</a></li>
+      <li><a href="#sbs-factory">&nbsp;&nbsp;— کارخانه‌ها</a></li>
+      <li><a href="#sbs-workshop">&nbsp;&nbsp;— کارگاه‌ها</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <section id="intro">
+      <div class="sec-head"><div class="sec-num">۱</div><h2>کلیات و تعاریف</h2></div>
+      <p class="sec-sub">پیش از تکمیل هر پرسشنامه یا اجرای نمونه‌برداری، این چند نکته را بدانید.</p>
+      <div class="card">
+        <p>
+          شاخص‌های <b>اکتیو (پیش‌نگر)</b> و <b>بینابینی</b> HSE، بر خلاف شاخص‌های پسینی مثل نرخ حوادث،
+          پیش از وقوع حادثه وضعیت ایمنی، بهداشت و محیط زیست را می‌سنجند. برای این منظور از سه
+          ابزار استاندارد استفاده می‌شود:
+        </p>
+        <div class="taglist">
+          <span class="tag">HSE Climate — درک و ادراک کارکنان از جوّ HSE</span>
+          <span class="tag">استعداد حادثه‌پذیری — ویژگی شخصیتی افراد شاغل در مشاغل بحرانی</span>
+          <span class="tag">SBS — مشاهدهٔ عینی رفتارهای ایمن و ناایمن در محل کار</span>
+        </div>
+        <div class="callout note">
+          <span class="ico">ℹ️</span>
+          <div><b>یک نکتهٔ مهم:</b> climate HSE با فرهنگ HSE یکی نیست. climate یک پدیدهٔ روان‌شناختی و
+          قابل‌تغییر است و برداشت کارکنان را در یک مقطع زمانی معین نشان می‌دهد؛ فرهنگ HSE پایدارتر است و
+          به ارزش‌های مشترک سازمان مربوط می‌شود.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ HSE CLIMATE ============ -->
+    <section id="climate">
+      <div class="sec-head"><div class="sec-num">۲</div><h2>پرسشنامهٔ HSE Climate</h2></div>
+      <p class="sec-sub">سنجش برداشت کارکنان از وضعیت ایمنی، بهداشت و محیط‌زیست در محل کار</p>
+
+      <div class="card">
+        <div class="meta-row">
+          <div class="meta"><div class="k">گروه هدف</div><div class="v">کلیهٔ پرسنل و پیمانکاران تأمین نیرو</div></div>
+          <div class="meta"><div class="k">نحوهٔ تکمیل</div><div class="v">خوداجرایی – نیمه‌نظارتی، ۴۳ سؤال، مقیاس ۵ درجه‌ای</div></div>
+          <div class="meta"><div class="k">دورهٔ اجرا</div><div class="v">سالانه، در دو نوبت ۶ ماهه (هر نوبت ۵۰٪ افراد)</div></div>
+        </div>
+
+        <h3 class="h">گام ۱ — تعیین تعداد پرسشنامهٔ قابل‌توزیع</h3>
+        <p>تعداد پرسشنامه‌هایی که باید چاپ و توزیع شوند، به تعداد کل پرسنل شرکت بستگی دارد و باید به‌گونه‌ای
+        توزیع شود که همهٔ ردهٔ‌های شغلی (تکنسین، سرپرست، سوپروایزر و...) با نسبت یکسان در آن حضور داشته باشند.</p>
+        <table>
+          <caption>جدول ۱ — درصد توزیع پرسشنامهٔ HSE Climate بر اساس تعداد پرسنل</caption>
+          <thead><tr><th>تعداد کل پرسنل</th><th class="num">درصد توزیع پرسشنامه</th></tr></thead>
+          <tbody>
+            <tr><td>تا ۱۰۰ نفر</td><td class="num">۸۰٪</td></tr>
+            <tr><td>از ۱۰۰ تا ۲۰۰ نفر</td><td class="num">۷۰٪</td></tr>
+            <tr><td>از ۲۰۰ تا ۴۰۰ نفر</td><td class="num">۶۰٪</td></tr>
+            <tr><td>از ۴۰۰ تا ۸۰۰ نفر</td><td class="num">۵۰٪</td></tr>
+            <tr><td>۸۰۰ نفر و بالاتر</td><td class="num">۴۰٪</td></tr>
+          </tbody>
+        </table>
+        <div class="example">مثال: اگر پرسنل شرکتی ۱۰۰۰ نفر باشد، باید ۴۰۰ پرسشنامه چاپ و توزیع شود؛ به‌نحوی‌که در هر ردهٔ شغلی حدود ۴۰٪ افراد پرسشنامه را تکمیل کنند.</div>
+
+        <h3 class="h">گام ۲ — آشنایی با ساختار پرسشنامه (۹ حیطه، ۴۳ سؤال)</h3>
+        <table>
+          <caption>جدول ۲ — حیطه‌های مورد بررسی و تعداد سؤالات هر حیطه</caption>
+          <thead><tr><th class="num">ردیف</th><th>حیطهٔ مورد بررسی</th><th class="num">تعداد سؤالات</th></tr></thead>
+          <tbody>
+            <tr><td class="num">۱</td><td>تعهد مدیریت</td><td class="num">۷</td></tr>
+            <tr><td class="num">۲</td><td>ارتباطات</td><td class="num">۵</td></tr>
+            <tr><td class="num">۳</td><td>تقدم HSE</td><td class="num">۴</td></tr>
+            <tr><td class="num">۴</td><td>قوانین و مقررات HSE</td><td class="num">۳</td></tr>
+            <tr><td class="num">۵</td><td>محیط حمایتی</td><td class="num">۶</td></tr>
+            <tr><td class="num">۶</td><td>مشارکت در HSE</td><td class="num">۳</td></tr>
+            <tr><td class="num">۷</td><td>اولویت‌های پرسنل و نیاز به HSE</td><td class="num">۵</td></tr>
+            <tr><td class="num">۸</td><td>درک پرسنل از ریسک</td><td class="num">۴</td></tr>
+            <tr><td class="num">۹</td><td>محیط کار</td><td class="num">۶</td></tr>
+            <tr style="font-weight:700;"><td class="num">—</td><td>مجموع</td><td class="num">۴۳</td></tr>
+          </tbody>
+        </table>
+
+        <h3 class="h">گام ۳ — امتیازدهی به پاسخ‌ها</h3>
+        <p>پس از جمع‌آوری پرسشنامه‌ها، به هر پاسخ بر اساس جدول زیر امتیاز داده می‌شود:</p>
+        <table>
+          <caption>جدول ۳ — امتیاز پاسخ‌ها</caption>
+          <thead><tr><th>پاسخ</th><th class="num">امتیاز</th></tr></thead>
+          <tbody>
+            <tr><td>کاملاً مخالفم</td><td class="num">۱</td></tr>
+            <tr><td>مخالفم</td><td class="num">۲</td></tr>
+            <tr><td>نظری ندارم</td><td class="num">۳</td></tr>
+            <tr><td>موافقم</td><td class="num">۴</td></tr>
+            <tr><td>کاملاً موافقم</td><td class="num">۵</td></tr>
+          </tbody>
+        </table>
+
+        <h3 class="h">گام ۴ — محاسبهٔ امتیاز هر حیطه</h3>
+        <p>
+          امتیاز خام هر حیطه از جمع سؤالات مربوط به همان حیطه به دست می‌آید (برخی سؤالات به‌صورت معکوس
+          محاسبه می‌شوند و با عبارت <span style="direction:ltr; display:inline-block;">(6 − Item)</span>
+          نشان داده شده‌اند)، سپس بر عدد مشخصی تقسیم و در ۱۰ ضرب می‌شود تا امتیاز هر حیطه در بازهٔ
+          <b>۰ تا ۱۰</b> قرار گیرد. جمع نمرهٔ ۹ حیطه، امتیاز کل climate را می‌سازد (حداکثر ۹۰).
+        </p>
+        <table>
+          <caption>جدول ۴ — فرمول محاسبهٔ امتیاز هر حیطه (تقسیم بر، سپس ضرب در ۱۰)</caption>
+          <thead><tr><th>حیطه</th><th>سؤالات مؤثر (فرمول جمع)</th><th class="num">تقسیم بر</th></tr></thead>
+          <tbody>
+            <tr><td>تعهد مدیریت</td><td style="direction:ltr; text-align:left;">Item9+(6−Item16)+(6−Item19)+Item26+Item33+Item38+Item42</td><td class="num">۳۵</td></tr>
+            <tr><td>ارتباطات</td><td style="direction:ltr; text-align:left;">Item1+Item10+(6−Item25)+(6−Item28)+Item31</td><td class="num">۲۵</td></tr>
+            <tr><td>تقدم HSE</td><td style="direction:ltr; text-align:left;">Item4+Item5+(6−Item20)+Item40</td><td class="num">۲۰</td></tr>
+            <tr><td>قوانین و مقررات HSE</td><td style="direction:ltr; text-align:left;">(6−Item17)+(6−Item21)+(6−Item35)</td><td class="num">۱۵</td></tr>
+            <tr><td>محیط حمایتی</td><td style="direction:ltr; text-align:left;">Item3+Item15+(6−Item22)+Item29+(6−Item32)+Item41</td><td class="num">۳۰</td></tr>
+            <tr><td>مشارکت در HSE</td><td style="direction:ltr; text-align:left;">Item8+Item13+(6−Item39)</td><td class="num">۱۵</td></tr>
+            <tr><td>اولویت‌های پرسنل و نیاز به HSE</td><td style="direction:ltr; text-align:left;">Item2+Item11+Item12+(6−Item23)+Item36</td><td class="num">۲۵</td></tr>
+            <tr><td>درک پرسنل از ریسک</td><td style="direction:ltr; text-align:left;">(6−Item6)+(6−Item18)+Item24+Item34</td><td class="num">۲۰</td></tr>
+            <tr><td>محیط کار</td><td style="direction:ltr; text-align:left;">(6−Item7)+Item14+(6−Item27)+(6−Item30)+Item37+(6−Item43)</td><td class="num">۳۰</td></tr>
+          </tbody>
+        </table>
+        <div class="callout note"><span class="ico">🧮</span><div>
+          امتیاز هر حیطه = (جمع بند مربوطه ÷ عدد «تقسیم بر») × ۱۰. برای مثال «تقدم HSE» یعنی جمع چهار
+          سؤال مربوطه تقسیم بر ۲۰ و ضرب در ۱۰.
+        </div></div>
+
+        <h3 class="h">گام ۵ — سطح‌بندی نتیجه</h3>
+        <table>
+          <caption>جدول ۵ — کمّی‌سازی و سطح‌بندی نتایج</caption>
+          <thead><tr><th>سطح</th><th class="num">هر حیطه (از ۱۰)</th><th class="num">امتیاز کل climate (از ۹۰)</th></tr></thead>
+          <tbody>
+            <tr><td><span class="badge b-low">climate پایین</span></td><td class="num">۲ تا کمتر از ۴</td><td class="num">۱۸ تا کمتر از ۳۶</td></tr>
+            <tr><td><span class="badge b-mid">climate متوسط</span></td><td class="num">۴ تا کمتر از ۸</td><td class="num">۳۶ تا کمتر از ۷۲</td></tr>
+            <tr><td><span class="badge b-high">climate بالا</span></td><td class="num">۸ تا ۱۰</td><td class="num">۷۲ تا ۹۰</td></tr>
+          </tbody>
+        </table>
+
+        <h3 class="h">گام ۶ — زمان‌بندی و ارسال نتایج</h3>
+        <ol class="steps">
+          <li><b>توزیع سالانه در دو نوبت</b><p>گروه هدف به دو بخش تقسیم می‌شود؛ هر ۶ ماه پرسشنامه به ۵۰٪ افراد تحویل داده می‌شود.</p></li>
+          <li><b>ورود داده‌ها</b><p>بلافاصله پس از دریافت هر نوبت پرسشنامه، داده‌ها ثبت و وارد فایل مربوطه می‌شود.</p></li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ============ ACCIDENT PRONENESS ============ -->
+    <section id="accident">
+      <div class="sec-head"><div class="sec-num">۳</div><h2>پرسشنامهٔ استعداد حادثه‌پذیری</h2></div>
+      <p class="sec-sub">سنجش ویژگی شخصیتی مرتبط با ریسک‌پذیری، ویژه شاغلان مشاغل بحرانی</p>
+
+      <div class="card">
+        <div class="meta-row">
+          <div class="meta"><div class="k">گروه هدف</div><div class="v">شاغلان «مشاغل بحرانی»</div></div>
+          <div class="meta"><div class="k">نحوهٔ تکمیل</div><div class="v">خوداجرایی – نیمه‌نظارتی، ۳۹ سؤال، مقیاس ۵ درجه‌ای</div></div>
+          <div class="meta"><div class="k">دورهٔ اجرا</div><div class="v">پیش از استخدام/شروع به کار، و سالی یک‌بار برای مشاغل بحرانی دائم</div></div>
+        </div>
+
+        <h3 class="h">گام ۱ — تهیهٔ فهرست مشاغل بحرانی</h3>
+        <p>
+          پیش از توزیع پرسشنامه، باید فهرستی از «مشاغل بحرانی» تهیه شود؛ منظور مشاغلی با ریسک بالا در
+          ارزیابی‌های انجام‌شده است.
+        </p>
+
+        <h3 class="h">گام ۲ — امتیازدهی به پاسخ‌ها</h3>
+        <table>
+          <caption>جدول ۶ — امتیاز پاسخ‌ها در پرسشنامهٔ استعداد حادثه‌پذیری</caption>
+          <thead><tr><th>پاسخ</th><th class="num">امتیاز</th></tr></thead>
+          <tbody>
+            <tr><td>کاملاً موافقم</td><td class="num">۵</td></tr>
+            <tr><td>موافقم</td><td class="num">۴</td></tr>
+            <tr><td>نظری ندارم</td><td class="num">۳</td></tr>
+            <tr><td>مخالفم</td><td class="num">۲</td></tr>
+            <tr><td>بکلی مخالفم</td><td class="num">۱</td></tr>
+          </tbody>
+        </table>
+
+        <h3 class="h">گام ۳ — محاسبهٔ امتیاز کل</h3>
+        <p>امتیاز کل با جمع جبری ۳۹ سؤال (با احتساب معکوس‌سازی برخی بندها) طبق فرمول استاندارد زیر محاسبه می‌شود:</p>
+        <div class="formula">
+          <span class="label">جدول ۷ — فرمول محاسبهٔ امتیاز کل استعداد حادثه‌پذیری</span>
+          Σ(Item1–3) + (6−Item4) + Σ(Item5–13) + (24−Σ(Item14–17)) + Σ(Item18–22)<br>
+          + (24−Σ(Item23–26)) + Item27 + (6−Item28) + Item29 + (6−Item30)<br>
+          + Σ(Item31–35) + (12−Σ(Item36–37)) + Σ(Item38–39)
+        </div>
+        <h3 class="h">گام ۴ — سطح‌بندی نتیجه</h3>
+        <table>
+          <thead><tr><th>سطح استعداد حادثه‌پذیری</th><th class="num">بازهٔ امتیاز (از ۳۹ تا ۱۹۵)</th></tr></thead>
+          <tbody>
+            <tr><td><span class="badge b-low">پایین</span></td><td class="num">۳۹ تا ۷۸</td></tr>
+            <tr><td><span class="badge b-mid">متوسط</span></td><td class="num">۷۸ تا ۱۱۷</td></tr>
+            <tr><td><span class="badge b-high">بالا</span></td><td class="num">۱۱۷ تا ۱۵۶</td></tr>
+            <tr><td><span class="badge b-vhigh">بسیار بالا</span></td><td class="num">۱۵۶ تا ۱۹۵</td></tr>
+          </tbody>
+        </table>
+
+        <h3 class="h">گام ۵ — زمان‌بندی و ارسال نتایج</h3>
+        <ol class="steps">
+          <li><b>پیش از شروع به کار</b><p>در حد امکان پیش از استخدام، در غیر این‌صورت پیش از آغاز به کار در شغل بحرانی، پرسشنامه باید تکمیل شود.</p></li>
+          <li><b>تکرار سالانه برای مشاغل دائم</b><p>برای مشاغلی که به‌صورت دائم بحرانی محسوب می‌شوند، پرسشنامه باید حداقل سالی یک‌بار تکمیل شود.</p></li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ============ SBS ============ -->
+    <section id="sbs">
+      <div class="sec-head"><div class="sec-num">۴</div><h2>نمونه‌برداری از رفتارهای ایمنی (SBS)</h2></div>
+      <p class="sec-sub">مشاهده و ثبت میدانی رفتار ایمن/ناایمن کارکنان — روش اجرا در کارخانه و کارگاه متفاوت است</p>
+
+      <div id="sbs-factory">
+        <h3 class="h" style="font-size:18px;">۴.۱ — نمونه‌برداری در کارخانه‌ها</h3>
+        <div class="card">
+          <ol class="steps">
+            <li><b>تعریف ایستگاه کاری</b><p>ایستگاه کاری، همان بخش‌های شرکت است که در آن فعالیتی صورت می‌گیرد؛ محوطهٔ کارخانه بر همین اساس تقسیم‌بندی می‌شود.</p></li>
+            <li><b>تهیهٔ فهرست اعمال ناایمن</b><p>بر اساس مطالعات پیشین و گزارش حوادث (حوادث ناتوان‌کننده، حوادث قابل‌ثبت، موارد نیازمند کمک‌های اولیه) و رفرنس‌های معتبر تهیه می‌شود.</p></li>
+            <li><b>مطالعهٔ پایلوت</b><p>یک مطالعهٔ پایلوت با حجم ۲۰۰ مشاهده انجام می‌شود تا نسبت رفتار ناایمن (P) تعیین شود. کارخانه‌هایی که در سال‌های قبل نمونه‌برداری کرده‌اند، می‌توانند از درصد رفتار ناایمن سال‌های گذشته به‌جای پایلوت استفاده کنند.</p></li>
+            <li><b>محاسبهٔ حجم نمونهٔ لازم</b><p>با فرمول زیر و برای حد اطمینان ۹۵٪ (K≈۱٫۶۴) حجم نمونه محاسبه می‌شود؛ سپس مشاهدات به‌طور مساوی بین کارکنان تقسیم می‌گردد.</p></li>
+            <li><b>آموزش مشاهده‌گر و اجرا</b><p>مشاهده‌گر آموزش می‌بیند تا رفتار هر فرد را به‌سرعت و درست به «ایمن» یا «ناایمن» طبقه‌بندی کند؛ سپس نمونه‌برداری در طول سال، با توزیع منطقی میان ساعات کاری، روزهای هفته و شیفت‌ها انجام می‌شود.</p></li>
+          </ol>
+
+          <div class="formula">
+            <span class="label">فرمول تعیین حجم نمونه (حد اطمینان ۹۵٪)</span>
+            N = K² × (1−P) / (S² × P) &nbsp;→&nbsp; برای ۹۵٪: N = 1075 × [(1−P) / P]
+          </div>
+          <div class="example">
+            <b>مثال:</b> اگر در مطالعهٔ پایلوت از ۲۰۰ مشاهده، ۶۲ مورد رفتار ناایمن بوده باشد (P = ۳۱٪) و دقت
+            مدنظر S = ۵٪ باشد:<br>
+            N = (۱٫۶۴)² × (۱−۰٫۳۱) / (۰٫۰۵² × ۰٫۳۱) ≈ <b>۲۳۹۲ مشاهده</b><br>
+            اگر جامعهٔ آماری ۲۴۳ نفر باشد، ۲۳۹۲ ÷ ۲۴۳ ≈ ۹٫۸؛ بنابراین از هر نفر ۱۰ مشاهده انجام می‌شود
+            (جمعاً ۲۴۳۰ مشاهده). مطالعهٔ اصلی با تعداد (نمونهٔ کل − نمونهٔ پایلوت) مشاهدهٔ باقی‌مانده تکمیل می‌شود.
+          </div>
+        </div>
+      </div>
+
+      <div id="sbs-workshop">
+        <h3 class="h" style="font-size:18px;">۴.۲ — نمونه‌برداری در کارگاه‌ها</h3>
+        <div class="card">
+          <ol class="steps">
+            <li><b>تهیهٔ فهرست اعمال ناایمن</b><p>مانند کارخانه‌ها، بر پایهٔ مطالعات قبلی و گزارش حوادث تهیه می‌شود.</p></li>
+            <li><b>انتخاب کارگاه‌های واجد شرایط</b><p>کارگاه انتخابی باید ۲۰ تا ۹۰ درصد پیشرفت اجرایی داشته باشد و تعداد کارگران آن کمتر از ۷۰ نفر نباشد.</p></li>
+            <li><b>مطالعهٔ پایلوت</b><p>می‌توان از نتایج مطالعات سال‌های گذشته به‌جای پایلوت جدید استفاده کرد.</p></li>
+            <li><b>محاسبه و توزیع حجم نمونه بین کارگاه‌ها</b><p>حجم کل نمونه برای شرکت با همان فرمول محاسبه، سپس متناسب با تعداد کارگران هر کارگاه بین آن‌ها تقسیم می‌شود.</p></li>
+            <li><b>آموزش مشاهده‌گر و اجرای فصلی</b><p>نمونه‌برداری در طول سال و در فواصل مناسب — معمولاً هر فصل یک‌بار، به‌مدت دو تا سه روز — انجام می‌شود.</p></li>
+          </ol>
+
+          <div class="example">
+            <b>مثال توزیع نمونه بین کارگاه‌ها:</b> برای حجم کل ۲۳۹۲ مشاهده در شرکتی با سه کارگاه (۲۰۰، ۱۵۰ و ۴۰۰ نفر):
+          </div>
+          <table>
+            <caption>جدول ۸ — نمونهٔ توزیع مشاهدات بین کارگاه‌ها (مثال عددی)</caption>
+            <thead><tr><th>کارگاه</th><th class="num">تعداد کارگران</th><th class="num">سهم از نمونهٔ کل</th><th class="num">مشاهدات نهایی (گرد‌شده به‌ازای هر نفر)</th></tr></thead>
+            <tbody>
+              <tr><td>کارگاه شمارهٔ یک</td><td class="num">۲۰۰</td><td class="num">۶۳۷</td><td class="num">۸۰۰ <span style="color:var(--ink-faint);">(۴ به‌ازای هر نفر)</span></td></tr>
+              <tr><td>کارگاه شمارهٔ دو</td><td class="num">۱۵۰</td><td class="num">۴۷۹</td><td class="num">۶۰۰</td></tr>
+              <tr><td>کارگاه شمارهٔ سه</td><td class="num">۴۰۰</td><td class="num">۱۲۷۶</td><td class="num">۱۶۰۰</td></tr>
+              <tr style="font-weight:700;"><td>جمع</td><td class="num">۷۵۰</td><td class="num">۲۳۹۲</td><td class="num">۳۰۰۰</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  // Scroll-spy for TOC
+  const links = document.querySelectorAll('.toc a');
+  const sections = Array.from(links).map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  const io = new IntersectionObserver((entries)=>{
+    entries.forEach(entry=>{
+      const id = '#' + entry.target.id;
+      const link = document.querySelector('.toc a[href="'+id+'"]');
+      if(!link) return;
+      if(entry.isIntersecting){
+        links.forEach(l=>l.classList.remove('active'));
+        link.classList.add('active');
+      }
+    });
+  }, {rootMargin:'-20% 0px -70% 0px'});
+  sections.forEach(s=>io.observe(s));
+</script>
+
+</body>
+</html>

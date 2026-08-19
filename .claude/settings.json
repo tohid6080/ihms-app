@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(node_modules/**)",
+      "Read(dist/**)",
+      "Read(android/**)",
+      "Read(**/*.log)",
+      "Read(.env)",
+      "Read(.env.*)"
+    ]
+  }
+}
