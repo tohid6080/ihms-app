@@ -43,7 +43,17 @@ export async function restFetch(path: string, options: RequestInit = {}) {
       ...(options.headers || {}),
     },
   });
+<<<<<<< HEAD
   if (!res.ok) return { ok: false, status: res.status, data: null };
+=======
+  if (!res.ok) {
+    // قبلاً اینجا فقط ok:false برمی‌گشت و متن واقعی خطای Postgres (که دقیقاً
+    // می‌گوید کدام جدول/Constraint مانع شده) دور ریخته می‌شد — همین موضوع
+    // باعث شد نتوانیم علت واقعی شکست حذف شرکت را پیدا کنیم، فقط حدس بزنیم.
+    const errText = await res.text().catch(() => "");
+    return { ok: false, status: res.status, data: null, error: errText };
+  }
+>>>>>>> 62c9c73 (Upload project files)
   const text = await res.text();
   return { ok: true, status: res.status, data: text ? JSON.parse(text) : [] };
 }

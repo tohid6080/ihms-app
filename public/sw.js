@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 const CACHE_NAME = "ihms-cache-v1";
+=======
+const CACHE_NAME = "ihms-cache-v2";
+>>>>>>> 62c9c73 (Upload project files)
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();

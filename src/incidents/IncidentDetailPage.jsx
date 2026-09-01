@@ -6,6 +6,10 @@ import { INCIDENT_TYPES, loadIncidentById } from "./incidentsApi.js";
 import { createOrGetAnalysis, loadAnalysisForIncident, requestTripodAnalysis, TRIPOD_STATUS_LABELS } from "../tripodBeta/tripodAnalysesApi.js";
 import { computeTripodCandidateFlag } from "../tripodBeta/incidentSource.js";
 import TripodAnalysisWorkspace from "../tripodBeta/TripodAnalysisWorkspace.jsx";
+<<<<<<< HEAD
+=======
+import BarrierMappingPicker from "../bowtie/BarrierMappingPicker.jsx";
+>>>>>>> 62c9c73 (Upload project files)
 
 /**
  * صفحه‌ی جزئیات حادثه — شامل دکمه‌ی «درخواست تحلیل Tripod Beta» طبق بخش ۳
@@ -119,6 +123,11 @@ export default function IncidentDetailPage({ incidentId, currentUser, role, read
           <p style={{ fontSize: 12, color: THEME.text3 }}>درخواست تحلیل فقط توسط کارفرما/ادمین انجام می‌شود.</p>
         )}
       </div>
+<<<<<<< HEAD
+=======
+
+      {isEmployerSide && <BarrierMappingPicker sourceType="incident" sourceId={incidentId} currentUser={currentUser} readOnly={readOnly} />}
+>>>>>>> 62c9c73 (Upload project files)
     </div>
   );
 }

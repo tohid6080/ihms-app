@@ -178,11 +178,16 @@ export async function setVisibilityRule(roleA, jobPositionIdA, roleB, jobPositio
 // ---------- مکالمات کاربر جاری ----------
 
 export async function loadMyConversations(username) {
+<<<<<<< HEAD
   console.log("[chat] loadMyConversations: شروع برای", username);
   const partRows = await sb(`chat_participants?username=eq.${encodeURIComponent(username)}&select=*`);
   console.log("[chat] loadMyConversations: ردیف‌های عضویت این کاربر", partRows);
   if (!sbOk(partRows) || partRows.length === 0) {
     console.warn("[chat] loadMyConversations: هیچ ردیف عضویتی برای این کاربر یافت نشد — لیست خالی برمی‌گردد");
+=======
+  const partRows = await sb(`chat_participants?username=eq.${encodeURIComponent(username)}&select=*`);
+  if (!sbOk(partRows) || partRows.length === 0) {
+>>>>>>> 62c9c73 (Upload project files)
     return [];
   }
   const convIds = partRows.map((p) => p.conversation_id);
@@ -190,7 +195,10 @@ export async function loadMyConversations(username) {
   partRows.forEach((p) => { myParticipant[p.conversation_id] = participantFromRow(p); });
 
   const convRows = await sb(`chat_conversations?id=in.(${convIds.join(",")})&select=*&order=updated_at.desc`);
+<<<<<<< HEAD
   console.log("[chat] loadMyConversations: ردیف‌های مکالمه بر اساس آن عضویت‌ها", convRows);
+=======
+>>>>>>> 62c9c73 (Upload project files)
   const conversations = sbOk(convRows) ? convRows.map(convFromRow) : [];
 
   // برای هر مکالمه، بقیه‌ی اعضا (برای نمایش نام طرف مقابل در چت مستقیم) و آخرین پیام را بگیر
@@ -225,7 +233,10 @@ export async function loadMyConversations(username) {
     const bt = b.lastMessage?.createdAt || b.createdAt;
     return bt.localeCompare(at);
   });
+<<<<<<< HEAD
   console.log("[chat] loadMyConversations: نتیجه‌ی نهایی", result);
+=======
+>>>>>>> 62c9c73 (Upload project files)
   return result;
 }
 
@@ -446,8 +457,30 @@ export async function markConversationRead(conversationId, username) {
 // ---------- آمار خلاصه برای زنگوله‌ی اعلان ----------
 
 export async function loadUnreadTotal(username) {
+<<<<<<< HEAD
   const convs = await loadMyConversations(username);
   const total = convs.reduce((sum, c) => sum + c.unreadCount, 0);
   console.log("[chat] loadUnreadTotal:", username, "→", total);
+=======
+  if (!username) return 0;
+  // فقط ستون‌های لازم برای شمارش — نه متن پیام، نه اطلاعات کامل مکالمه.
+  // قبلاً این تابع کل loadMyConversations (۴ درخواست سنگین با select=*)
+  // را فقط برای یک عدد صدا می‌زد؛ الان فقط ۲ درخواست سبک اجرا می‌کند.
+  const partRows = await sb(`chat_participants?username=eq.${encodeURIComponent(username)}&select=conversation_id,last_read_at`);
+  if (!sbOk(partRows) || partRows.length === 0) return 0;
+
+  const convIds = partRows.map((p) => p.conversation_id);
+  const lastReadByConv = {};
+  partRows.forEach((p) => { lastReadByConv[p.conversation_id] = p.last_read_at || ""; });
+
+  const msgRows = await sb(`chat_messages?conversation_id=in.(${convIds.join(",")})&sender_username=neq.${encodeURIComponent(username)}&select=conversation_id,created_at`);
+  if (!sbOk(msgRows)) return 0;
+
+  let total = 0;
+  msgRows.forEach((m) => {
+    const myLastRead = lastReadByConv[m.conversation_id];
+    if (!myLastRead || new Date(m.created_at) > new Date(myLastRead)) total += 1;
+  });
+>>>>>>> 62c9c73 (Upload project files)
   return total;
 }

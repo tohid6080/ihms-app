@@ -26,7 +26,11 @@ export const PERMISSION_MODULES = [
   { key: "riskAssessment", label: "مدیریت ارزیابی ریسک (Risk Assessment)" },
   { key: "personnelAccess", label: "مدیریت ورود و تردد پرسنل" },
   { key: "proactiveIndicators", label: "اندازه‌گیری شاخص‌های Proactive HSE" },
+<<<<<<< HEAD
   { key: "machineryManagement", label: "مدیریت ماشین‌آلات و تجهیزات" },
+=======
+  { key: "machineryManagement", label: "مدیریت ماشین‌آلات" },
+>>>>>>> 62c9c73 (Upload project files)
   { key: "scaffoldManagement", label: "مدیریت داربست" },
   { key: "managementDashboard", label: "داشبورد مدیریتی و گزارش‌های تحلیلی" },
 ];

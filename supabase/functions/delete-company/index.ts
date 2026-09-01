@@ -22,6 +22,7 @@ import { getCallerClaims } from "../_shared/jwtUtils.ts";
 import { json, CORS_HEADERS, restFetch } from "../_shared/supabaseAdmin.ts";
 
 // ترتیب حذف — از وابسته‌ترین (فرزند) به مستقل‌ترین (والد). هر جدولی که
+<<<<<<< HEAD
 // اینجا نیست یا company_id ندارد یا حذفش لازم نیست (مثل super_admins).
 const DELETE_ORDER = [
   "bowtie_escalation_controls",
@@ -60,6 +61,42 @@ const DELETE_ORDER = [
   "company_subscription_history",
   "contractors",
   "employer_accounts",
+=======
+// اینجا نیست یا company_id ندارد یا حذفش لازم نیست (مثل super_admins،
+// یا جداول مرجع سراسری مثل sbs_ref_*/tripod_ref_*/plans که بین همه‌ی
+// شرکت‌ها مشترک‌اند و نباید حذف شوند).
+//
+// ⚠️ نکته‌ی نگهداری حیاتی: هر جدول جدیدی که از این پس به پروژه اضافه
+// می‌شود و ستون company_id دارد، باید همین‌جا هم اضافه شود — وگرنه دقیقاً
+// همین باگ (حذف زیرشاخه‌ها موفق، حذف خودِ شرکت با خطای کلید خارجی ناموفق)
+// دوباره رخ می‌دهد. این فهرست را از روی حسابرسی کامل schema (بخش
+// «Audit دیتابیس» در تاریخچه‌ی این پروژه) بازسازی کردم؛ اگر ماژول جدیدی
+// بعد از این اضافه شود، این‌جا را هم به‌روزرسانی کنید.
+const DELETE_ORDER = [
+  // عمیق‌ترین فرزندان
+  "bowtie_escalation_controls", "anomaly_barrier_links", "dbee_score_history", "dbee_source_barrier_map",
+  "tripod_branch_hidden_failures", "tripod_corrective_actions", "tripod_status_history", "tripod_targets",
+  "risk_assessment_history", "proactive_indicator_answers", "personnel_documents", "personnel_notifications",
+  "machinery_documents", "scaffold_tag_photos", "training_requirements", "hse_climate_responses",
+  "chat_messages", "chat_participants", "anomaly_photos", "anomaly_notifications", "corrective_actions",
+  // سطح بعد
+  "bowtie_escalation_factors", "tripod_branch_preconditions", "hcms_risk_assessments",
+  "proactive_indicator_assessments", "hse_gate_items",
+  // بریرها و شاخه‌ها
+  "bowtie_barriers", "tripod_branches",
+  // خودِ BowTie/Tripod/Anomaly
+  "bowtie_threats", "bowtie_consequences", "bowtie_effectiveness_thresholds", "dbee_weights",
+  "tripod_analyses", "anomalies",
+  // موجودیت‌های اصلی ماژول‌ها
+  "bowties", "incidents", "hcms_risk_matrix", "risk_knowledge_base", "sbs_observations",
+  "sbs_sample_size_assignments", "personnel_audit_log", "personnel", "machinery", "scaffold_tags",
+  "training_courses", "hse_climate_campaigns", "chat_conversations", "chat_visibility_rules",
+  "chat_matrix_extra_identities", "archive_log", "user_activity", "admin_audit_log", "anomaly_categories",
+  // مالی/سیستمی مخصوص شرکت
+  "payments", "company_payments", "company_subscription_history", "permissions", "system_announcements",
+  // جداولی که بقیه به آن‌ها ارجاع می‌دهند — باید آخر از همه حذف شوند
+  "job_positions", "contractors", "employer_accounts",
+>>>>>>> 62c9c73 (Upload project files)
 ];
 
 async function logAudit(entry: Record<string, unknown>) {
@@ -101,6 +138,7 @@ Deno.serve(async (req) => {
     for (const table of DELETE_ORDER) {
       const before = await restFetch(`${table}?company_id=eq.${companyId}&select=id`);
       const count = before.ok && Array.isArray(before.data) ? before.data.length : 0;
+<<<<<<< HEAD
       if (count > 0) {
         await restFetch(`${table}?company_id=eq.${companyId}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
       }
@@ -109,6 +147,30 @@ Deno.serve(async (req) => {
 
     const finalDelete = await restFetch(`companies?id=eq.${companyId}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
     if (!finalDelete.ok) return json({ error: "همه‌ی داده‌های وابسته حذف شدند، اما حذف خودِ شرکت با خطا مواجه شد.", deletedCounts }, 500);
+=======
+      let deleteError: string | null = null;
+      if (count > 0) {
+        const delRes = await restFetch(`${table}?company_id=eq.${companyId}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
+        if (!delRes.ok) deleteError = (delRes as any).error || `خطای نامشخص (status ${delRes.status})`;
+      }
+      deletedCounts[table] = count;
+      if (deleteError) {
+        return json({
+          error: `حذف جدول «${table}» با خطا مواجه شد — این احتمالاً علت واقعی مشکل است.`,
+          detail: deleteError, deletedCounts,
+        }, 500);
+      }
+    }
+
+    const finalDelete = await restFetch(`companies?id=eq.${companyId}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
+    if (!finalDelete.ok) {
+      return json({
+        error: "همه‌ی داده‌های وابسته حذف شدند، اما حذف خودِ شرکت با خطا مواجه شد.",
+        detail: (finalDelete as any).error || `status ${finalDelete.status}`,
+        deletedCounts,
+      }, 500);
+    }
+>>>>>>> 62c9c73 (Upload project files)
 
     await logAudit({
       action: "delete_company", target_type: "company", target_id: companyId, target_username: company.name,

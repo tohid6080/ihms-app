@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from "react";
+<<<<<<< HEAD
 import { AlertTriangle, Plus, X, ChevronRight, ChevronDown, ChevronsRight, ChevronsLeft, LogOut, CheckCircle2, Clock, Camera, ImagePlus, Trash2, FileSpreadsheet, FileText, User, Users, ShieldCheck, LayoutGrid, BarChart3, Briefcase, Settings, Archive, Truck, Tag, MessageCircle, GraduationCap, ShieldOff, ShieldAlert, Database, Fingerprint, Info, Sliders, TrendingUp, Search, Home, Megaphone, Sparkles, Gift, Bell, ArrowUpRight } from "lucide-react";
+=======
+import { AlertTriangle, Plus, X, ChevronRight, ChevronLeft, ChevronDown, ChevronsRight, ChevronsLeft, LogOut, CheckCircle2, Clock, Camera, ImagePlus, Trash2, FileSpreadsheet, FileText, User, Users, ShieldCheck, LayoutGrid, BarChart3, Briefcase, Settings, Archive, Truck, Tag, MessageCircle, GraduationCap, ShieldOff, ShieldAlert, Database, Fingerprint, Info, Sliders, TrendingUp, Search, Home, Megaphone, Sparkles, Gift, Bell, ArrowUpRight, ClipboardList } from "lucide-react";
+>>>>>>> 62c9c73 (Upload project files)
 import * as XLSX from "xlsx";
 import ExcelJS from "exceljs";
 import BowTieDashboard from "./bowtie/BowTieDashboard.jsx";
@@ -16,7 +20,13 @@ import PersonnelDashboard from "./personnel/PersonnelDashboard.jsx";
 import ProactiveIndicatorsDashboard from "./proactiveIndicators/ProactiveIndicatorsDashboard.jsx";
 import IncidentsListPage from "./incidents/IncidentsListPage.jsx";
 import { loadHomeKpiSummary } from "./dashboard/homeKpiApi.js";
+<<<<<<< HEAD
 import { loadModuleConfig, loadDashboardConfig, loadNotificationTypes, loadAppearanceConfig, applyAppearanceToDom, loadActiveAnnouncement } from "./systemConfigApi.js";
+=======
+import { loadModuleConfig, loadDashboardConfig, loadNotificationTypes, loadAppearanceConfig, applyAppearanceToDom, loadActiveAnnouncements } from "./systemConfigApi.js";
+import { submitToGate, loadPendingGateItems, loadAssignedGateItems, loadCompanyStaffOptions, assignForReview, submitReview, approveGateItem, rejectGateItem, GATE_STATUS_LABELS } from "./hseGateApi.js";
+import SubscriptionGate from "./subscription/SubscriptionGate.jsx";
+>>>>>>> 62c9c73 (Upload project files)
 import { AppearanceProvider, useAppearance } from "./shared/AppearanceContext.jsx";
 import PublicHseClimateSurvey from "./proactiveIndicators/PublicHseClimateSurvey.jsx";
 import HomeDashboard from "./dashboard/HomeDashboard.jsx";
@@ -62,7 +72,11 @@ import SyncStatusBadge from "./offline/SyncStatusBadge.jsx";
 import { retryItemNow } from "./offline/syncEngine.js";
 import { exportWorkbookNativeAware, exportHtmlReportNativeAware } from "./offline/nativeFile.js";
 import { saveBlobNativeAware } from "./offline/archiveZip.js";
+<<<<<<< HEAD
 import { toJalaliDateTime } from "./personnel/jalaliDate.jsx";
+=======
+import { toJalaliDateTime, toJalaliSafe } from "./personnel/jalaliDate.jsx";
+>>>>>>> 62c9c73 (Upload project files)
 import { APP_NAME, sb, sbOk, sbErrMsg, uid, todayISO, THEME, styles, usePersistedState, setCurrentCompanyId, getCurrentCompanyId, loadCurrentCompanyPlanFeatures, isModuleInPlan } from "./shared.js";
 
 /**
@@ -144,7 +158,11 @@ const HSE_MODULES = [
   },
   {
     key: "machineryManagement",
+<<<<<<< HEAD
     label: "مدیریت ماشین‌آلات و تجهیزات",
+=======
+    label: "مدیریت ماشین‌آلات",
+>>>>>>> 62c9c73 (Upload project files)
     labelKey: "moduleMachinery",
     icon: true,
     sub: [
@@ -1102,6 +1120,7 @@ function LoginScreen({ onLogin }) {
   };
 
   return (
+<<<<<<< HEAD
     <div style={styles.centerScreen}>
       <div style={{ ...styles.card, width: 360, direction: dir }}>
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
@@ -1147,11 +1166,154 @@ function LoginScreen({ onLogin }) {
         )}
 
         <p style={styles.hint}>{t("designedBy")}</p>
+=======
+    <div style={{ ...styles.centerScreen, alignItems: "stretch", padding: 0 }}>
+      <div style={{ display: "flex", width: "100%", minHeight: "100vh", flexWrap: "wrap" }}>
+        {/* پنل اطلاعیه — سمت چپ در دسکتاپ (طبق مرجع)؛ در موبایل کاملاً حذف می‌شود، نه فقط پنهان، تا هیچ فضایی از فرم ورود نگیرد */}
+        <LoginAnnouncementPanel />
+
+        {/* پنل ورود — سمت راست */}
+        <div style={{ flex: "1 1 380px", minWidth: 320, display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 24px", background: THEME.surface }}>
+          <div style={{ width: 340, maxWidth: "100%", direction: dir }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+              <LanguageToggle lang={lang} setLang={setLang} />
+            </div>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
+              <IhmsLogo size={100} src={appearance?.logoUrl} />
+            </div>
+            <h2 style={{ textAlign: "center", marginBottom: 2, fontSize: 18, direction: "ltr", color: THEME.navy, fontWeight: 700, letterSpacing: "-0.01em" }}>{appearance?.systemName || APP_NAME}</h2>
+            <p style={{ textAlign: "center", color: THEME.text3, fontSize: 12.5, marginTop: 4, marginBottom: 22, fontWeight: 500 }}>
+              {t("loginTagline")}
+            </p>
+
+            <label style={{ ...styles.label, textAlign: dir === "rtl" ? "right" : "left" }}>{t("username")}</label>
+            <input style={styles.input} value={username} onChange={(e) => setUsername(e.target.value)} dir={dir} />
+
+            <label style={{ ...styles.label, textAlign: dir === "rtl" ? "right" : "left" }}>{t("password")}</label>
+            <input
+              style={styles.input}
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
+              dir={dir}
+            />
+
+            {error && <p style={styles.error}>{error}</p>}
+            {!error && warning && <p style={{ fontSize: 11, color: "#b45309", marginTop: -6, marginBottom: 10, lineHeight: 1.7 }}>{warning}</p>}
+
+            <button type="button" style={{ ...styles.button, opacity: loading ? 0.75 : 1 }} onClick={handleSubmit} disabled={loading}>
+              {loading ? t("loggingIn") : t("loginButton")}
+            </button>
+
+            {bioAvailable && (
+              <button
+                type="button"
+                onClick={handleBiometricLogin}
+                disabled={bioChecking}
+                style={{ ...styles.button, background: THEME.tealDeep, marginTop: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: bioChecking ? 0.75 : 1 }}
+              >
+                <Fingerprint size={16} /> {bioChecking ? t("biometricGateChecking") : t("biometricQuickLogin")}
+              </button>
+            )}
+
+            <p style={styles.hint}>{t("designedBy")}</p>
+          </div>
+        </div>
+>>>>>>> 62c9c73 (Upload project files)
       </div>
     </div>
   );
 }
 
+<<<<<<< HEAD
+=======
+// پنل اطلاعیه‌ی صفحه‌ی ورود — فقط اطلاعیه‌های سراسری (company_id=null)
+// را نشان می‌دهد، چون قبل از ورود هنوز مشخص نیست کاربر متعلق به کدام
+// شرکت است. عکس/عنوان/متن دقیقاً همان قاب ثابت اسلایدر صفحه‌ی اصلی را
+// دارند (بخش ۲) تا با تغییر طول متن یا عکس، ظاهر صفحه به‌هم نریزد. اگر
+// هیچ اطلاعیه‌ی فعالی نبود، این پنل به‌طور کامل مخفی می‌شود (نه یک قاب
+// خالی) و فرم ورود در تمام عرض صفحه قرار می‌گیرد.
+function LoginAnnouncementPanel() {
+  const isDesktop = useIsDesktop();
+  const [announcements, setAnnouncements] = useState(undefined);
+  const [index, setIndex] = useState(0);
+  useEffect(() => { loadActiveAnnouncements("login").then(setAnnouncements).catch(() => setAnnouncements([])); }, []);
+
+  const isSlider = announcements && announcements.length > 1;
+  useEffect(() => {
+    if (!isSlider) return;
+    const current = announcements[index];
+    const ms = (current.displaySeconds || 10) * 1000;
+    const timer = setTimeout(() => setIndex((i) => (i + 1) % announcements.length), ms);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index, isSlider, announcements]);
+
+  // در موبایل، این پنل به‌طور کامل رندر نمی‌شود (نه فقط با CSS پنهان) —
+  // طبق الزام صریح: نباید هیچ فضایی از فرم ورود بگیرد.
+  if (!isDesktop) return null;
+  if (!announcements || announcements.length === 0) return null;
+  const current = announcements[Math.min(index, announcements.length - 1)];
+  const Icon = ANNOUNCEMENT_ICONS[current.iconKey] || Megaphone;
+
+  return (
+    <div
+      style={{
+        flex: "1 1 420px", minWidth: 320, position: "relative", overflow: "hidden",
+        background: current.loginImageUrl ? "#0e2a3f" : `linear-gradient(160deg, ${THEME.navy}, ${THEME.tealDeep})`,
+        display: "flex", flexDirection: "column", justifyContent: "flex-end", padding: "40px 44px",
+      }}
+    >
+      {/* عکس واقعی با contain — کل تصویر همیشه کامل و بدون برش دیده می‌شود؛
+          فضای خالی احتمالی اطراف آن با همان پس‌زمینه‌ی navy پر می‌شود. */}
+      {current.loginImageUrl && (
+        <img src={current.loginImageUrl} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }} />
+      )}
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(14,42,63,0.15) 0%, rgba(14,42,63,0.82) 78%)" }} />
+      {isSlider && (
+        <div style={{ position: "absolute", top: 24, insetInlineEnd: 24, display: "flex", alignItems: "center", gap: 6, zIndex: 1 }}>
+          <button type="button" onClick={() => setIndex((i) => (i - 1 + announcements.length) % announcements.length)} style={loginSliderNavBtnStyle}><ChevronRight size={14} color="#fff" /></button>
+          <button type="button" onClick={() => setIndex((i) => (i + 1) % announcements.length)} style={loginSliderNavBtnStyle}><ChevronLeft size={14} color="#fff" /></button>
+        </div>
+      )}
+      {!current.loginImageUrl && (
+        <div style={{ position: "absolute", top: 44, insetInlineStart: 44, zIndex: 1 }}>
+          <div style={{ width: 52, height: 52, borderRadius: 14, background: "rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Icon size={26} color="#fff" />
+          </div>
+        </div>
+      )}
+      <div style={{ position: "relative", zIndex: 1, maxWidth: 440 }}>
+        <h3 style={{
+          fontSize: 20, fontWeight: 800, color: "#fff", margin: "0 0 10px", minHeight: 26,
+          display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", lineHeight: 1.3,
+        }}>
+          {current.title || "\u00A0"}
+        </h3>
+        <p style={{
+          fontSize: 13.5, color: "rgba(255,255,255,0.88)", lineHeight: 1.9, margin: 0, minHeight: "calc(1.9em * 3)",
+          display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden",
+        }}>
+          {current.message}
+        </p>
+        {isSlider && (
+          <div style={{ display: "flex", gap: 6, marginTop: 20 }}>
+            {announcements.map((a, i) => (
+              <button
+                key={a.id} type="button" onClick={() => setIndex(i)}
+                style={{ width: i === index ? 20 : 7, height: 7, borderRadius: 999, border: "none", padding: 0, cursor: "pointer", background: i === index ? "#fff" : "rgba(255,255,255,0.4)", transition: "width .2s, background .2s" }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+const loginSliderNavBtnStyle = { width: 30, height: 30, borderRadius: "50%", border: "1.5px solid rgba(255,255,255,0.5)", background: "rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };
+
+>>>>>>> 62c9c73 (Upload project files)
 // گیت ورود بیومتریک — وقتی نشستی از قبل ذخیره شده (currentUser در
 // localStorage) و کاربر قبلاً ورود با اثر انگشت را فعال کرده، این صفحه
 // جای رفتن مستقیم به داشبورد می‌آید. بدون این گیت، هرکسی که گوشیِ
@@ -1985,6 +2147,20 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
         alert(`آنومالی ثبت شد، اما ساخت خودکار ارزیابی ریسک HCMS با خطا مواجه شد: ${hcmsResult.message}\nمی‌توانید بعداً از داخل «مدیریت ریسک → HCMS» آن را دستی بسازید.`);
       }
     }
+<<<<<<< HEAD
+=======
+    // ورود به گیت تأیید سرپرست/مدیر HSE — طبق طرح تأییدشده، فقط وقتی
+    // ثبت‌کننده نقش Employer معمولی دارد (نه ادمین یا سرپرست/مدیر HSE
+    // که خودشان صاحب اختیار تأیید هستند، پس نیازی به تأیید خودشان نیست).
+    // مثل ثبت ارتباط Barrier بالا، این یک عملیات ثانویه‌ی best-effort
+    // است — ناموفق‌بودنش، ثبت اصلی آنومالی را ناموفق نشان نمی‌دهد.
+    if (currentUser?.role === "EMPLOYER") {
+      submitToGate({
+        moduleKey: "anomalyReport", recordId: record.id,
+        recordLabel: `${record.trackingNumber} — ${record.area}`, direction: "employer_to_contractor",
+      }, currentUser?.name).catch(() => {});
+    }
+>>>>>>> 62c9c73 (Upload project files)
     setSaving(false);
     onSaved ? onSaved() : onBack && onBack();
   };
@@ -2194,10 +2370,22 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
 }
 
 // ---------- لیست و پیگیری آنومالی‌ها ----------
+<<<<<<< HEAD
 function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter, initialRiskFilter, initialContractorFilter }) {
   const isAdmin = role === "ADMIN";
   const isReviewer = (role === "EMPLOYER" || isAdmin) && !readOnly;
   const isReadOnlyReviewer = (role === "EMPLOYER" || isAdmin) && !!readOnly;
+=======
+function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter, initialRiskFilter, initialContractorFilter, initialExpandedAnomalyId }) {
+  const isAdmin = role === "ADMIN";
+  // طبق تصمیم تأییدشده: تأیید نهایی آنومالی (بستن بعد از اقدام اصلاحی
+  // پیمانکار) فقط برای سرپرست/مدیر HSE و ادمین مجاز است، نه هر
+  // کارفرمایی معمولی. role (prop) همیشه "EMPLOYER" است (حتی برای حساب
+  // سرپرست HSE — هر دو در EmployerDashboard میزبانی می‌شوند)، پس
+  // مستقیم currentUser?.role چک می‌شود.
+  const isReviewer = (currentUser?.role === "HSE_SUPERVISOR" || isAdmin) && !readOnly;
+  const isReadOnlyReviewer = (currentUser?.role === "HSE_SUPERVISOR" || isAdmin) && !!readOnly;
+>>>>>>> 62c9c73 (Upload project files)
   const isContractor = role === "CONTRACTOR";
   // ادمین علاوه بر تأیید/رد، می‌تواند مثل پیمانکار هم اقدام اصلاحی ثبت و ارسال کند
   const canActAsContractor = (isContractor || isAdmin) && !readOnly;
@@ -2254,9 +2442,41 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
 
   useEffect(() => { load(); }, []);
 
+<<<<<<< HEAD
   const scoped = isContractor && myContractorName
     ? anomalies.filter((a) => (a.contractor || "").trim().toLowerCase() === myContractorName)
     : anomalies;
+=======
+  // طبق گزارش صریح: کلیک روی «مشاهده» از کارت «کارهای در دست اقدام من»
+  // باید همان آنومالی را مستقیم باز کند، نه فقط لیست را نشان بدهد و
+  // کاربر مجبور شود پایین لیست بگردد دنبالش. دقیقاً همان الگوی
+  // initialSelectedPersonnelId موجود در PersonnelDashboard.
+  useEffect(() => {
+    if (!initialExpandedAnomalyId || anomalies.length === 0) return;
+    const found = anomalies.find((a) => a.id === initialExpandedAnomalyId);
+    if (found) startExpand(found);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialExpandedAnomalyId, anomalies.length]);
+
+  // طبق طرح تأییدشده‌ی گیت HSE: تا سرپرست/مدیر HSE تأیید نکند، هیچ
+  // آنومالی‌ای که هنوز pending_approval است نباید سمت پیمانکار دیده
+  // شود. فقط برای isContractor بارگذاری می‌شود — کارفرما/ادمین همیشه
+  // همه‌چیز (از جمله وضعیت در انتظار تأیید) را می‌بینند.
+  const [pendingGateRecordIds, setPendingGateRecordIds] = useState(null);
+  useEffect(() => {
+    if (!isContractor) { setPendingGateRecordIds(new Set()); return; }
+    loadPendingGateItems("anomalyReport").then((items) => {
+      setPendingGateRecordIds(new Set(items.map((it) => it.recordId)));
+    }).catch(() => setPendingGateRecordIds(new Set()));
+  }, [isContractor]);
+
+  useEffect(() => { loadGateData(); }, [isContractor, isReviewer, currentUser?.username]);
+
+  const scoped = (isContractor && myContractorName
+    ? anomalies.filter((a) => (a.contractor || "").trim().toLowerCase() === myContractorName)
+    : anomalies
+  ).filter((a) => !isContractor || !pendingGateRecordIds || !pendingGateRecordIds.has(a.id));
+>>>>>>> 62c9c73 (Upload project files)
 
   // برای پرکردن dropdown فیلتر پیمانکار (فقط ادمین/کارفرما می‌بینند) — از
   // کل لیست بارگذاری‌شده مشتق می‌شود، نه از نتیجه‌ی فیلترشده، تا با انتخاب
@@ -2306,6 +2526,14 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
     setActionPhotos([]);
     setShowRejectBox(false);
     setRejectNote("");
+<<<<<<< HEAD
+=======
+    setAssigningGateId(null);
+    setAssignGateTo("");
+    setReviewingGateId(null);
+    setReviewComment("");
+    setGateMessage("");
+>>>>>>> 62c9c73 (Upload project files)
   };
 
   const startExpand = async (a) => {
@@ -2430,6 +2658,77 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
     return { label: "باز", color: "#92400e", bg: "#fef3c7", Icon: Clock };
   };
 
+<<<<<<< HEAD
+=======
+  // ---------- گیت تأیید سرپرست/مدیر HSE (گردش‌کار سه‌مرحله‌ای) ----------
+  // نگاشت anomaly.id → آخرین رکورد گیت آن (اگر وجود داشته باشد). فقط
+  // برای isReviewer یا کارشناسانی که ممکن است چیزی به آن‌ها ارجاع شده
+  // باشد بارگذاری می‌شود — نه پیمانکار (که این گیت اصلاً برایش معنا ندارد).
+  const [gateMap, setGateMap] = useState({});
+  const [gateStaff, setGateStaff] = useState([]);
+  const [assigningGateId, setAssigningGateId] = useState(null); // anomaly.id در حال ارجاع
+  const [assignGateTo, setAssignGateTo] = useState("");
+  const [reviewingGateId, setReviewingGateId] = useState(null); // anomaly.id در حال ارسال نتیجه‌ی بررسی
+  const [reviewComment, setReviewComment] = useState("");
+  const [gateBusy, setGateBusy] = useState(null);
+  const [gateMessage, setGateMessage] = useState("");
+
+  const loadGateData = async () => {
+    if (isContractor) return; // این گیت فقط سمت کارفرما معناداراست
+    const [pending, mine, staff] = await Promise.all([
+      isReviewer ? loadPendingGateItems("anomalyReport") : Promise.resolve([]),
+      loadAssignedGateItems(currentUser?.username).then((rows) => rows.filter((r) => r.moduleKey === "anomalyReport")),
+      isReviewer ? loadCompanyStaffOptions() : Promise.resolve([]),
+    ]);
+    const map = {};
+    [...pending, ...mine].forEach((it) => { map[it.recordId] = it; });
+    setGateMap(map);
+    setGateStaff(staff);
+  };
+
+  const handleAssignForReview = async (a) => {
+    const gateItem = gateMap[a.id];
+    if (!gateItem || !assignGateTo) return;
+    setGateBusy(a.id); setGateMessage("");
+    const result = await assignForReview(gateItem.id, assignGateTo, currentUser?.name);
+    setGateBusy(null);
+    if (result?.__error) { setGateMessage(result.message); return; }
+    setAssigningGateId(null); setAssignGateTo("");
+    await loadGateData();
+  };
+
+  const handleSubmitReview = async (a) => {
+    const gateItem = gateMap[a.id];
+    if (!gateItem) return;
+    setGateBusy(a.id); setGateMessage("");
+    const result = await submitReview(gateItem.id, currentUser?.username, reviewComment);
+    setGateBusy(null);
+    if (result?.__error) { setGateMessage(result.message); return; }
+    setReviewingGateId(null); setReviewComment("");
+    await loadGateData();
+  };
+
+  const handleApproveGate = async (a) => {
+    const gateItem = gateMap[a.id];
+    if (!gateItem) return;
+    setGateBusy(a.id); setGateMessage("");
+    const result = await approveGateItem(gateItem.id, currentUser?.name);
+    setGateBusy(null);
+    if (result?.__error) { setGateMessage(result.message); return; }
+    await loadGateData();
+  };
+
+  const handleRejectGate = async (a, note) => {
+    const gateItem = gateMap[a.id];
+    if (!gateItem) return;
+    setGateBusy(a.id); setGateMessage("");
+    const result = await rejectGateItem(gateItem.id, currentUser?.name, note);
+    setGateBusy(null);
+    if (result?.__error) { setGateMessage(result.message); return; }
+    await loadGateData();
+  };
+
+>>>>>>> 62c9c73 (Upload project files)
   if (loading) return <div style={{ padding: 24, textAlign: "center", color: "#93a1b0" }}>در حال بارگذاری...</div>;
 
   if (linkedChatId) {
@@ -2607,12 +2906,24 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
         const fixPhotos = photos.filter((p) => p.stage === "fix");
         return (
           <div style={{ ...styles.card, width: "auto", marginTop: 14, padding: "20px 22px" }}>
+<<<<<<< HEAD
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
               <h3 style={{ margin: 0, fontSize: 14.5, color: THEME.navy, fontWeight: 700 }}>{a.trackingNumber}</h3>
               <button type="button" style={{ ...styles.smallButton, background: THEME.teal, display: "flex", alignItems: "center", gap: 6 }} onClick={() => openLinkedChat(a)} disabled={linkedChatBusy}>
                 <MessageCircle size={13} /> {linkedChatBusy ? "..." : "چت درباره این مورد"}
               </button>
               <button type="button" style={{ ...styles.smallButton, background: THEME.navyMid, display: "flex", alignItems: "center", gap: 6 }} onClick={() => openLinkedHcms(a)} disabled={linkedHcmsBusy}>
+=======
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12, gap: 10, flexWrap: "wrap" }}>
+              <div>
+                <h3 style={{ margin: "0 0 4px", fontSize: 14.5, color: THEME.navy, fontWeight: 700 }}>{a.trackingNumber}</h3>
+                <p style={{ margin: 0, fontSize: 13, color: THEME.text, lineHeight: 1.8 }}>{a.description}</p>
+              </div>
+              <button type="button" style={{ ...styles.smallButton, background: THEME.teal, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }} onClick={() => openLinkedChat(a)} disabled={linkedChatBusy}>
+                <MessageCircle size={13} /> {linkedChatBusy ? "..." : "چت درباره این مورد"}
+              </button>
+              <button type="button" style={{ ...styles.smallButton, background: THEME.navyMid, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }} onClick={() => openLinkedHcms(a)} disabled={linkedHcmsBusy}>
+>>>>>>> 62c9c73 (Upload project files)
                 <ShieldAlert size={13} /> {linkedHcmsBusy ? "..." : "ارزیابی ریسک HCMS"}
               </button>
             </div>
@@ -2751,6 +3062,82 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
                 {a.effectiveness && <div><b>اثربخشی:</b> {a.effectiveness}</div>}
               </div>
             )}
+<<<<<<< HEAD
+=======
+            {gateMap[a.id] && (
+              <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 9, padding: 12, marginTop: 10, marginBottom: 10 }}>
+                <p style={{ fontSize: 11.5, fontWeight: 700, color: "#1d4ed8", margin: "0 0 8px" }}>
+                  گیت تأیید سرپرست/مدیر HSE — {GATE_STATUS_LABELS[gateMap[a.id].status] || gateMap[a.id].status}
+                </p>
+                {gateMap[a.id].reviewerComment && (
+                  <p style={{ fontSize: 11.5, color: "#374151", margin: "0 0 8px", lineHeight: 1.8 }}>
+                    <b>نظر کارشناس:</b> {gateMap[a.id].reviewerComment}
+                  </p>
+                )}
+                {gateMessage && <p style={styles.error}>{gateMessage}</p>}
+
+                {/* سمت سرپرست/مدیر HSE — هم روی pending_approval هم روی reviewed در دسترس است */}
+                {isReviewer && (gateMap[a.id].status === "pending_approval" || gateMap[a.id].status === "reviewed") && (
+                  <div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                      <button type="button" style={{ ...styles.smallButton, background: "#166534" }} onClick={() => handleApproveGate(a)} disabled={gateBusy === a.id}>
+                        تأیید نهایی و ارسال به پیمانکار
+                      </button>
+                      {gateMap[a.id].status === "pending_approval" && (
+                        <button type="button" style={styles.smallButton} onClick={() => { setAssigningGateId(a.id); setAssignGateTo(""); }} disabled={gateBusy === a.id}>
+                          ارجاع به کارشناس برای بررسی
+                        </button>
+                      )}
+                      <button type="button" style={{ ...styles.smallButton, background: THEME.danger }} onClick={() => setShowRejectBox(true)} disabled={gateBusy === a.id}>
+                        رد
+                      </button>
+                    </div>
+                    {assigningGateId === a.id && (
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                        <select style={{ ...styles.input, marginTop: 0, maxWidth: 220 }} value={assignGateTo} onChange={(e) => setAssignGateTo(e.target.value)} dir="rtl">
+                          <option value="">انتخاب کارشناس</option>
+                          {gateStaff.filter((s) => s.username !== currentUser?.username).map((s) => <option key={s.username} value={s.username}>{s.name}</option>)}
+                        </select>
+                        <button type="button" style={styles.smallButton} onClick={() => handleAssignForReview(a)} disabled={gateBusy === a.id || !assignGateTo}>ثبت ارجاع</button>
+                        <button type="button" style={{ ...styles.smallButton, background: THEME.text3 }} onClick={() => setAssigningGateId(null)}>انصراف</button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* سمت کارشناسی که این مورد به او ارجاع شده */}
+                {gateMap[a.id].status === "assigned_review" && gateMap[a.id].assignedTo === currentUser?.username && (
+                  <div>
+                    {reviewingGateId !== a.id ? (
+                      <button type="button" style={styles.smallButton} onClick={() => { setReviewingGateId(a.id); setReviewComment(""); }} disabled={gateBusy === a.id}>
+                        ارسال نتیجه‌ی بررسی برای سرپرست/مدیر HSE
+                      </button>
+                    ) : (
+                      <div>
+                        <label style={styles.label}>نظر یا توضیح (اختیاری)</label>
+                        <textarea style={{ ...styles.input, minHeight: 50 }} value={reviewComment} onChange={(e) => setReviewComment(e.target.value)} dir="rtl" />
+                        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                          <button type="button" style={styles.smallButton} onClick={() => handleSubmitReview(a)} disabled={gateBusy === a.id}>ارسال</button>
+                          <button type="button" style={{ ...styles.smallButton, background: THEME.text3 }} onClick={() => setReviewingGateId(null)}>انصراف</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {isReviewer && showRejectBox && (
+                  <div style={{ marginTop: 8 }}>
+                    <label style={styles.label}>دلیل رد (اختیاری)</label>
+                    <textarea style={{ ...styles.input, minHeight: 50 }} value={rejectNote} onChange={(e) => setRejectNote(e.target.value)} dir="rtl" />
+                    <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                      <button type="button" style={{ ...styles.smallButton, background: THEME.danger }} onClick={() => { handleRejectGate(a, rejectNote); setShowRejectBox(false); setRejectNote(""); }} disabled={gateBusy === a.id}>ثبت رد</button>
+                      <button type="button" style={{ ...styles.smallButton, background: THEME.text3 }} onClick={() => setShowRejectBox(false)}>انصراف</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+>>>>>>> 62c9c73 (Upload project files)
             {isReviewer && a.status === "open" && (
               <div>
                 <div style={styles.backLink} onClick={() => setShowManualEdit((v) => !v)}>
@@ -2868,6 +3255,7 @@ function DashboardHeader({ panelLabelKey, currentUser, onLogout, onOpenSettings,
       <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: "1 1 auto" }}>
         <Avatar name={currentUser?.name} size={38} bg="rgba(255,255,255,0.18)" />
         <div style={{ minWidth: 0, lineHeight: 1.35 }}>
+<<<<<<< HEAD
           <div style={styles.appNameTag}>{t(panelLabelKey)}</div>
           <div style={{ fontSize: 14.5, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "60vw" }}>{currentUser?.name || "—"}</div>
           {currentUser?.jobPositionTitle && (
@@ -2875,6 +3263,14 @@ function DashboardHeader({ panelLabelKey, currentUser, onLogout, onOpenSettings,
           )}
           {currentUser?.companyName && appearance?.headerShowCompanyName !== false && (
             <div style={{ fontSize: 10.5, color: "rgba(255,255,255,0.6)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "60vw" }}>{currentUser.companyName}</div>
+=======
+          <div style={{ fontSize: 14.5, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "60vw" }}>{t(panelLabelKey)}</div>
+          {currentUser?.companyName && appearance?.headerShowCompanyName !== false && (
+            <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.75)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "60vw" }}>{currentUser.companyName}</div>
+          )}
+          {currentUser?.name && (
+            <div style={{ fontSize: 10.5, color: "rgba(255,255,255,0.6)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "60vw" }}>{currentUser.name}</div>
+>>>>>>> 62c9c73 (Upload project files)
           )}
         </div>
       </div>
@@ -2963,6 +3359,13 @@ function SidebarItem({ mod, view, setView, collapsed, openKey, setOpenKey }) {
   const handleClick = () => {
     if (mod.muted) return;
     if (isLeaf) { setView(mod.key); return; }
+<<<<<<< HEAD
+=======
+    // در حالت جمع‌شده، زیرمنو اصلاً رندر نمی‌شود (چون فضایی برایش نیست)؛
+    // پس کلیک روی آیکون باید مستقیم محتوا را باز کند — دقیقاً مثل رفتار
+    // ماژول‌های بدون زیرمنو (مثل شاخص‌های Proactive HSE).
+    if (collapsed) { setView(mod.sub[0].key); return; }
+>>>>>>> 62c9c73 (Upload project files)
     setOpenKey(isOpen ? null : mod.key); // آکاردئون: باز/بسته، بدون تغییر view
   };
 
@@ -3048,17 +3451,35 @@ function Sidebar({ modules, view, setView, collapsed, onToggleCollapse }) {
         borderInlineStart: `1px solid rgba(255,255,255,0.08)`,
       }}
     >
+<<<<<<< HEAD
       {/* برچسب پنل (مثلاً «کارفرما») اینجا عمداً تکرار نمی‌شود — همان
           برچسب از قبل بالای DashboardHeader نمایش داده می‌شود. */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-end", padding: collapsed ? "16px 0" : "12px 14px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+=======
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: collapsed ? "12px 8px" : "12px 14px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+>>>>>>> 62c9c73 (Upload project files)
         <button
           type="button" onClick={onToggleCollapse} title={collapsed ? "باز کردن منو" : "جمع کردن منو"}
           style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 7, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
         >
           {collapsed ? <ChevronsLeft size={15} color="#fff" /> : <ChevronsRight size={15} color="#fff" />}
         </button>
+<<<<<<< HEAD
       </div>
       <div style={{ padding: collapsed ? "8px 8px 0" : "10px 10px 0" }}>
+=======
+        {!collapsed && (
+          <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.07)", borderRadius: 8, padding: "6px 10px", minWidth: 0 }}>
+            <Search size={13} color="rgba(255,255,255,0.5)" style={{ flexShrink: 0 }} />
+            <input
+              value={search} onChange={(e) => setSearch(e.target.value)} placeholder="جستجوی ماژول‌ها..." dir="rtl"
+              style={{ flex: 1, minWidth: 0, background: "transparent", border: "none", outline: "none", color: "#fff", fontSize: 12, fontFamily: THEME.font }}
+            />
+          </div>
+        )}
+      </div>
+      <div style={{ padding: collapsed ? "8px 8px 0" : "8px 10px 0" }}>
+>>>>>>> 62c9c73 (Upload project files)
         <div
           onClick={() => setView("menu")}
           title={collapsed ? "صفحه اصلی" : undefined}
@@ -3077,6 +3498,7 @@ function Sidebar({ modules, view, setView, collapsed, onToggleCollapse }) {
           {!collapsed && <span>صفحه اصلی</span>}
         </div>
       </div>
+<<<<<<< HEAD
       {!collapsed && (
         <div style={{ padding: "10px 12px 4px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.07)", borderRadius: 8, padding: "7px 10px" }}>
@@ -3088,6 +3510,8 @@ function Sidebar({ modules, view, setView, collapsed, onToggleCollapse }) {
           </div>
         </div>
       )}
+=======
+>>>>>>> 62c9c73 (Upload project files)
       <div style={{ flex: 1, overflowY: "auto", padding: collapsed ? "10px 8px" : "10px 10px", display: "flex", flexDirection: "column", gap: 3 }}>
         {filteredModules.map((mod) => (
           <SidebarItem key={mod.key} mod={mod} view={view} setView={setView} collapsed={collapsed} openKey={q ? effectiveOpenKey : openKey} setOpenKey={setOpenKey} />
@@ -3126,7 +3550,11 @@ function ResponsiveDashboardShell({ panelLabelKey, currentUser, onLogout, onOpen
   // در دسکتاپ، لیست ماژول‌های صفحه‌ی «منو» دیگر در فضای اصلی نمایش داده
   // نمی‌شود (چون همان لیست دقیقاً در Sidebar سمت راست هست) — به‌جایش یک
   // پیام خوش‌آمدگویی با نام واقعی کاربر واردشده نشان داده می‌شود.
+<<<<<<< HEAD
   const mainContent = view === "menu" ? <WelcomeScreen currentUser={currentUser} setView={setView} /> : children;
+=======
+  const mainContent = view === "menu" ? <WelcomeScreen currentUser={currentUser} setView={setView} onNavigate={onNavigate} sidebarModules={sidebarModules} /> : children;
+>>>>>>> 62c9c73 (Upload project files)
 
   return (
     <div style={{ direction: dir, fontFamily: THEME.font, minHeight: "100vh", background: THEME.bg, display: "flex", flexDirection: "column" }}>
@@ -3144,6 +3572,7 @@ function ResponsiveDashboardShell({ panelLabelKey, currentUser, onLogout, onOpen
 // صفحه‌ی اصلی دسکتاپ — کارت خوش‌آمدگویی مینیمال + خلاصه‌ی KPI واقعی
 // (هیچ عدد ثابت/نمایشی‌ای در کار نیست؛ همه از همان لایه‌های داده‌ی
 // موجود anomalies/personnel/corrective_actions/incidents می‌آید).
+<<<<<<< HEAD
 function WelcomeScreen({ currentUser, setView }) {
   const { t } = useLanguage();
   const [kpi, setKpi] = useState(null);
@@ -3212,12 +3641,152 @@ function WelcomeScreen({ currentUser, setView }) {
           </div>
         ))}
       </div>
+=======
+// نگاشت module_key (که در hse_gate_items ذخیره می‌شود) به هدف ناوبری
+// واقعی — دقیقاً همان الگوی handleHomeNavigate/navFilter که برای اعلان‌های
+// هوشمند داشبورد از قبل استفاده می‌شود، تا مسیر یکسان و آشنا بماند.
+const GATE_MODULE_TO_NAV_TARGET = {
+  anomalyReport: { module: "anomaly" },
+  personnelAccess: { module: "personnel" },
+  machineryManagement: { module: "machinery" },
+  scaffoldManagement: { module: "scaffold" },
+  riskAssessment: { module: "bowtie" },
+};
+const GATE_MODULE_LABELS = {
+  anomalyReport: "عدم انطباق",
+  personnelAccess: "پرسنل",
+  machineryManagement: "ماشین‌آلات",
+  scaffoldManagement: "داربست",
+  riskAssessment: "ارزیابی ریسک",
+};
+
+function WelcomeScreen({ currentUser, setView, onNavigate, sidebarModules }) {
+  const { t } = useLanguage();
+  const [tasks, setTasks] = useState(null);
+  const [announcements, setAnnouncements] = useState(undefined); // undefined=در حال بارگذاری، []=هیچ اطلاعیه‌ی واجدشرایطی نیست
+  useEffect(() => {
+    loadActiveAnnouncements("home").then(setAnnouncements).catch(() => setAnnouncements([]));
+    // پیمانکار نه گیرنده‌ی واگذاری است، نه گیت‌کیپر — این کارت برایش خالی می‌ماند
+    if (currentUser?.role === "CONTRACTOR") { setTasks([]); return; }
+
+    const isGatekeeper = currentUser?.role === "HSE_SUPERVISOR" || currentUser?.role === "ADMIN";
+    Promise.all([
+      loadAssignedGateItems(currentUser?.username).catch(() => []),
+      isGatekeeper ? loadPendingGateItems().catch(() => []) : Promise.resolve([]),
+    ]).then(([assigned, pending]) => {
+      // یک مورد می‌تواند هم واگذارشده به من باشد هم در انتظار تأیید من
+      // باشد (در دو مسیر متفاوت) — بر اساس id یکتا از تکرار جلوگیری می‌شود.
+      const merged = [...assigned.map((it) => ({ ...it, kind: "assigned" })), ...pending.map((it) => ({ ...it, kind: "pending_approval" }))];
+      const seen = new Set();
+      const deduped = merged.filter((it) => (seen.has(it.id) ? false : (seen.add(it.id), true)));
+      setTasks(deduped);
+    });
+  }, [currentUser?.username, currentUser?.role]);
+
+  const handleTaskClick = (task) => {
+    const target = GATE_MODULE_TO_NAV_TARGET[task.moduleKey];
+    if (target && onNavigate) onNavigate({ ...target, recordId: task.recordId });
+  };
+
+  return (
+    <div>
+      {/* ردیف اول — طبق خواسته‌ی دقیق: خوش‌آمدگویی سمت راست (اولین فرزند
+          در RTL)، کارهای در دست اقدام روبه‌رویش سمت چپ. بنر Hero و بخش
+          دسترسی سریع طبق درخواست کاملاً حذف شدند. */}
+      <div style={{ display: "flex", gap: 14, alignItems: "stretch", marginBottom: 14, flexWrap: "wrap" }}>
+        <div style={{ flex: "1 1 40%", minWidth: 280, display: "flex" }}>
+          <WelcomeCard currentUser={currentUser} />
+        </div>
+        <div style={{ flex: "1 1 55%", minWidth: 300 }}>
+          <TasksCard tasks={tasks} onTaskClick={handleTaskClick} />
+        </div>
+      </div>
+
+      {/* ردیف دوم — اطلاعیه‌ها، همان عرض قبلی (تمام‌عرض)، فقط ارتفاع کارت بیشتر */}
+      {announcements && announcements.length > 0 && (
+        <AnnouncementSlider announcements={announcements} setView={setView} />
+      )}
+    </div>
+  );
+}
+
+// بنر اصلی — پیام کلی سامانه + ۴ نکته‌ی برجسته (متن ثابت محصول، نه داده‌ی
+// پویا؛ صرفاً معرفی IHMS مثل نمونه‌ی مرجع). ارتفاع با کارت خوش‌آمدگویی هم‌تراز است.
+function WelcomeCard({ currentUser }) {
+  const { t } = useLanguage();
+  const now = new Date();
+  return (
+    <div style={{
+      background: THEME.surface, border: `1px solid ${THEME.border}`, borderRadius: 16, padding: "20px 24px",
+      display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", width: "100%", minHeight: 200,
+    }}>
+      <span style={{ fontSize: 30, marginBottom: 10 }}>👋</span>
+      <h2 style={{ fontSize: 18, fontWeight: 800, color: THEME.navy, margin: "0 0 8px" }}>
+        {t("welcomeGreeting")}، {currentUser?.name || ""}
+      </h2>
+      <p style={{ fontSize: 12.5, color: THEME.text2, lineHeight: 1.9, margin: "0 0 16px", maxWidth: 220 }}>
+        به سامانه‌ی مدیریت HSE یکپارچه خوش آمدید. روز خوبی داشته باشید!
+      </p>
+      <div style={{ fontSize: 11, color: THEME.text3, display: "flex", alignItems: "center", gap: 5 }}>
+        <Clock size={12} /> آخرین ورود: {toJalaliSafe(now.toISOString())}
+      </div>
+    </div>
+  );
+}
+
+function TasksCard({ tasks, onTaskClick }) {
+  return (
+    <div style={{ background: THEME.surface, border: `1px solid ${THEME.border}`, borderRadius: 14, padding: 16, height: "100%" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: tasks && tasks.length > 0 ? 12 : 0 }}>
+        <h3 style={{ fontSize: 13.5, fontWeight: 700, color: THEME.navy, margin: 0, display: "flex", alignItems: "center", gap: 6 }}>
+          <ClipboardList size={15} color={THEME.teal} /> کارهای در دست اقدام من
+        </h3>
+        {tasks && tasks.length > 0 && (
+          <span style={{ fontSize: 11, color: THEME.text3, fontWeight: 600 }}>{tasks.length.toLocaleString("fa-IR")}</span>
+        )}
+      </div>
+      {tasks === null && <p style={{ fontSize: 12, color: THEME.text3, margin: 0 }}>در حال بارگذاری...</p>}
+      {tasks && tasks.length === 0 && (
+        <p style={{ fontSize: 12, color: THEME.text3, margin: 0 }}>در حال حاضر هیچ کاری در دست اقدام شما نیست.</p>
+      )}
+      {tasks && tasks.length > 0 && (
+        <div style={{ maxHeight: 320, overflowY: "auto" }}>
+          {tasks.map((it) => (
+            <div
+              key={`${it.kind}-${it.id}`}
+              onClick={() => onTaskClick(it)}
+              style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 2px", borderBottom: `1px solid ${THEME.border}`, cursor: "pointer" }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: THEME.navy, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {it.recordLabel || it.recordId}
+                  </span>
+                  <span style={{
+                    fontSize: 9.5, padding: "1px 7px", borderRadius: 999, flexShrink: 0, fontWeight: 700,
+                    background: it.kind === "pending_approval" ? "#fef3c7" : THEME.tealSoft,
+                    color: it.kind === "pending_approval" ? "#b45309" : THEME.tealDeep,
+                  }}>
+                    {it.kind === "pending_approval" ? "در انتظار تأیید" : "واگذارشده"}
+                  </span>
+                </div>
+                <span style={{ fontSize: 10.5, color: THEME.text3 }}>
+                  {GATE_MODULE_LABELS[it.moduleKey] || it.moduleKey} — {toJalaliSafe(it.reviewedAt || it.createdAt)}
+                </span>
+              </div>
+              <ChevronRight size={13} color={THEME.text3} style={{ transform: "rotate(180deg)", flexShrink: 0 }} />
+            </div>
+          ))}
+        </div>
+      )}
+>>>>>>> 62c9c73 (Upload project files)
     </div>
   );
 }
 
 const ANNOUNCEMENT_ICONS = { megaphone: Megaphone, sparkles: Sparkles, gift: Gift, info: Info, bell: Bell };
 
+<<<<<<< HEAD
 // کارت اطلاعیه/تبلیغات — کنار پیام خوش‌آمدگویی صفحه‌ی اصلی دسکتاپ، هرگز
 // در موبایل رندر نمی‌شود (چون WelcomeScreen خودش فقط در شاخه‌ی دسکتاپ
 // ResponsiveDashboardShell صدا زده می‌شود). عنوان/متن/دکمه از دیتابیس
@@ -3226,6 +3795,10 @@ function AnnouncementCard({ announcement, setView }) {
   const Icon = ANNOUNCEMENT_ICONS[announcement.iconKey] || Megaphone;
 
   const handleAction = () => {
+=======
+function announcementActionUrl(announcement, setView) {
+  return () => {
+>>>>>>> 62c9c73 (Upload project files)
     if (!announcement.buttonUrl) return;
     const url = announcement.buttonUrl.trim();
     if (url.startsWith("http://") || url.startsWith("https://")) {
@@ -3234,6 +3807,7 @@ function AnnouncementCard({ announcement, setView }) {
       setView(url); // مقصد داخلی — نام یک view/ماژول موجود
     }
   };
+<<<<<<< HEAD
 
   return (
     <div
@@ -3261,6 +3835,158 @@ function AnnouncementCard({ announcement, setView }) {
           {announcement.buttonLabel} <ArrowUpRight size={13} />
         </button>
       )}
+=======
+}
+
+// اسلایدر اطلاعیه/تبلیغات — طبق درخواست بازطراحی: تمام‌عرض، تصویر بزرگ‌تر
+// سمت راست (در RTL)، متن سمت چپ، ارتفاع کاملاً ثابت (بدون aspect-ratio
+// مشتق‌شده) تا هیچ لرزشی بین اطلاعیه‌های مختلف ایجاد نشود. با ≤۱ اطلاعیه،
+// دکمه‌های ناوبری/نقاط پایینی مخفی می‌مانند (بدون تغییر رفتار قبلی).
+function AnnouncementSlider({ announcements, setView }) {
+  const [index, setIndex] = useState(0);
+  const isSlider = announcements.length > 1;
+  const current = announcements[Math.min(index, announcements.length - 1)];
+
+  useEffect(() => {
+    if (!isSlider) return;
+    const ms = (current.displaySeconds || 10) * 1000;
+    const timer = setTimeout(() => setIndex((i) => (i + 1) % announcements.length), ms);
+    return () => clearTimeout(timer);
+  }, [index, isSlider, current, announcements.length]);
+
+  const Icon = ANNOUNCEMENT_ICONS[current.iconKey] || Megaphone;
+  const handleAction = announcementActionUrl(current, setView);
+
+  return (
+    <div style={{ background: THEME.surface, border: `1px solid ${THEME.border}`, borderRadius: 16, overflow: "hidden", position: "relative" }}>
+      <div style={{ display: "flex", flexWrap: "wrap" }}>
+        {/* ناحیه‌ی تصویر — عرض واکنش‌گرا، ارتفاع کاملاً ثابت به پیکسل */}
+        <div style={{ flex: "1 1 340px", minWidth: 260, height: 340, background: current.imageUrl ? "#e9eef3" : THEME.tealSoft, position: "relative", overflow: "hidden" }}>
+          {current.imageUrl ? (
+            <img src={current.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
+          ) : (
+            <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Icon size={48} color={THEME.tealDeep} />
+            </div>
+          )}
+          {isSlider && (
+            <div style={{ position: "absolute", top: 10, insetInlineEnd: 10, display: "flex", alignItems: "center", gap: 4 }}>
+              <button type="button" onClick={() => setIndex((i) => (i - 1 + announcements.length) % announcements.length)} title="اطلاعیه‌ی قبلی" style={sliderNavBtnStyle}>
+                <ChevronRight size={13} color={THEME.navy} />
+              </button>
+              <button type="button" onClick={() => setIndex((i) => (i + 1) % announcements.length)} title="اطلاعیه‌ی بعدی" style={sliderNavBtnStyle}>
+                <ChevronLeft size={13} color={THEME.navy} />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* ناحیه‌ی متن — عرض واکنش‌گرا، ارتفاع با تعداد خط محدود ثابت می‌ماند */}
+        <div style={{ flex: "1 1 300px", minWidth: 260, height: 340, padding: "28px 30px", display: "flex", flexDirection: "column", boxSizing: "border-box" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <Megaphone size={14} color={THEME.teal} />
+            <span style={{ fontSize: 11, fontWeight: 700, color: THEME.teal }}>اطلاعیه‌ها</span>
+          </div>
+          <h3 style={{
+            fontSize: 19, fontWeight: 800, color: THEME.navy, margin: "0 0 10px", minHeight: 25,
+            display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden",
+          }}>
+            {current.title || "\u00A0"}
+          </h3>
+          <p style={{
+            fontSize: 13.5, color: THEME.text2, lineHeight: 1.9, margin: 0, minHeight: "calc(1.9em * 4)",
+            display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden",
+          }}>
+            {current.message}
+          </p>
+          {current.buttonLabel && current.buttonUrl && (
+            <button
+              type="button" onClick={handleAction}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 5, alignSelf: "flex-start", marginTop: 12,
+                background: THEME.teal, color: "#fff", border: "none", borderRadius: 9, padding: "8px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: THEME.font,
+              }}
+            >
+              {current.buttonLabel} <ArrowUpRight size={13} />
+            </button>
+          )}
+          {isSlider && (
+            <div style={{ display: "flex", gap: 6, marginTop: "auto", paddingTop: 12 }}>
+              {announcements.map((a, i) => (
+                <button
+                  key={a.id} type="button" onClick={() => setIndex(i)} title={`اطلاعیه ${i + 1}`}
+                  style={{ width: i === index ? 18 : 6, height: 6, borderRadius: 999, border: "none", padding: 0, cursor: "pointer", background: i === index ? THEME.teal : THEME.border, transition: "width .2s, background .2s" }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+const sliderNavBtnStyle = { width: 26, height: 26, borderRadius: 8, border: "none", background: "rgba(255,255,255,0.9)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", boxShadow: "0 1px 4px rgba(0,0,0,0.15)" };
+
+// نسخه‌ی جمع‌وجور مخصوص موبایل — طبق الزام Responsive بودن؛ بدون هیچ
+// تغییری در Layout موجود موبایل، فقط یک بنر جدید و مستقل بالای منو
+// (دقیقاً مثل الگوی موجود DbSizeWarningBanner) اضافه می‌شود.
+function MobileAnnouncementBanner({ setView }) {
+  const [announcements, setAnnouncements] = useState(undefined);
+  const [index, setIndex] = useState(0);
+  useEffect(() => { loadActiveAnnouncements("home").then(setAnnouncements).catch(() => setAnnouncements([])); }, []);
+
+  const isSlider = announcements && announcements.length > 1;
+  useEffect(() => {
+    if (!isSlider) return;
+    const current = announcements[index];
+    const ms = (current.displaySeconds || 10) * 1000;
+    const timer = setTimeout(() => setIndex((i) => (i + 1) % announcements.length), ms);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index, isSlider, announcements]);
+
+  if (!announcements || announcements.length === 0) return null;
+  const current = announcements[Math.min(index, announcements.length - 1)];
+  const Icon = ANNOUNCEMENT_ICONS[current.iconKey] || Megaphone;
+  const handleAction = announcementActionUrl(current, setView);
+
+  return (
+    <div style={{ background: THEME.surface, border: `1px solid ${THEME.border}`, borderRadius: 14, padding: 14, marginBottom: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ width: 44, height: 44, borderRadius: 10, background: current.imageUrl ? "#e9eef3" : THEME.tealSoft, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
+          {current.imageUrl ? <img src={current.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <Icon size={20} color={THEME.tealDeep} />}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: 13, fontWeight: 800, color: THEME.navy, minHeight: 17,
+            display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden",
+          }}>
+            {current.title || "\u00A0"}
+          </div>
+          <div style={{
+            fontSize: 11.5, color: THEME.text2, lineHeight: 1.7, minHeight: "calc(1.7em * 2)",
+            display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
+          }}>
+            {current.message}
+          </div>
+        </div>
+      </div>
+      {current.buttonLabel && current.buttonUrl && (
+        <button type="button" onClick={handleAction} style={{ marginTop: 8, display: "inline-flex", alignItems: "center", gap: 4, background: THEME.teal, color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: THEME.font }}>
+          {current.buttonLabel} <ArrowUpRight size={12} />
+        </button>
+      )}
+      {isSlider && (
+        <div style={{ display: "flex", justifyContent: "center", gap: 5, marginTop: 8 }}>
+          {announcements.map((a, i) => (
+            <button
+              key={a.id} type="button" onClick={() => setIndex(i)}
+              style={{ width: i === index ? 16 : 5, height: 5, borderRadius: 999, border: "none", padding: 0, cursor: "pointer", background: i === index ? THEME.teal : THEME.border, transition: "width .2s, background .2s" }}
+            />
+          ))}
+        </div>
+      )}
+>>>>>>> 62c9c73 (Upload project files)
     </div>
   );
 }
@@ -3337,6 +4063,10 @@ function AdminDashboard({ onLogout, currentUser }) {
     <ResponsiveDashboardShell panelLabelKey="panelAdmin" currentUser={currentUser} onLogout={onLogout} onOpenSettings={() => setView("profile")} view={view} setView={setView} sidebarModules={sidebarModules}>
       {view === "menu" && (
         <div style={styles.menuList}>
+<<<<<<< HEAD
+=======
+          <MobileAnnouncementBanner setView={setView} />
+>>>>>>> 62c9c73 (Upload project files)
           <DbSizeWarningBanner />
           {isModuleInPlan(planFeatures, "chat") && <MenuRow icon={MessageCircle} label={t("moduleChat")} onClick={() => setView("chat")} badge={chatUnread} />}
           {isModuleInPlan(planFeatures, "anomalyReport") && <MenuRow icon={AlertTriangle} label={mt(anomalyMod)} onClick={() => setView("anomalyReport")} accent sub />}
@@ -3454,9 +4184,15 @@ function AdminDashboard({ onLogout, currentUser }) {
       {view === "chat" && <ChatDashboard onBack={() => setView("menu")} currentUser={currentUser} />}
       {/* مدیریت حساب کارفرما/پیمانکار: عمداً دیگر اینجا رندر نمی‌شود — به پنل Super Admin منتقل شد */}
       {view === "anomalyForm" && <AnomalyForm onBack={() => setView("anomalyReport")} currentUser={currentUser} onSaved={() => setView("anomalyList")} />}
+<<<<<<< HEAD
       {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="ADMIN" currentUser={currentUser} initialStatusFilter={navFilter?.module === "anomaly" ? navFilter.statusFilter : undefined} initialRiskFilter={navFilter?.module === "anomaly" ? navFilter.riskFilter : undefined} initialContractorFilter={navFilter?.module === "anomaly" ? navFilter.contractorFilter : undefined} />}
       {view === "correctiveActionsList" && <CorrectiveActionsDashboard onBack={() => setView("anomalyReport")} currentUser={currentUser} />}
       {view === "bowtieDashboard" && <BowTieDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} readOnly={false} />}
+=======
+      {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="ADMIN" currentUser={currentUser} initialStatusFilter={navFilter?.module === "anomaly" ? navFilter.statusFilter : undefined} initialRiskFilter={navFilter?.module === "anomaly" ? navFilter.riskFilter : undefined} initialContractorFilter={navFilter?.module === "anomaly" ? navFilter.contractorFilter : undefined} initialExpandedAnomalyId={navFilter?.module === "anomaly" ? navFilter.recordId : undefined} />}
+      {view === "correctiveActionsList" && <CorrectiveActionsDashboard onBack={() => setView("anomalyReport")} currentUser={currentUser} />}
+      {view === "bowtieDashboard" && <BowTieDashboard role="ADMIN" onBack={() => setView("riskAssessment")} currentUser={currentUser} readOnly={false} />}
+>>>>>>> 62c9c73 (Upload project files)
       {view === "hcmsDashboard" && <HcmsDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} />}
       {view === "personnelForm" && <PersonnelForm onBack={() => setView("personnelAccess")} currentUser={currentUser} onSaved={() => setView("personnelAccess")} />}
       {view === "personnelDashboard" && <PersonnelDashboard onBack={() => setView("personnelAccess")} currentUser={currentUser} role="ADMIN" initialStatusFilter={navFilter?.module === "personnel" ? navFilter.statusFilter : undefined} initialContractorFilter={navFilter?.module === "personnel" ? navFilter.contractorFilter : undefined} onNavigateToAssessment={(ctx) => { setAssessmentContext(ctx); setView("proactiveIndicators"); }} initialSelectedPersonnelId={assessmentContext?.personnelId} />}
@@ -3578,6 +4314,10 @@ function EmployerDashboard({ onLogout, currentUser }) {
     >
       {view === "menu" && (
         <div style={styles.menuList}>
+<<<<<<< HEAD
+=======
+          <MobileAnnouncementBanner setView={setView} />
+>>>>>>> 62c9c73 (Upload project files)
           {HSE_MODULES.filter((mod) => isModuleVisible(permMap, mod.key) && isModuleInPlan(planFeatures, mod.key)).map((mod) => (
             <MenuRow
               key={mod.key}
@@ -3657,9 +4397,15 @@ function EmployerDashboard({ onLogout, currentUser }) {
       {view === "chat" && <ChatDashboard onBack={() => setView("menu")} currentUser={currentUser} />}
       {view === "riskKnowledgeManagement" && <RiskKnowledgeManager onBack={() => setView("riskAssessment")} currentUser={currentUser} />}
       {view === "anomalyForm" && anomalyCanEdit && <AnomalyForm onBack={() => setView("anomalyReport")} currentUser={currentUser} onSaved={() => setView("anomalyList")} />}
+<<<<<<< HEAD
       {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="EMPLOYER" currentUser={currentUser} readOnly={!canEdit || getAccessLevel(permMap, "anomalyReport") === "view"} initialStatusFilter={navFilter?.module === "anomaly" ? navFilter.statusFilter : undefined} initialRiskFilter={navFilter?.module === "anomaly" ? navFilter.riskFilter : undefined} initialContractorFilter={navFilter?.module === "anomaly" ? navFilter.contractorFilter : undefined} />}
       {view === "correctiveActionsList" && <CorrectiveActionsDashboard onBack={() => setView("anomalyReport")} currentUser={currentUser} />}
       {view === "bowtieDashboard" && <BowTieDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} readOnly={!canEdit || getAccessLevel(permMap, "riskAssessment") === "view"} />}
+=======
+      {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="EMPLOYER" currentUser={currentUser} readOnly={!canEdit || getAccessLevel(permMap, "anomalyReport") === "view"} initialStatusFilter={navFilter?.module === "anomaly" ? navFilter.statusFilter : undefined} initialRiskFilter={navFilter?.module === "anomaly" ? navFilter.riskFilter : undefined} initialContractorFilter={navFilter?.module === "anomaly" ? navFilter.contractorFilter : undefined} initialExpandedAnomalyId={navFilter?.module === "anomaly" ? navFilter.recordId : undefined} />}
+      {view === "correctiveActionsList" && <CorrectiveActionsDashboard onBack={() => setView("anomalyReport")} currentUser={currentUser} />}
+      {view === "bowtieDashboard" && <BowTieDashboard role="EMPLOYER" onBack={() => setView("riskAssessment")} currentUser={currentUser} readOnly={!canEdit || getAccessLevel(permMap, "riskAssessment") === "view"} />}
+>>>>>>> 62c9c73 (Upload project files)
       {view === "hcmsDashboard" && <HcmsDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} />}
       {view === "archiveManagement" && <ArchiveManager onBack={() => setView("menu")} currentUser={currentUser} />}
       {view === "personnelForm" && <PersonnelForm onBack={() => setView("personnelAccess")} currentUser={currentUser} onSaved={() => setView("personnelAccess")} />}
@@ -3773,6 +4519,10 @@ function ContractorDashboard({ onLogout, currentUser }) {
     >
       {view === "menu" && (
         <div style={styles.menuList}>
+<<<<<<< HEAD
+=======
+          <MobileAnnouncementBanner setView={setView} />
+>>>>>>> 62c9c73 (Upload project files)
           {HSE_MODULES.filter((mod) => isModuleVisible(permMap, mod.key) && isModuleInPlan(planFeatures, mod.key)).map((mod) => (
             <MenuRow
               key={mod.key}
@@ -3851,7 +4601,11 @@ function ContractorDashboard({ onLogout, currentUser }) {
       {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel={t("roleLabelContractor")} />}
       {view === "chat" && <ChatDashboard onBack={() => setView("menu")} currentUser={currentUser} />}
       {view === "hcmsDashboard" && <HcmsDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} />}
+<<<<<<< HEAD
       {view === "bowtieDashboard" && <BowTieDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} readOnly={getAccessLevel(permMap, "riskAssessment") === "view"} />}
+=======
+      {view === "bowtieDashboard" && <BowTieDashboard role="CONTRACTOR" onBack={() => setView("riskAssessment")} currentUser={currentUser} readOnly={getAccessLevel(permMap, "riskAssessment") === "view"} />}
+>>>>>>> 62c9c73 (Upload project files)
       {view === "archiveManagement" && <ArchiveManager onBack={() => setView("menu")} currentUser={currentUser} />}
       {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="CONTRACTOR" currentUser={currentUser} readOnly={getAccessLevel(permMap, "anomalyReport") === "view"} initialStatusFilter={navFilter?.module === "anomaly" ? navFilter.statusFilter : undefined} initialRiskFilter={navFilter?.module === "anomaly" ? navFilter.riskFilter : undefined} />}
       {view === "correctiveActionsList" && <CorrectiveActionsDashboard onBack={() => setView("anomalyReport")} currentUser={currentUser} />}
@@ -3960,9 +4714,19 @@ function AppInner() {
     );
   }
 
+<<<<<<< HEAD
   if (currentUser.role === "ADMIN") return <AdminDashboard onLogout={handleLogout} currentUser={currentUser} />;
   if (currentUser.role === "EMPLOYER") return <EmployerDashboard onLogout={handleLogout} currentUser={currentUser} />;
   return <ContractorDashboard onLogout={handleLogout} currentUser={currentUser} />;
+=======
+  return (
+    <SubscriptionGate currentUser={currentUser} onLogout={handleLogout}>
+      {currentUser.role === "ADMIN" && <AdminDashboard onLogout={handleLogout} currentUser={currentUser} />}
+      {(currentUser.role === "EMPLOYER" || currentUser.role === "HSE_SUPERVISOR") && <EmployerDashboard onLogout={handleLogout} currentUser={currentUser} />}
+      {currentUser.role === "CONTRACTOR" && <ContractorDashboard onLogout={handleLogout} currentUser={currentUser} />}
+    </SubscriptionGate>
+  );
+>>>>>>> 62c9c73 (Upload project files)
 }
 
 // مسیر Super Admin کاملاً جدا از درخت بالاست — هیچ حساب کارفرما/پیمانکار/ادمین

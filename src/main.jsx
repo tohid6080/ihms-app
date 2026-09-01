@@ -34,7 +34,18 @@ baseStyle.textContent = `
 `;
 document.head.appendChild(baseStyle);
 
+<<<<<<< HEAD
 if ("serviceWorker" in navigator) {
+=======
+// طبق یک باگ واقعی که گزارش شد: Service Worker قبلاً بدون قید و شرط
+// حتی در npm run dev هم ثبت می‌شد — که باعث می‌شد کاربر با وجود
+// build مجدد و Hard Refresh، هنوز محتوای کش‌شده‌ی قدیمی ببیند (چون
+// Service Worker با Hot Module Reload خودِ Vite تداخل می‌کند). الان
+// فقط در نسخه‌ی نهایی واقعی (Production build) ثبت می‌شود —
+// import.meta.env.PROD مقداری است که خودِ Vite در npm run build
+// روی true تنظیم می‌کند، نه در npm run dev.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+>>>>>>> 62c9c73 (Upload project files)
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("./sw.js").catch(() => {});
   });

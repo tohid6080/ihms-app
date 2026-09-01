@@ -27,6 +27,14 @@ const SORT_OPTIONS = [
  */
 export default function MachineryDashboard({ onBack, currentUser, role, initialApprovalFilter, initialContractorFilter, readOnly }) {
   const isContractor = role === "CONTRACTOR";
+<<<<<<< HEAD
+=======
+  // طبق همان تصمیم تأییدشده که برای پرسنل و آنومالی اعمال شد: تأیید
+  // ماشین‌آلات فقط برای سرپرست/مدیر HSE و ادمین مجاز است، نه هر
+  // کارفرمایی معمولی. role (prop) همیشه "EMPLOYER" است (حتی برای حساب
+  // سرپرست HSE)، پس مستقیم currentUser?.role چک می‌شود.
+  const isGatekeeper = (currentUser?.role === "HSE_SUPERVISOR" || role === "ADMIN") && !isContractor;
+>>>>>>> 62c9c73 (Upload project files)
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -178,10 +186,17 @@ export default function MachineryDashboard({ onBack, currentUser, role, initialA
             <button type="button" style={{ ...styles.smallButton, background: THEME.danger }} onClick={() => handleDelete(m.id)}><Trash2 size={12} /></button>
           </>
         )}
+<<<<<<< HEAD
         {!isContractor && !readOnly && m.approvalStatus === "pending" && (
           <button type="button" style={styles.smallButton} onClick={() => startReview(m)}>بررسی</button>
         )}
         {!isContractor && !readOnly && m.approvalStatus !== "pending" && (
+=======
+        {isGatekeeper && !readOnly && m.approvalStatus === "pending" && (
+          <button type="button" style={styles.smallButton} onClick={() => startReview(m)}>بررسی</button>
+        )}
+        {isGatekeeper && !readOnly && m.approvalStatus !== "pending" && (
+>>>>>>> 62c9c73 (Upload project files)
           <button type="button" style={{ ...styles.smallButton, background: THEME.text3 }} onClick={() => startReview(m)}>تغییر تصمیم</button>
         )}
       </>
@@ -195,10 +210,17 @@ export default function MachineryDashboard({ onBack, currentUser, role, initialA
       {onBack && <div style={styles.backLink} onClick={onBack}>← بازگشت به منو</div>}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
         <Truck size={20} color={THEME.teal} />
+<<<<<<< HEAD
         <h2 style={{ margin: 0, fontSize: 19, color: THEME.navy, fontWeight: 700 }}>مدیریت ماشین‌آلات و تجهیزات</h2>
       </div>
       <p style={{ color: THEME.text3, fontSize: 12.5, marginTop: 4, marginBottom: 14 }}>
         {isContractor ? "ثبت و پیگیری ماشین‌آلات و تجهیزات شرکت شما" : "مشاهده و تأیید ماشین‌آلات ثبت‌شده توسط تمام پیمانکاران"}
+=======
+        <h2 style={{ margin: 0, fontSize: 19, color: THEME.navy, fontWeight: 700 }}>مدیریت ماشین‌آلات</h2>
+      </div>
+      <p style={{ color: THEME.text3, fontSize: 12.5, marginTop: 4, marginBottom: 14 }}>
+        {isContractor ? "ثبت و پیگیری ماشین‌آلات شرکت شما" : "مشاهده و تأیید ماشین‌آلات ثبت‌شده توسط تمام پیمانکاران"}
+>>>>>>> 62c9c73 (Upload project files)
       </p>
 
       {isContractor && !readOnly && (
@@ -229,7 +251,11 @@ export default function MachineryDashboard({ onBack, currentUser, role, initialA
           </>
         }
         bulkActions={
+<<<<<<< HEAD
           !isContractor && !readOnly
+=======
+          isGatekeeper && !readOnly
+>>>>>>> 62c9c73 (Upload project files)
             ? [{ label: "تأیید گروهی", onClick: handleBulkApprove }]
             : isContractor && !readOnly
               ? [{ label: "حذف گروهی", danger: true, onClick: handleBulkDelete }]
@@ -355,7 +381,11 @@ export default function MachineryDashboard({ onBack, currentUser, role, initialA
             </div>
           )}
 
+<<<<<<< HEAD
           {expandedId === expandedItem.id && !isContractor && !readOnly && (
+=======
+          {expandedId === expandedItem.id && isGatekeeper && !readOnly && (
+>>>>>>> 62c9c73 (Upload project files)
             <div style={{ borderTop: docsExpandedId === expandedItem.id ? `1px solid ${THEME.border}` : "none", paddingTop: docsExpandedId === expandedItem.id ? 10 : 0 }}>
               <label style={styles.label}>توضیحات (برای رد یا نیاز به اصلاح الزامی است)</label>
               <textarea style={{ ...styles.input, minHeight: 60, fontFamily: "inherit" }} value={reviewNoteDraft} onChange={(e) => setReviewNoteDraft(e.target.value)} dir="rtl" />

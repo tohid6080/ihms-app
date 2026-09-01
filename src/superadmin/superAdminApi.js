@@ -45,6 +45,12 @@ function companyFromRow(r) {
     subscriptionType: r.subscription_type || "trial",
     subscriptionStatus: r.subscription_status || "active",
     subscriptionEndDate: r.subscription_end_date || "",
+<<<<<<< HEAD
+=======
+    subscriptionStartDate: r.subscription_start_date || "",
+    trialStart: r.trial_start || "",
+    trialEnd: r.trial_end || "",
+>>>>>>> 62c9c73 (Upload project files)
     subscriptionDays: r.subscription_days || null,
     storageQuotaMb: r.storage_quota_mb ?? 500,
     lastLoginAt: r.last_login_at || "",
@@ -65,7 +71,12 @@ export async function loadCompanies() {
 export async function createCompany(rec) {
   const payload = {
     name: rec.name, subscription_type: rec.subscriptionType || "trial",
+<<<<<<< HEAD
     subscription_status: "active", subscription_end_date: rec.subscriptionEndDate || null,
+=======
+    subscription_status: rec.subscriptionStatus || "active", subscription_start_date: rec.subscriptionStartDate || null,
+    subscription_end_date: rec.subscriptionEndDate || null,
+>>>>>>> 62c9c73 (Upload project files)
     storage_quota_mb: rec.storageQuotaMb || 500,
   };
   const rows = await sb("companies", { method: "POST", body: JSON.stringify([payload]) }, "super_admin");
@@ -111,7 +122,11 @@ export async function deleteCompanySecure(companyId, confirmName) {
       body: JSON.stringify({ companyId, confirmName }),
     });
     const data = await res.json();
+<<<<<<< HEAD
     if (!res.ok) return { __error: true, message: data?.error || "خطا در حذف شرکت" };
+=======
+    if (!res.ok) return { __error: true, message: data?.error || "خطا در حذف شرکت", detail: data?.detail || "" };
+>>>>>>> 62c9c73 (Upload project files)
     return { ok: true, deletedCounts: data.deletedCounts };
   } catch {
     return { __error: true, message: "خطا در برقراری ارتباط با سرور" };
@@ -124,12 +139,20 @@ export async function deleteCompanySecure(companyId, confirmName) {
 export async function setCompanyActive(companyId, active) {
   const rows = await sb(`companies?id=eq.${companyId}`, { method: "PATCH", body: JSON.stringify({ subscription_status: active ? "active" : "disabled" }) }, "super_admin");
   if (!sbOk(rows)) return { __error: true, message: "خطا در تغییر وضعیت شرکت" };
+<<<<<<< HEAD
   // طبق خواسته‌ی صریح: هم غیرفعال‌سازی هم فعال‌سازی مجدد شرکت، همه‌ی
   // کاربرانش (کارفرما+پیمانکار) را در همان جهت هماهنگ می‌کند.
   await Promise.all([
     sb(`employer_accounts?company_id=eq.${companyId}`, { method: "PATCH", body: JSON.stringify({ is_active: active }) }, "super_admin"),
     sb(`contractors?company_id=eq.${companyId}`, { method: "PATCH", body: JSON.stringify({ is_active: active }) }, "super_admin"),
   ]);
+=======
+  // طبق خواسته‌ی صریح: is_active حساب‌های کاربری عمداً دست‌نخورده می‌ماند —
+  // کاربر باید بتواند حتی وقتی شرکتش غیرفعال شده لاگین کند و پیام واضح
+  // «حساب شرکت غیرفعال شده است» را همراه با صفحه‌ی انتخاب پلن ببیند
+  // (دقیقاً همان مکانیزم SubscriptionGate که برای پایان Trial هم استفاده
+  // می‌شود)، نه اینکه اصلاً نتواند وارد شود.
+>>>>>>> 62c9c73 (Upload project files)
   return { ok: true };
 }
 
@@ -220,9 +243,16 @@ export async function createCompanyUserAccount(companyId, { name, username, pass
   if (sbOk(existing) && existing.length > 0) {
     return { __error: true, message: "این نام کاربری قبلاً استفاده شده است" };
   }
+<<<<<<< HEAD
   const payload = {
     name: name.trim(), username: clean, password, can_edit: true,
     role: role === "admin" ? "admin" : "employer", company_id: companyId,
+=======
+  const validRoles = ["admin", "employer", "hse_supervisor"];
+  const payload = {
+    name: name.trim(), username: clean, password, can_edit: true,
+    role: validRoles.includes(role) ? role : "employer", company_id: companyId,
+>>>>>>> 62c9c73 (Upload project files)
   };
   const rows = await sb("employer_accounts", { method: "POST", body: JSON.stringify([payload]) }, "super_admin");
   if (!sbOk(rows)) return { __error: true, message: "خطا در ثبت حساب" };
@@ -245,6 +275,10 @@ function planFromRow(r) {
   return {
     id: r.id,
     name: r.name,
+<<<<<<< HEAD
+=======
+    trialDays: r.trial_days ?? null,
+>>>>>>> 62c9c73 (Upload project files)
     priceMonthly: Number(r.price_monthly) || 0,
     priceYearly: Number(r.price_yearly) || 0,
     maxUsers: r.max_users,
@@ -298,6 +332,10 @@ export const PLAN_FEATURES = [
     sub: [
       { key: "accidentProneness", label: "استعداد حادثه‌پذیری (Accident Proneness)" },
       { key: "hseClimate", label: "HSE Climate" },
+<<<<<<< HEAD
+=======
+      { key: "sbs", label: "نمونه‌برداری از رفتارهای ایمنی (SBS)" },
+>>>>>>> 62c9c73 (Upload project files)
     ],
   },
   {
@@ -308,7 +346,11 @@ export const PLAN_FEATURES = [
     ],
   },
   {
+<<<<<<< HEAD
     key: "machineryManagement", label: "مدیریت ماشین‌آلات و تجهیزات",
+=======
+    key: "machineryManagement", label: "مدیریت ماشین‌آلات",
+>>>>>>> 62c9c73 (Upload project files)
     sub: [{ key: "machineryDashboard", label: "لیست ماشین‌آلات" }],
   },
   {
@@ -343,6 +385,10 @@ export async function createPlan(rec) {
   const nextOrder = sbOk(existing) && existing.length > 0 ? (existing[0].sort_order ?? 0) + 1 : 1;
   const payload = {
     name: rec.name, price_monthly: rec.priceMonthly || 0, price_yearly: rec.priceYearly || 0,
+<<<<<<< HEAD
+=======
+    trial_days: rec.trialDays || null,
+>>>>>>> 62c9c73 (Upload project files)
     max_users: rec.maxUsers || null, max_personnel: rec.maxPersonnel || null, max_storage_mb: rec.maxStorageMb || null,
     features: rec.features || [], is_active: true, sort_order: nextOrder,
   };
@@ -356,6 +402,10 @@ export async function updatePlan(id, patch) {
   if ("name" in patch) dbPatch.name = patch.name;
   if ("priceMonthly" in patch) dbPatch.price_monthly = patch.priceMonthly;
   if ("priceYearly" in patch) dbPatch.price_yearly = patch.priceYearly;
+<<<<<<< HEAD
+=======
+  if ("trialDays" in patch) dbPatch.trial_days = patch.trialDays || null;
+>>>>>>> 62c9c73 (Upload project files)
   if ("maxUsers" in patch) dbPatch.max_users = patch.maxUsers || null;
   if ("maxPersonnel" in patch) dbPatch.max_personnel = patch.maxPersonnel || null;
   if ("maxStorageMb" in patch) dbPatch.max_storage_mb = patch.maxStorageMb || null;
@@ -457,6 +507,10 @@ export async function assignPlanToCompany(companyId, planId, action, changedBy, 
     plan_id: planId,
     subscription_type: subscriptionType,
     subscription_days: subscriptionType === "daily" ? Number(days) || null : null,
+<<<<<<< HEAD
+=======
+    subscription_start_date: new Date().toISOString(),
+>>>>>>> 62c9c73 (Upload project files)
     contract_amount: contractAmount,
     discount_amount: discount,
     final_amount: finalAmount,
@@ -516,7 +570,11 @@ async function callManageAccount(payload) {
 // targetType: "admin" | "employer" | "contractor"
 export async function loadAccountsByType(targetType, companyId) {
   const table = targetType === "contractor" ? "contractors" : "employer_accounts";
+<<<<<<< HEAD
   const roleFilter = targetType === "admin" ? "&role=eq.admin" : targetType === "employer" ? "&role=eq.employer" : "";
+=======
+  const roleFilter = targetType === "admin" ? "&role=eq.admin" : targetType === "employer" ? "&role=eq.employer" : targetType === "hse_supervisor" ? "&role=eq.hse_supervisor" : "";
+>>>>>>> 62c9c73 (Upload project files)
   const companyFilter = companyId ? `&company_id=eq.${companyId}` : "";
   const selectCols = targetType === "contractor"
     ? "id,name,username,company_id,job_position_id,contact_person_name,start_date,contract_details,phone,email,is_active"

@@ -7,6 +7,10 @@ import { THEME } from "../shared.js";
 import { useLanguage } from "../i18n/LanguageContext.jsx";
 import { loadPersonnelList, loadNotifications } from "../personnel/personnelApi.js";
 import { loadDashboardAnomalies, loadDashboardContractors, loadDashboardMachinery, loadDashboardScaffold, loadDashboardBowties } from "./homeDashboardApi.js";
+<<<<<<< HEAD
+=======
+import { loadDashboardWidgetConfig } from "../systemConfigApi.js";
+>>>>>>> 62c9c73 (Upload project files)
 
 /**
  * Executive / management dashboard — rebuilt as a dense, single-screen
@@ -37,6 +41,10 @@ export default function HomeDashboard({ role, currentUser, onNavigate, onBack })
   const [bowties, setBowties] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
+<<<<<<< HEAD
+=======
+  const [widgetVisibility, setWidgetVisibility] = useState(null); // null=هنوز بارگذاری‌نشده => fail-open، همه نمایش داده می‌شوند
+>>>>>>> 62c9c73 (Upload project files)
 
   const isContractor = role === "CONTRACTOR";
   const myName = norm(currentUser?.name);
@@ -51,8 +59,19 @@ export default function HomeDashboard({ role, currentUser, onNavigate, onBack })
       setNotifications(await loadNotifications(isContractor ? "contractor" : "employer"));
       setLoading(false);
     })();
+<<<<<<< HEAD
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+=======
+    loadDashboardWidgetConfig().then((rows) => {
+      if (rows.length > 0) setWidgetVisibility(Object.fromEntries(rows.map((r) => [r.widgetKey, r.isVisible])));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // پیش‌فرض «نمایش داده شود» برای هر ویجتی که هنوز پیکربندی نشده (یا در
+  // حال بارگذاری است) — تا رفتار فعلی سامانه هرگز رگرسیون نکند.
+  const isWidgetVisible = (key) => widgetVisibility === null || widgetVisibility[key] !== false;
+>>>>>>> 62c9c73 (Upload project files)
 
   const scopedPersonnel = useMemo(
     () => (isContractor ? personnel.filter((p) => norm(p.contractorName) === myName) : personnel),
@@ -217,6 +236,10 @@ export default function HomeDashboard({ role, currentUser, onNavigate, onBack })
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))", gap: 10, marginBottom: 10 }}>
+<<<<<<< HEAD
+=======
+          {isWidgetVisible("contractorHse") && (
+>>>>>>> 62c9c73 (Upload project files)
           <Panel title={t("panelContractorHse")} icon={ShieldCheck}>
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5, minWidth: 480 }}>
@@ -250,8 +273,15 @@ export default function HomeDashboard({ role, currentUser, onNavigate, onBack })
               </table>
             </div>
           </Panel>
+<<<<<<< HEAD
 
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+=======
+          )}
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {isWidgetVisible("urgentAlerts") && (
+>>>>>>> 62c9c73 (Upload project files)
             <Panel title={t("panelUrgentAlerts")} icon={Bell} compact>
               {urgentAlerts.length === 0 && <p style={{ fontSize: 11.5, color: THEME.text3, margin: 0 }}>{t("noUrgentAlerts")}</p>}
               {urgentAlerts.map((a, i) => (
@@ -261,7 +291,13 @@ export default function HomeDashboard({ role, currentUser, onNavigate, onBack })
                 </div>
               ))}
             </Panel>
+<<<<<<< HEAD
 
+=======
+            )}
+
+            {isWidgetVisible("smartInsights") && (
+>>>>>>> 62c9c73 (Upload project files)
             <Panel title={t("panelSmartInsights")} icon={Sparkles} compact>
               {insights.length === 0 && <p style={{ fontSize: 11.5, color: THEME.text3, margin: 0 }}>{t("noSmartInsights")}</p>}
               {insights.map((ins, i) => (
@@ -271,10 +307,15 @@ export default function HomeDashboard({ role, currentUser, onNavigate, onBack })
                 </div>
               ))}
             </Panel>
+<<<<<<< HEAD
+=======
+            )}
+>>>>>>> 62c9c73 (Upload project files)
           </div>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
+<<<<<<< HEAD
           <Panel title={t("panelAnomalyTrend")} icon={TrendingUp} compact>
             <MiniBarChart data={monthlyAnomalyTrend.map(([m, c]) => ({ label: m.slice(5), value: c, color: THEME.navy }))} />
           </Panel>
@@ -290,6 +331,33 @@ export default function HomeDashboard({ role, currentUser, onNavigate, onBack })
           <Panel title={t("panelContractorPerformance")} icon={ShieldCheck} compact>
             <MiniBarChart data={perfChartData} suffix="%" />
           </Panel>
+=======
+          {isWidgetVisible("anomalyTrend") && (
+          <Panel title={t("panelAnomalyTrend")} icon={TrendingUp} compact>
+            <MiniBarChart data={monthlyAnomalyTrend.map(([m, c]) => ({ label: m.slice(5), value: c, color: THEME.navy }))} />
+          </Panel>
+          )}
+          {isWidgetVisible("healthStatus") && (
+          <Panel title={t("panelHealthStatus")} icon={Users} compact>
+            <MiniDonut data={healthStatusData} />
+          </Panel>
+          )}
+          {isWidgetVisible("machineryStatus") && (
+          <Panel title={t("panelMachineryStatus")} icon={Truck} compact>
+            <MiniDonut data={machineryStatusData} />
+          </Panel>
+          )}
+          {isWidgetVisible("anomalyByRisk") && (
+          <Panel title={t("panelAnomalyByRisk")} icon={AlertTriangle} compact>
+            <MiniDonut data={anomalyRiskData} />
+          </Panel>
+          )}
+          {isWidgetVisible("contractorPerformance") && (
+          <Panel title={t("panelContractorPerformance")} icon={ShieldCheck} compact>
+            <MiniBarChart data={perfChartData} suffix="%" />
+          </Panel>
+          )}
+>>>>>>> 62c9c73 (Upload project files)
         </div>
       </div>
     </div>

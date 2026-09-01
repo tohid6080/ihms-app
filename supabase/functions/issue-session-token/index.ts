@@ -53,7 +53,11 @@ Deno.serve(async (req) => {
     const employerResult = await callRpc("verify_employer_password", { p_username: username, p_password: password });
     const employer = employerResult.ok && Array.isArray(employerResult.data) && employerResult.data.length > 0 ? employerResult.data[0] : null;
     if (employer) {
+<<<<<<< HEAD
       const appRole = employer.role === "admin" ? "admin" : "employer";
+=======
+      const appRole = employer.role === "admin" ? "admin" : employer.role === "hse_supervisor" ? "hse_supervisor" : "employer";
+>>>>>>> 62c9c73 (Upload project files)
       const token = await signToken({
         sub: employer.id, role: "authenticated", username: employer.username,
         is_super_admin: false, company_id: employer.company_id || null, app_role: appRole,
@@ -65,7 +69,11 @@ Deno.serve(async (req) => {
           id: employer.id, name: employer.name, username: employer.username,
           canEdit: employer.can_edit !== false, jobPositionId: employer.job_position_id || "",
           jobPositionTitle: employer.job_position_title || "", companyName: employer.company_name || "",
+<<<<<<< HEAD
           role: appRole === "admin" ? "ADMIN" : "EMPLOYER", companyId: employer.company_id || "",
+=======
+          role: appRole === "admin" ? "ADMIN" : appRole === "hse_supervisor" ? "HSE_SUPERVISOR" : "EMPLOYER", companyId: employer.company_id || "",
+>>>>>>> 62c9c73 (Upload project files)
           phone: employer.phone || "", email: employer.email || "",
           preferredLanguage: employer.preferred_language || "fa", createdAt: employer.created_at || "",
         },

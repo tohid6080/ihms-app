@@ -17,6 +17,10 @@ import { json, CORS_HEADERS, callRpc, restFetch } from "../_shared/supabaseAdmin
 const TABLE_BY_TYPE: Record<string, string> = {
   admin: "employer_accounts",
   employer: "employer_accounts",
+<<<<<<< HEAD
+=======
+  hse_supervisor: "employer_accounts",
+>>>>>>> 62c9c73 (Upload project files)
   contractor: "contractors",
 };
 
@@ -108,7 +112,12 @@ Deno.serve(async (req) => {
             }
           : {
               name: f.name.trim(), username: f.username.trim(), company_id: f.companyId || null,
+<<<<<<< HEAD
               job_position_id: f.jobPositionId || null, role: targetType === "admin" ? "admin" : "employer",
+=======
+              job_position_id: f.jobPositionId || null,
+              role: targetType === "admin" ? "admin" : targetType === "hse_supervisor" ? "hse_supervisor" : "employer",
+>>>>>>> 62c9c73 (Upload project files)
               can_edit: f.canEdit !== false, phone: f.phone || "", email: f.email || "",
             };
 
@@ -157,7 +166,11 @@ Deno.serve(async (req) => {
         if ("contractDetails" in f) payload.contract_details = f.contractDetails;
       } else {
         if ("canEdit" in f) payload.can_edit = f.canEdit !== false;
+<<<<<<< HEAD
         if (targetType === "admin" || targetType === "employer") payload.role = targetType === "admin" ? "admin" : "employer";
+=======
+        if (targetType === "admin" || targetType === "employer" || targetType === "hse_supervisor") payload.role = targetType;
+>>>>>>> 62c9c73 (Upload project files)
       }
       const updated = await restFetch(`${table}?id=eq.${targetId}`, { method: "PATCH", body: JSON.stringify(payload) });
       if (!updated.ok) return json({ error: "خطا در ویرایش حساب" }, 500);
