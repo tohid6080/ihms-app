@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import { loadDashboardAnomalies } from "./homeDashboardApi.js";
 import { loadPersonnelListOfflineFirst } from "../personnel/personnelApi.js";
 import { loadCorrectiveActions } from "../correctiveActions/correctiveActionsApi.js";
@@ -18,7 +17,6 @@ export async function loadHomeKpiSummary() {
     loadIncidents().catch(() => []),
   ]);
 
-=======
 import { sb, sbOk, getCurrentCompanyId } from "../shared.js";
 
 /**
@@ -44,7 +42,6 @@ export async function loadHomeKpiSummary() {
   const correctiveActions = sbOk(caRows) ? caRows : [];
   const incidents = sbOk(incidentRows) ? incidentRows : [];
 
->>>>>>> 62c9c73 (Upload project files)
   return {
     openAnomalies: anomalies.filter((a) => a.status !== "Closed").length,
     activePersonnel: personnel.filter((p) => p.status === "active").length,

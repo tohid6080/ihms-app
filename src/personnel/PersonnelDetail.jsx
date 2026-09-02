@@ -46,16 +46,13 @@ export default function PersonnelDetail({ personnel: initialPersonnel, role, cur
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [personnel.jobTitle]);
 
-<<<<<<< HEAD
   const isEmployer = (role === "EMPLOYER" || role === "ADMIN") && !readOnly;
-=======
   // طبق تصمیم تأییدشده: بررسی/تأیید مدارک و صلاحیت پرسنل فقط برای
   // سرپرست/مدیر HSE و ادمین مجاز است، نه هر کارفرمایی معمولی. چون
   // role (prop) همیشه "EMPLOYER" است (حتی برای حساب سرپرست HSE — هر دو
   // در EmployerDashboard میزبانی می‌شوند)، مستقیم currentUser?.role چک
   // می‌شود که واقعاً نقش سیستمی کاربر جاری را نشان می‌دهد.
   const isEmployer = (currentUser?.role === "HSE_SUPERVISOR" || role === "ADMIN") && !readOnly;
->>>>>>> 62c9c73 (Upload project files)
   const isContractor = role === "CONTRACTOR" && !readOnly;
 
   const load = async () => {

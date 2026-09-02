@@ -1,9 +1,5 @@
-import React, { useState, useEffect } from "react";
-<<<<<<< HEAD
 import { AlertTriangle, Plus, X, ChevronRight, ChevronDown, ChevronsRight, ChevronsLeft, LogOut, CheckCircle2, Clock, Camera, ImagePlus, Trash2, FileSpreadsheet, FileText, User, Users, ShieldCheck, LayoutGrid, BarChart3, Briefcase, Settings, Archive, Truck, Tag, MessageCircle, GraduationCap, ShieldOff, ShieldAlert, Database, Fingerprint, Info, Sliders, TrendingUp, Search, Home, Megaphone, Sparkles, Gift, Bell, ArrowUpRight } from "lucide-react";
-=======
 import { AlertTriangle, Plus, X, ChevronRight, ChevronLeft, ChevronDown, ChevronsRight, ChevronsLeft, LogOut, CheckCircle2, Clock, Camera, ImagePlus, Trash2, FileSpreadsheet, FileText, User, Users, ShieldCheck, LayoutGrid, BarChart3, Briefcase, Settings, Archive, Truck, Tag, MessageCircle, GraduationCap, ShieldOff, ShieldAlert, Database, Fingerprint, Info, Sliders, TrendingUp, Search, Home, Megaphone, Sparkles, Gift, Bell, ArrowUpRight, ClipboardList } from "lucide-react";
->>>>>>> 62c9c73 (Upload project files)
 import * as XLSX from "xlsx";
 import ExcelJS from "exceljs";
 import BowTieDashboard from "./bowtie/BowTieDashboard.jsx";
@@ -20,13 +16,17 @@ import PersonnelDashboard from "./personnel/PersonnelDashboard.jsx";
 import ProactiveIndicatorsDashboard from "./proactiveIndicators/ProactiveIndicatorsDashboard.jsx";
 import IncidentsListPage from "./incidents/IncidentsListPage.jsx";
 import { loadHomeKpiSummary } from "./dashboard/homeKpiApi.js";
-<<<<<<< HEAD
-import { loadModuleConfig, loadDashboardConfig, loadNotificationTypes, loadAppearanceConfig, applyAppearanceToDom, loadActiveAnnouncement } from "./systemConfigApi.js";
-=======
-import { loadModuleConfig, loadDashboardConfig, loadNotificationTypes, loadAppearanceConfig, applyAppearanceToDom, loadActiveAnnouncements } from "./systemConfigApi.js";
+import {
+  loadModuleConfig,
+  loadDashboardConfig,
+  loadNotificationTypes,
+  loadAppearanceConfig,
+  applyAppearanceToDom,
+  loadActiveAnnouncement,
+  loadActiveAnnouncements
+} from "./systemConfigApi.js";
 import { submitToGate, loadPendingGateItems, loadAssignedGateItems, loadCompanyStaffOptions, assignForReview, submitReview, approveGateItem, rejectGateItem, GATE_STATUS_LABELS } from "./hseGateApi.js";
 import SubscriptionGate from "./subscription/SubscriptionGate.jsx";
->>>>>>> 62c9c73 (Upload project files)
 import { AppearanceProvider, useAppearance } from "./shared/AppearanceContext.jsx";
 import PublicHseClimateSurvey from "./proactiveIndicators/PublicHseClimateSurvey.jsx";
 import HomeDashboard from "./dashboard/HomeDashboard.jsx";
@@ -72,11 +72,7 @@ import SyncStatusBadge from "./offline/SyncStatusBadge.jsx";
 import { retryItemNow } from "./offline/syncEngine.js";
 import { exportWorkbookNativeAware, exportHtmlReportNativeAware } from "./offline/nativeFile.js";
 import { saveBlobNativeAware } from "./offline/archiveZip.js";
-<<<<<<< HEAD
-import { toJalaliDateTime } from "./personnel/jalaliDate.jsx";
-=======
 import { toJalaliDateTime, toJalaliSafe } from "./personnel/jalaliDate.jsx";
->>>>>>> 62c9c73 (Upload project files)
 import { APP_NAME, sb, sbOk, sbErrMsg, uid, todayISO, THEME, styles, usePersistedState, setCurrentCompanyId, getCurrentCompanyId, loadCurrentCompanyPlanFeatures, isModuleInPlan } from "./shared.js";
 
 /**
@@ -158,11 +154,8 @@ const HSE_MODULES = [
   },
   {
     key: "machineryManagement",
-<<<<<<< HEAD
     label: "مدیریت ماشین‌آلات و تجهیزات",
-=======
     label: "مدیریت ماشین‌آلات",
->>>>>>> 62c9c73 (Upload project files)
     labelKey: "moduleMachinery",
     icon: true,
     sub: [
@@ -1120,7 +1113,6 @@ function LoginScreen({ onLogin }) {
   };
 
   return (
-<<<<<<< HEAD
     <div style={styles.centerScreen}>
       <div style={{ ...styles.card, width: 360, direction: dir }}>
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
@@ -1166,7 +1158,6 @@ function LoginScreen({ onLogin }) {
         )}
 
         <p style={styles.hint}>{t("designedBy")}</p>
-=======
     <div style={{ ...styles.centerScreen, alignItems: "stretch", padding: 0 }}>
       <div style={{ display: "flex", width: "100%", minHeight: "100vh", flexWrap: "wrap" }}>
         {/* پنل اطلاعیه — سمت چپ در دسکتاپ (طبق مرجع)؛ در موبایل کاملاً حذف می‌شود، نه فقط پنهان، تا هیچ فضایی از فرم ورود نگیرد */}
@@ -1220,14 +1211,11 @@ function LoginScreen({ onLogin }) {
             <p style={styles.hint}>{t("designedBy")}</p>
           </div>
         </div>
->>>>>>> 62c9c73 (Upload project files)
       </div>
     </div>
   );
 }
 
-<<<<<<< HEAD
-=======
 // پنل اطلاعیه‌ی صفحه‌ی ورود — فقط اطلاعیه‌های سراسری (company_id=null)
 // را نشان می‌دهد، چون قبل از ورود هنوز مشخص نیست کاربر متعلق به کدام
 // شرکت است. عکس/عنوان/متن دقیقاً همان قاب ثابت اسلایدر صفحه‌ی اصلی را
@@ -1313,7 +1301,6 @@ function LoginAnnouncementPanel() {
 }
 const loginSliderNavBtnStyle = { width: 30, height: 30, borderRadius: "50%", border: "1.5px solid rgba(255,255,255,0.5)", background: "rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };
 
->>>>>>> 62c9c73 (Upload project files)
 // گیت ورود بیومتریک — وقتی نشستی از قبل ذخیره شده (currentUser در
 // localStorage) و کاربر قبلاً ورود با اثر انگشت را فعال کرده، این صفحه
 // جای رفتن مستقیم به داشبورد می‌آید. بدون این گیت، هرکسی که گوشیِ
@@ -2147,8 +2134,6 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
         alert(`آنومالی ثبت شد، اما ساخت خودکار ارزیابی ریسک HCMS با خطا مواجه شد: ${hcmsResult.message}\nمی‌توانید بعداً از داخل «مدیریت ریسک → HCMS» آن را دستی بسازید.`);
       }
     }
-<<<<<<< HEAD
-=======
     // ورود به گیت تأیید سرپرست/مدیر HSE — طبق طرح تأییدشده، فقط وقتی
     // ثبت‌کننده نقش Employer معمولی دارد (نه ادمین یا سرپرست/مدیر HSE
     // که خودشان صاحب اختیار تأیید هستند، پس نیازی به تأیید خودشان نیست).
@@ -2160,7 +2145,6 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
         recordLabel: `${record.trackingNumber} — ${record.area}`, direction: "employer_to_contractor",
       }, currentUser?.name).catch(() => {});
     }
->>>>>>> 62c9c73 (Upload project files)
     setSaving(false);
     onSaved ? onSaved() : onBack && onBack();
   };
@@ -2370,12 +2354,10 @@ function AnomalyForm({ onBack, currentUser, onSaved }) {
 }
 
 // ---------- لیست و پیگیری آنومالی‌ها ----------
-<<<<<<< HEAD
 function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter, initialRiskFilter, initialContractorFilter }) {
   const isAdmin = role === "ADMIN";
   const isReviewer = (role === "EMPLOYER" || isAdmin) && !readOnly;
   const isReadOnlyReviewer = (role === "EMPLOYER" || isAdmin) && !!readOnly;
-=======
 function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter, initialRiskFilter, initialContractorFilter, initialExpandedAnomalyId }) {
   const isAdmin = role === "ADMIN";
   // طبق تصمیم تأییدشده: تأیید نهایی آنومالی (بستن بعد از اقدام اصلاحی
@@ -2385,7 +2367,6 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
   // مستقیم currentUser?.role چک می‌شود.
   const isReviewer = (currentUser?.role === "HSE_SUPERVISOR" || isAdmin) && !readOnly;
   const isReadOnlyReviewer = (currentUser?.role === "HSE_SUPERVISOR" || isAdmin) && !!readOnly;
->>>>>>> 62c9c73 (Upload project files)
   const isContractor = role === "CONTRACTOR";
   // ادمین علاوه بر تأیید/رد، می‌تواند مثل پیمانکار هم اقدام اصلاحی ثبت و ارسال کند
   const canActAsContractor = (isContractor || isAdmin) && !readOnly;
@@ -2442,11 +2423,9 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
 
   useEffect(() => { load(); }, []);
 
-<<<<<<< HEAD
   const scoped = isContractor && myContractorName
     ? anomalies.filter((a) => (a.contractor || "").trim().toLowerCase() === myContractorName)
     : anomalies;
-=======
   // طبق گزارش صریح: کلیک روی «مشاهده» از کارت «کارهای در دست اقدام من»
   // باید همان آنومالی را مستقیم باز کند، نه فقط لیست را نشان بدهد و
   // کاربر مجبور شود پایین لیست بگردد دنبالش. دقیقاً همان الگوی
@@ -2476,7 +2455,6 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
     ? anomalies.filter((a) => (a.contractor || "").trim().toLowerCase() === myContractorName)
     : anomalies
   ).filter((a) => !isContractor || !pendingGateRecordIds || !pendingGateRecordIds.has(a.id));
->>>>>>> 62c9c73 (Upload project files)
 
   // برای پرکردن dropdown فیلتر پیمانکار (فقط ادمین/کارفرما می‌بینند) — از
   // کل لیست بارگذاری‌شده مشتق می‌شود، نه از نتیجه‌ی فیلترشده، تا با انتخاب
@@ -2526,14 +2504,11 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
     setActionPhotos([]);
     setShowRejectBox(false);
     setRejectNote("");
-<<<<<<< HEAD
-=======
     setAssigningGateId(null);
     setAssignGateTo("");
     setReviewingGateId(null);
     setReviewComment("");
     setGateMessage("");
->>>>>>> 62c9c73 (Upload project files)
   };
 
   const startExpand = async (a) => {
@@ -2658,8 +2633,6 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
     return { label: "باز", color: "#92400e", bg: "#fef3c7", Icon: Clock };
   };
 
-<<<<<<< HEAD
-=======
   // ---------- گیت تأیید سرپرست/مدیر HSE (گردش‌کار سه‌مرحله‌ای) ----------
   // نگاشت anomaly.id → آخرین رکورد گیت آن (اگر وجود داشته باشد). فقط
   // برای isReviewer یا کارشناسانی که ممکن است چیزی به آن‌ها ارجاع شده
@@ -2728,7 +2701,6 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
     await loadGateData();
   };
 
->>>>>>> 62c9c73 (Upload project files)
   if (loading) return <div style={{ padding: 24, textAlign: "center", color: "#93a1b0" }}>در حال بارگذاری...</div>;
 
   if (linkedChatId) {
@@ -2906,14 +2878,12 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
         const fixPhotos = photos.filter((p) => p.stage === "fix");
         return (
           <div style={{ ...styles.card, width: "auto", marginTop: 14, padding: "20px 22px" }}>
-<<<<<<< HEAD
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
               <h3 style={{ margin: 0, fontSize: 14.5, color: THEME.navy, fontWeight: 700 }}>{a.trackingNumber}</h3>
               <button type="button" style={{ ...styles.smallButton, background: THEME.teal, display: "flex", alignItems: "center", gap: 6 }} onClick={() => openLinkedChat(a)} disabled={linkedChatBusy}>
                 <MessageCircle size={13} /> {linkedChatBusy ? "..." : "چت درباره این مورد"}
               </button>
               <button type="button" style={{ ...styles.smallButton, background: THEME.navyMid, display: "flex", alignItems: "center", gap: 6 }} onClick={() => openLinkedHcms(a)} disabled={linkedHcmsBusy}>
-=======
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12, gap: 10, flexWrap: "wrap" }}>
               <div>
                 <h3 style={{ margin: "0 0 4px", fontSize: 14.5, color: THEME.navy, fontWeight: 700 }}>{a.trackingNumber}</h3>
@@ -2923,7 +2893,6 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
                 <MessageCircle size={13} /> {linkedChatBusy ? "..." : "چت درباره این مورد"}
               </button>
               <button type="button" style={{ ...styles.smallButton, background: THEME.navyMid, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }} onClick={() => openLinkedHcms(a)} disabled={linkedHcmsBusy}>
->>>>>>> 62c9c73 (Upload project files)
                 <ShieldAlert size={13} /> {linkedHcmsBusy ? "..." : "ارزیابی ریسک HCMS"}
               </button>
             </div>
@@ -3062,8 +3031,6 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
                 {a.effectiveness && <div><b>اثربخشی:</b> {a.effectiveness}</div>}
               </div>
             )}
-<<<<<<< HEAD
-=======
             {gateMap[a.id] && (
               <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 9, padding: 12, marginTop: 10, marginBottom: 10 }}>
                 <p style={{ fontSize: 11.5, fontWeight: 700, color: "#1d4ed8", margin: "0 0 8px" }}>
@@ -3137,7 +3104,6 @@ function AnomalyList({ onBack, role, currentUser, readOnly, initialStatusFilter,
                 )}
               </div>
             )}
->>>>>>> 62c9c73 (Upload project files)
             {isReviewer && a.status === "open" && (
               <div>
                 <div style={styles.backLink} onClick={() => setShowManualEdit((v) => !v)}>
@@ -3255,7 +3221,6 @@ function DashboardHeader({ panelLabelKey, currentUser, onLogout, onOpenSettings,
       <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: "1 1 auto" }}>
         <Avatar name={currentUser?.name} size={38} bg="rgba(255,255,255,0.18)" />
         <div style={{ minWidth: 0, lineHeight: 1.35 }}>
-<<<<<<< HEAD
           <div style={styles.appNameTag}>{t(panelLabelKey)}</div>
           <div style={{ fontSize: 14.5, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "60vw" }}>{currentUser?.name || "—"}</div>
           {currentUser?.jobPositionTitle && (
@@ -3263,14 +3228,12 @@ function DashboardHeader({ panelLabelKey, currentUser, onLogout, onOpenSettings,
           )}
           {currentUser?.companyName && appearance?.headerShowCompanyName !== false && (
             <div style={{ fontSize: 10.5, color: "rgba(255,255,255,0.6)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "60vw" }}>{currentUser.companyName}</div>
-=======
           <div style={{ fontSize: 14.5, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "60vw" }}>{t(panelLabelKey)}</div>
           {currentUser?.companyName && appearance?.headerShowCompanyName !== false && (
             <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.75)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "60vw" }}>{currentUser.companyName}</div>
           )}
           {currentUser?.name && (
             <div style={{ fontSize: 10.5, color: "rgba(255,255,255,0.6)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "60vw" }}>{currentUser.name}</div>
->>>>>>> 62c9c73 (Upload project files)
           )}
         </div>
       </div>
@@ -3359,13 +3322,10 @@ function SidebarItem({ mod, view, setView, collapsed, openKey, setOpenKey }) {
   const handleClick = () => {
     if (mod.muted) return;
     if (isLeaf) { setView(mod.key); return; }
-<<<<<<< HEAD
-=======
     // در حالت جمع‌شده، زیرمنو اصلاً رندر نمی‌شود (چون فضایی برایش نیست)؛
     // پس کلیک روی آیکون باید مستقیم محتوا را باز کند — دقیقاً مثل رفتار
     // ماژول‌های بدون زیرمنو (مثل شاخص‌های Proactive HSE).
     if (collapsed) { setView(mod.sub[0].key); return; }
->>>>>>> 62c9c73 (Upload project files)
     setOpenKey(isOpen ? null : mod.key); // آکاردئون: باز/بسته، بدون تغییر view
   };
 
@@ -3451,23 +3411,18 @@ function Sidebar({ modules, view, setView, collapsed, onToggleCollapse }) {
         borderInlineStart: `1px solid rgba(255,255,255,0.08)`,
       }}
     >
-<<<<<<< HEAD
       {/* برچسب پنل (مثلاً «کارفرما») اینجا عمداً تکرار نمی‌شود — همان
           برچسب از قبل بالای DashboardHeader نمایش داده می‌شود. */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-end", padding: collapsed ? "16px 0" : "12px 14px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-=======
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: collapsed ? "12px 8px" : "12px 14px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
->>>>>>> 62c9c73 (Upload project files)
         <button
           type="button" onClick={onToggleCollapse} title={collapsed ? "باز کردن منو" : "جمع کردن منو"}
           style={{ background: "rgba(255,255,255,0.08)", border: "none", borderRadius: 7, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
         >
           {collapsed ? <ChevronsLeft size={15} color="#fff" /> : <ChevronsRight size={15} color="#fff" />}
         </button>
-<<<<<<< HEAD
       </div>
       <div style={{ padding: collapsed ? "8px 8px 0" : "10px 10px 0" }}>
-=======
         {!collapsed && (
           <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.07)", borderRadius: 8, padding: "6px 10px", minWidth: 0 }}>
             <Search size={13} color="rgba(255,255,255,0.5)" style={{ flexShrink: 0 }} />
@@ -3479,7 +3434,6 @@ function Sidebar({ modules, view, setView, collapsed, onToggleCollapse }) {
         )}
       </div>
       <div style={{ padding: collapsed ? "8px 8px 0" : "8px 10px 0" }}>
->>>>>>> 62c9c73 (Upload project files)
         <div
           onClick={() => setView("menu")}
           title={collapsed ? "صفحه اصلی" : undefined}
@@ -3498,7 +3452,6 @@ function Sidebar({ modules, view, setView, collapsed, onToggleCollapse }) {
           {!collapsed && <span>صفحه اصلی</span>}
         </div>
       </div>
-<<<<<<< HEAD
       {!collapsed && (
         <div style={{ padding: "10px 12px 4px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.07)", borderRadius: 8, padding: "7px 10px" }}>
@@ -3510,8 +3463,6 @@ function Sidebar({ modules, view, setView, collapsed, onToggleCollapse }) {
           </div>
         </div>
       )}
-=======
->>>>>>> 62c9c73 (Upload project files)
       <div style={{ flex: 1, overflowY: "auto", padding: collapsed ? "10px 8px" : "10px 10px", display: "flex", flexDirection: "column", gap: 3 }}>
         {filteredModules.map((mod) => (
           <SidebarItem key={mod.key} mod={mod} view={view} setView={setView} collapsed={collapsed} openKey={q ? effectiveOpenKey : openKey} setOpenKey={setOpenKey} />
@@ -3550,11 +3501,8 @@ function ResponsiveDashboardShell({ panelLabelKey, currentUser, onLogout, onOpen
   // در دسکتاپ، لیست ماژول‌های صفحه‌ی «منو» دیگر در فضای اصلی نمایش داده
   // نمی‌شود (چون همان لیست دقیقاً در Sidebar سمت راست هست) — به‌جایش یک
   // پیام خوش‌آمدگویی با نام واقعی کاربر واردشده نشان داده می‌شود.
-<<<<<<< HEAD
   const mainContent = view === "menu" ? <WelcomeScreen currentUser={currentUser} setView={setView} /> : children;
-=======
   const mainContent = view === "menu" ? <WelcomeScreen currentUser={currentUser} setView={setView} onNavigate={onNavigate} sidebarModules={sidebarModules} /> : children;
->>>>>>> 62c9c73 (Upload project files)
 
   return (
     <div style={{ direction: dir, fontFamily: THEME.font, minHeight: "100vh", background: THEME.bg, display: "flex", flexDirection: "column" }}>
@@ -3572,7 +3520,6 @@ function ResponsiveDashboardShell({ panelLabelKey, currentUser, onLogout, onOpen
 // صفحه‌ی اصلی دسکتاپ — کارت خوش‌آمدگویی مینیمال + خلاصه‌ی KPI واقعی
 // (هیچ عدد ثابت/نمایشی‌ای در کار نیست؛ همه از همان لایه‌های داده‌ی
 // موجود anomalies/personnel/corrective_actions/incidents می‌آید).
-<<<<<<< HEAD
 function WelcomeScreen({ currentUser, setView }) {
   const { t } = useLanguage();
   const [kpi, setKpi] = useState(null);
@@ -3641,7 +3588,6 @@ function WelcomeScreen({ currentUser, setView }) {
           </div>
         ))}
       </div>
-=======
 // نگاشت module_key (که در hse_gate_items ذخیره می‌شود) به هدف ناوبری
 // واقعی — دقیقاً همان الگوی handleHomeNavigate/navFilter که برای اعلان‌های
 // هوشمند داشبورد از قبل استفاده می‌شود، تا مسیر یکسان و آشنا بماند.
@@ -3779,14 +3725,12 @@ function TasksCard({ tasks, onTaskClick }) {
           ))}
         </div>
       )}
->>>>>>> 62c9c73 (Upload project files)
     </div>
   );
 }
 
 const ANNOUNCEMENT_ICONS = { megaphone: Megaphone, sparkles: Sparkles, gift: Gift, info: Info, bell: Bell };
 
-<<<<<<< HEAD
 // کارت اطلاعیه/تبلیغات — کنار پیام خوش‌آمدگویی صفحه‌ی اصلی دسکتاپ، هرگز
 // در موبایل رندر نمی‌شود (چون WelcomeScreen خودش فقط در شاخه‌ی دسکتاپ
 // ResponsiveDashboardShell صدا زده می‌شود). عنوان/متن/دکمه از دیتابیس
@@ -3795,10 +3739,8 @@ function AnnouncementCard({ announcement, setView }) {
   const Icon = ANNOUNCEMENT_ICONS[announcement.iconKey] || Megaphone;
 
   const handleAction = () => {
-=======
 function announcementActionUrl(announcement, setView) {
   return () => {
->>>>>>> 62c9c73 (Upload project files)
     if (!announcement.buttonUrl) return;
     const url = announcement.buttonUrl.trim();
     if (url.startsWith("http://") || url.startsWith("https://")) {
@@ -3807,7 +3749,6 @@ function announcementActionUrl(announcement, setView) {
       setView(url); // مقصد داخلی — نام یک view/ماژول موجود
     }
   };
-<<<<<<< HEAD
 
   return (
     <div
@@ -3835,7 +3776,6 @@ function announcementActionUrl(announcement, setView) {
           {announcement.buttonLabel} <ArrowUpRight size={13} />
         </button>
       )}
-=======
 }
 
 // اسلایدر اطلاعیه/تبلیغات — طبق درخواست بازطراحی: تمام‌عرض، تصویر بزرگ‌تر
@@ -3986,7 +3926,6 @@ function MobileAnnouncementBanner({ setView }) {
           ))}
         </div>
       )}
->>>>>>> 62c9c73 (Upload project files)
     </div>
   );
 }
@@ -4063,10 +4002,7 @@ function AdminDashboard({ onLogout, currentUser }) {
     <ResponsiveDashboardShell panelLabelKey="panelAdmin" currentUser={currentUser} onLogout={onLogout} onOpenSettings={() => setView("profile")} view={view} setView={setView} sidebarModules={sidebarModules}>
       {view === "menu" && (
         <div style={styles.menuList}>
-<<<<<<< HEAD
-=======
           <MobileAnnouncementBanner setView={setView} />
->>>>>>> 62c9c73 (Upload project files)
           <DbSizeWarningBanner />
           {isModuleInPlan(planFeatures, "chat") && <MenuRow icon={MessageCircle} label={t("moduleChat")} onClick={() => setView("chat")} badge={chatUnread} />}
           {isModuleInPlan(planFeatures, "anomalyReport") && <MenuRow icon={AlertTriangle} label={mt(anomalyMod)} onClick={() => setView("anomalyReport")} accent sub />}
@@ -4184,15 +4120,12 @@ function AdminDashboard({ onLogout, currentUser }) {
       {view === "chat" && <ChatDashboard onBack={() => setView("menu")} currentUser={currentUser} />}
       {/* مدیریت حساب کارفرما/پیمانکار: عمداً دیگر اینجا رندر نمی‌شود — به پنل Super Admin منتقل شد */}
       {view === "anomalyForm" && <AnomalyForm onBack={() => setView("anomalyReport")} currentUser={currentUser} onSaved={() => setView("anomalyList")} />}
-<<<<<<< HEAD
       {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="ADMIN" currentUser={currentUser} initialStatusFilter={navFilter?.module === "anomaly" ? navFilter.statusFilter : undefined} initialRiskFilter={navFilter?.module === "anomaly" ? navFilter.riskFilter : undefined} initialContractorFilter={navFilter?.module === "anomaly" ? navFilter.contractorFilter : undefined} />}
       {view === "correctiveActionsList" && <CorrectiveActionsDashboard onBack={() => setView("anomalyReport")} currentUser={currentUser} />}
       {view === "bowtieDashboard" && <BowTieDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} readOnly={false} />}
-=======
       {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="ADMIN" currentUser={currentUser} initialStatusFilter={navFilter?.module === "anomaly" ? navFilter.statusFilter : undefined} initialRiskFilter={navFilter?.module === "anomaly" ? navFilter.riskFilter : undefined} initialContractorFilter={navFilter?.module === "anomaly" ? navFilter.contractorFilter : undefined} initialExpandedAnomalyId={navFilter?.module === "anomaly" ? navFilter.recordId : undefined} />}
       {view === "correctiveActionsList" && <CorrectiveActionsDashboard onBack={() => setView("anomalyReport")} currentUser={currentUser} />}
       {view === "bowtieDashboard" && <BowTieDashboard role="ADMIN" onBack={() => setView("riskAssessment")} currentUser={currentUser} readOnly={false} />}
->>>>>>> 62c9c73 (Upload project files)
       {view === "hcmsDashboard" && <HcmsDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} />}
       {view === "personnelForm" && <PersonnelForm onBack={() => setView("personnelAccess")} currentUser={currentUser} onSaved={() => setView("personnelAccess")} />}
       {view === "personnelDashboard" && <PersonnelDashboard onBack={() => setView("personnelAccess")} currentUser={currentUser} role="ADMIN" initialStatusFilter={navFilter?.module === "personnel" ? navFilter.statusFilter : undefined} initialContractorFilter={navFilter?.module === "personnel" ? navFilter.contractorFilter : undefined} onNavigateToAssessment={(ctx) => { setAssessmentContext(ctx); setView("proactiveIndicators"); }} initialSelectedPersonnelId={assessmentContext?.personnelId} />}
@@ -4314,10 +4247,7 @@ function EmployerDashboard({ onLogout, currentUser }) {
     >
       {view === "menu" && (
         <div style={styles.menuList}>
-<<<<<<< HEAD
-=======
           <MobileAnnouncementBanner setView={setView} />
->>>>>>> 62c9c73 (Upload project files)
           {HSE_MODULES.filter((mod) => isModuleVisible(permMap, mod.key) && isModuleInPlan(planFeatures, mod.key)).map((mod) => (
             <MenuRow
               key={mod.key}
@@ -4397,15 +4327,12 @@ function EmployerDashboard({ onLogout, currentUser }) {
       {view === "chat" && <ChatDashboard onBack={() => setView("menu")} currentUser={currentUser} />}
       {view === "riskKnowledgeManagement" && <RiskKnowledgeManager onBack={() => setView("riskAssessment")} currentUser={currentUser} />}
       {view === "anomalyForm" && anomalyCanEdit && <AnomalyForm onBack={() => setView("anomalyReport")} currentUser={currentUser} onSaved={() => setView("anomalyList")} />}
-<<<<<<< HEAD
       {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="EMPLOYER" currentUser={currentUser} readOnly={!canEdit || getAccessLevel(permMap, "anomalyReport") === "view"} initialStatusFilter={navFilter?.module === "anomaly" ? navFilter.statusFilter : undefined} initialRiskFilter={navFilter?.module === "anomaly" ? navFilter.riskFilter : undefined} initialContractorFilter={navFilter?.module === "anomaly" ? navFilter.contractorFilter : undefined} />}
       {view === "correctiveActionsList" && <CorrectiveActionsDashboard onBack={() => setView("anomalyReport")} currentUser={currentUser} />}
       {view === "bowtieDashboard" && <BowTieDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} readOnly={!canEdit || getAccessLevel(permMap, "riskAssessment") === "view"} />}
-=======
       {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="EMPLOYER" currentUser={currentUser} readOnly={!canEdit || getAccessLevel(permMap, "anomalyReport") === "view"} initialStatusFilter={navFilter?.module === "anomaly" ? navFilter.statusFilter : undefined} initialRiskFilter={navFilter?.module === "anomaly" ? navFilter.riskFilter : undefined} initialContractorFilter={navFilter?.module === "anomaly" ? navFilter.contractorFilter : undefined} initialExpandedAnomalyId={navFilter?.module === "anomaly" ? navFilter.recordId : undefined} />}
       {view === "correctiveActionsList" && <CorrectiveActionsDashboard onBack={() => setView("anomalyReport")} currentUser={currentUser} />}
       {view === "bowtieDashboard" && <BowTieDashboard role="EMPLOYER" onBack={() => setView("riskAssessment")} currentUser={currentUser} readOnly={!canEdit || getAccessLevel(permMap, "riskAssessment") === "view"} />}
->>>>>>> 62c9c73 (Upload project files)
       {view === "hcmsDashboard" && <HcmsDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} />}
       {view === "archiveManagement" && <ArchiveManager onBack={() => setView("menu")} currentUser={currentUser} />}
       {view === "personnelForm" && <PersonnelForm onBack={() => setView("personnelAccess")} currentUser={currentUser} onSaved={() => setView("personnelAccess")} />}
@@ -4519,10 +4446,7 @@ function ContractorDashboard({ onLogout, currentUser }) {
     >
       {view === "menu" && (
         <div style={styles.menuList}>
-<<<<<<< HEAD
-=======
           <MobileAnnouncementBanner setView={setView} />
->>>>>>> 62c9c73 (Upload project files)
           {HSE_MODULES.filter((mod) => isModuleVisible(permMap, mod.key) && isModuleInPlan(planFeatures, mod.key)).map((mod) => (
             <MenuRow
               key={mod.key}
@@ -4601,11 +4525,8 @@ function ContractorDashboard({ onLogout, currentUser }) {
       {view === "profile" && <ProfileView onBack={() => setView("menu")} currentUser={currentUser} roleLabel={t("roleLabelContractor")} />}
       {view === "chat" && <ChatDashboard onBack={() => setView("menu")} currentUser={currentUser} />}
       {view === "hcmsDashboard" && <HcmsDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} />}
-<<<<<<< HEAD
       {view === "bowtieDashboard" && <BowTieDashboard onBack={() => setView("riskAssessment")} currentUser={currentUser} readOnly={getAccessLevel(permMap, "riskAssessment") === "view"} />}
-=======
       {view === "bowtieDashboard" && <BowTieDashboard role="CONTRACTOR" onBack={() => setView("riskAssessment")} currentUser={currentUser} readOnly={getAccessLevel(permMap, "riskAssessment") === "view"} />}
->>>>>>> 62c9c73 (Upload project files)
       {view === "archiveManagement" && <ArchiveManager onBack={() => setView("menu")} currentUser={currentUser} />}
       {view === "anomalyList" && <AnomalyList onBack={() => setView("anomalyReport")} role="CONTRACTOR" currentUser={currentUser} readOnly={getAccessLevel(permMap, "anomalyReport") === "view"} initialStatusFilter={navFilter?.module === "anomaly" ? navFilter.statusFilter : undefined} initialRiskFilter={navFilter?.module === "anomaly" ? navFilter.riskFilter : undefined} />}
       {view === "correctiveActionsList" && <CorrectiveActionsDashboard onBack={() => setView("anomalyReport")} currentUser={currentUser} />}
@@ -4714,11 +4635,9 @@ function AppInner() {
     );
   }
 
-<<<<<<< HEAD
   if (currentUser.role === "ADMIN") return <AdminDashboard onLogout={handleLogout} currentUser={currentUser} />;
   if (currentUser.role === "EMPLOYER") return <EmployerDashboard onLogout={handleLogout} currentUser={currentUser} />;
   return <ContractorDashboard onLogout={handleLogout} currentUser={currentUser} />;
-=======
   return (
     <SubscriptionGate currentUser={currentUser} onLogout={handleLogout}>
       {currentUser.role === "ADMIN" && <AdminDashboard onLogout={handleLogout} currentUser={currentUser} />}
@@ -4726,7 +4645,6 @@ function AppInner() {
       {currentUser.role === "CONTRACTOR" && <ContractorDashboard onLogout={handleLogout} currentUser={currentUser} />}
     </SubscriptionGate>
   );
->>>>>>> 62c9c73 (Upload project files)
 }
 
 // مسیر Super Admin کاملاً جدا از درخت بالاست — هیچ حساب کارفرما/پیمانکار/ادمین

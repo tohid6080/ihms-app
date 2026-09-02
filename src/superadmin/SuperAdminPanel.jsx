@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from "react";
-<<<<<<< HEAD
 import { ShieldAlert, Plus, LogOut, Send, CreditCard, AlertTriangle, UserPlus, KeyRound, Layers, Trash2, History, Activity, TrendingDown, Clock, LogIn, ShieldX, LayoutDashboard, Building2, Users, FileClock, ChevronLeft, HardDrive, RefreshCw, Settings2, Copy, GripVertical, ArrowUp, ArrowDown, RotateCcw, Eye, EyeOff, LayoutGrid, PanelsTopLeft, Bell, Palette, Megaphone, Sparkles, Gift, Info } from "lucide-react";
 import { THEME } from "../shared.js";
 import { changeMyPassword } from "../sessionToken.js";
 import { loadModuleConfig, saveModuleConfig, loadDashboardConfig, saveDashboardConfig, loadNotificationTypes, saveNotificationType, loadAppearanceConfig, saveAppearanceConfig, loadAllAnnouncements, createAnnouncement, updateAnnouncement, setAnnouncementActive, deleteAnnouncement } from "../systemConfigApi.js";
 import AccountManagement from "./AccountManagement.jsx";
 import { toJalaliSafe, JalaliDateInput } from "../personnel/jalaliDate.jsx";
-=======
 import { ShieldAlert, Plus, LogOut, Send, CreditCard, AlertTriangle, UserPlus, KeyRound, Layers, Trash2, History, Activity, TrendingDown, Clock, LogIn, ShieldX, LayoutDashboard, Building2, Users, FileClock, ChevronLeft, HardDrive, RefreshCw, Settings2, Copy, GripVertical, ArrowUp, ArrowDown, RotateCcw, Eye, EyeOff, LayoutGrid, PanelsTopLeft, Bell, Palette, Megaphone, Sparkles, Gift, Info, ImagePlus, X } from "lucide-react";
 import { THEME } from "../shared.js";
 import { changeMyPassword } from "../sessionToken.js";
@@ -14,16 +12,12 @@ import { loadModuleConfig, saveModuleConfig, loadDashboardConfig, saveDashboardC
 import { uploadBase64ToStorage, deleteFromStorage, parseStorageUrl } from "../offline/storageUpload.js";
 import AccountManagement from "./AccountManagement.jsx";
 import { toJalaliSafe, toJalaliDateTime, JalaliDateInput } from "../personnel/jalaliDate.jsx";
->>>>>>> 62c9c73 (Upload project files)
 import {
   loadCompanies, createCompany, updateCompany, deleteCompanySecure, setCompanyActive,
   loadCompanyPayments, addCompanyPayment, PAYMENT_TYPES,
   loadCompanyUserAccounts,
-<<<<<<< HEAD
   SUBSCRIPTION_TYPES, SUBSCRIPTION_STATUSES, subscriptionStatusMeta,
-=======
   SUBSCRIPTION_TYPES, SUBSCRIPTION_STATUSES,
->>>>>>> 62c9c73 (Upload project files)
   loadPlans, createPlan, updatePlan, deactivatePlan, movePlan, deletePlan, assignPlanToCompany, loadCompanySubscriptionHistory,
   PLAN_FEATURES, computeContractAmount, computeMonthlyRecurringAmount,
   computePaymentStatus, isPaymentOverdue, computeMonthlyPaymentAlarm, computeSubscriptionAlertTier,
@@ -31,10 +25,7 @@ import {
   loadAuditLog, loadStorageUsage, setStorageCapacity, storageUsageStatus,
   copyBowtiesToCompany, copyRiskKnowledgeToCompany,
 } from "./superAdminApi.js";
-<<<<<<< HEAD
-=======
 import { computeSubscriptionAccess, loadOnlinePaymentsForCompany } from "../subscriptionApi.js";
->>>>>>> 62c9c73 (Upload project files)
 
 const inputStyle = { width: "100%", padding: "8px 10px", borderRadius: 8, border: `1.5px solid ${THEME.border}`, fontSize: 12.5, fontFamily: THEME.font, boxSizing: "border-box" };
 const btnStyle = (bg) => ({ padding: "7px 14px", borderRadius: 8, border: "none", background: bg || THEME.teal, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: THEME.font });
@@ -49,14 +40,11 @@ export default function SuperAdminPanel({ currentAdmin, onLogout }) {
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState("trial");
-<<<<<<< HEAD
-=======
   const [newStatus, setNewStatus] = useState("active");
   const [newStartDate, setNewStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [newStartTime, setNewStartTime] = useState("00:00");
   const [newEndDate, setNewEndDate] = useState("");
   const [newEndTime, setNewEndTime] = useState("00:00");
->>>>>>> 62c9c73 (Upload project files)
   const [expandedId, setExpandedId] = useState(null);
   const [payments, setPayments] = useState({});
 
@@ -70,10 +58,8 @@ export default function SuperAdminPanel({ currentAdmin, onLogout }) {
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
-<<<<<<< HEAD
     const result = await createCompany({ name: newName.trim(), subscriptionType: newType });
     if (!result?.__error) { setNewName(""); setShowCreate(false); await load(); }
-=======
     const startIso = newStartDate ? new Date(`${newStartDate}T${newStartTime || "00:00"}:00`).toISOString() : null;
     const endIso = newEndDate ? new Date(`${newEndDate}T${newEndTime || "00:00"}:00`).toISOString() : null;
     const result = await createCompany({ name: newName.trim(), subscriptionType: newType, subscriptionStatus: newStatus, subscriptionStartDate: startIso, subscriptionEndDate: endIso });
@@ -82,7 +68,6 @@ export default function SuperAdminPanel({ currentAdmin, onLogout }) {
       setShowCreate(false);
       await load();
     }
->>>>>>> 62c9c73 (Upload project files)
   };
 
   const handleUpdate = async (id, patch) => {
@@ -92,11 +77,8 @@ export default function SuperAdminPanel({ currentAdmin, onLogout }) {
 
   const handleDelete = async (id, confirmName) => {
     const result = await deleteCompanySecure(id, confirmName);
-<<<<<<< HEAD
     if (result?.__error) { alert(result.message); return; }
-=======
     if (result?.__error) { alert(result.message + (result.detail ? `\n\nجزئیات فنی:\n${result.detail}` : "")); return; }
->>>>>>> 62c9c73 (Upload project files)
     await load();
   };
 
@@ -189,13 +171,10 @@ export default function SuperAdminPanel({ currentAdmin, onLogout }) {
           {page === "companies" && (
             <CompaniesPage
               companies={companies} plans={plans} currentAdmin={currentAdmin} usageStats={usageStats}
-<<<<<<< HEAD
               expandedId={expandedId} showCreate={showCreate} newName={newName} newType={newType}
-=======
               expandedId={expandedId} showCreate={showCreate} newName={newName} newType={newType} newStatus={newStatus} setNewStatus={setNewStatus}
               newStartDate={newStartDate} setNewStartDate={setNewStartDate} newStartTime={newStartTime} setNewStartTime={setNewStartTime}
               newEndDate={newEndDate} setNewEndDate={setNewEndDate} newEndTime={newEndTime} setNewEndTime={setNewEndTime}
->>>>>>> 62c9c73 (Upload project files)
               setShowCreate={setShowCreate} setNewName={setNewName} setNewType={setNewType}
               onCreate={handleCreate} onToggleExpand={toggleExpand}
               onUpdate={handleUpdate} onDelete={handleDelete} onSetActive={handleSetActive}
@@ -203,11 +182,8 @@ export default function SuperAdminPanel({ currentAdmin, onLogout }) {
             />
           )}
           {page === "accounts" && <AccountManagement currentAdmin={currentAdmin} />}
-<<<<<<< HEAD
           {page === "plans" && <PlansManager plans={plans} currentAdmin={currentAdmin} onChanged={load} />}
-=======
           {page === "plans" && <PlansManager plans={plans} companies={companies} currentAdmin={currentAdmin} onChanged={load} />}
->>>>>>> 62c9c73 (Upload project files)
           {page === "storage" && <StorageUsagePage />}
           {page === "monitoring" && <SystemInsights companies={companies} />}
           {page === "systemConfig" && <SystemConfigPage currentAdmin={currentAdmin} companies={companies} />}
@@ -561,12 +537,9 @@ function QuickLinkCard({ icon: Icon, label, onClick }) {
 }
 
 function CompaniesPage({
-<<<<<<< HEAD
   companies, plans, currentAdmin, usageStats, expandedId, showCreate, newName, newType,
-=======
   companies, plans, currentAdmin, usageStats, expandedId, showCreate, newName, newType, newStatus, setNewStatus,
   newStartDate, setNewStartDate, newStartTime, setNewStartTime, newEndDate, setNewEndDate, newEndTime, setNewEndTime,
->>>>>>> 62c9c73 (Upload project files)
   setShowCreate, setNewName, setNewType, onCreate, onToggleExpand, onUpdate, onDelete, onSetActive,
   payments, onAddPayment, onPlanChanged,
 }) {
@@ -581,13 +554,11 @@ function CompaniesPage({
         </div>
 
         {showCreate && (
-<<<<<<< HEAD
           <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", background: THEME.bg, padding: 12, borderRadius: 8 }}>
             <input style={{ ...inputStyle, flex: 1, minWidth: 160 }} placeholder="نام شرکت" value={newName} onChange={(e) => setNewName(e.target.value)} dir="rtl" />
             <select style={inputStyle} value={newType} onChange={(e) => setNewType(e.target.value)} dir="rtl">
               {SUBSCRIPTION_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
-=======
           <div style={{ marginBottom: 14, background: THEME.bg, padding: 12, borderRadius: 8 }}>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
               <input style={{ ...inputStyle, flex: 1, minWidth: 160 }} placeholder="نام شرکت" value={newName} onChange={(e) => setNewName(e.target.value)} dir="rtl" />
@@ -625,7 +596,6 @@ function CompaniesPage({
                 {" "}تا <b>{toJalaliDateTime(new Date(`${newEndDate}T${newEndTime || "00:00"}:00`).toISOString())}</b>
               </p>
             )}
->>>>>>> 62c9c73 (Upload project files)
             <button type="button" onClick={onCreate} style={btnStyle()}>ثبت</button>
           </div>
         )}
@@ -636,43 +606,34 @@ function CompaniesPage({
               <tr style={{ borderBottom: `1.5px solid ${THEME.border}`, color: THEME.text3 }}>
                 <th style={{ textAlign: "right", padding: "6px 8px" }}>نام شرکت</th>
                 <th style={{ textAlign: "center", padding: "6px 8px" }}>تاریخ ثبت‌نام</th>
-<<<<<<< HEAD
                 <th style={{ textAlign: "center", padding: "6px 8px" }}>نوع اشتراک</th>
                 <th style={{ textAlign: "center", padding: "6px 8px" }}>وضعیت</th>
                 <th style={{ textAlign: "center", padding: "6px 8px" }}>پایان اشتراک</th>
-=======
                 <th style={{ textAlign: "center", padding: "6px 8px" }}>پلن و وضعیت اشتراک</th>
->>>>>>> 62c9c73 (Upload project files)
                 <th style={{ textAlign: "center", padding: "6px 8px" }}>آخرین ورود</th>
                 <th style={{ padding: "6px 8px" }} />
               </tr>
             </thead>
             <tbody>
               {companies.map((c) => {
-<<<<<<< HEAD
                 const sm = subscriptionStatusMeta(c.subscriptionStatus);
-=======
                 const access = computeSubscriptionAccess(c);
                 const planName = plans.find((p) => p.id === c.planId)?.name || "بدون پلن";
->>>>>>> 62c9c73 (Upload project files)
                 return (
                   <React.Fragment key={c.id}>
                     <tr style={{ borderBottom: `1px solid ${THEME.border}` }}>
                       <td style={{ padding: "8px", fontWeight: 600 }}>{c.name}</td>
                       <td style={{ padding: "8px", textAlign: "center" }}>{toJalaliSafe(c.registeredAt) || "—"}</td>
-<<<<<<< HEAD
                       <td style={{ padding: "8px", textAlign: "center" }}>{SUBSCRIPTION_TYPES.find((t) => t.value === c.subscriptionType)?.label}</td>
                       <td style={{ padding: "8px", textAlign: "center" }}>
                         <span style={{ fontSize: 10.5, padding: "3px 10px", borderRadius: 999, background: sm.bg, color: sm.color, fontWeight: 600 }}>{sm.label}</span>
                       </td>
                       <td style={{ padding: "8px", textAlign: "center" }}>{toJalaliSafe(c.subscriptionEndDate) || "—"}</td>
-=======
                       <td style={{ padding: "8px", textAlign: "center" }}>
                         <span style={{ fontSize: 10.5, padding: "3px 10px", borderRadius: 999, background: access.isLocked ? "#fee2e2" : "#dcfce7", color: access.isLocked ? "#991b1b" : "#166534", fontWeight: 600 }}>
                           {planName} — {access.label}
                         </span>
                       </td>
->>>>>>> 62c9c73 (Upload project files)
                       <td style={{ padding: "8px", textAlign: "center", color: THEME.text3 }}>{c.lastLoginAt ? toJalaliSafe(c.lastLoginAt) : "هنوز وارد نشده"}</td>
                       <td style={{ padding: "8px", textAlign: "left" }}>
                         <button type="button" onClick={() => onToggleExpand(c)} style={{ ...btnStyle(THEME.navyMid), fontSize: 11 }}>
@@ -682,11 +643,8 @@ function CompaniesPage({
                     </tr>
                     {expandedId === c.id && (
                       <tr>
-<<<<<<< HEAD
                         <td colSpan={7} style={{ padding: 0 }}>
-=======
                         <td colSpan={5} style={{ padding: 0 }}>
->>>>>>> 62c9c73 (Upload project files)
                           <CompanyManagePanel
                             company={c}
                             companies={companies}
@@ -707,11 +665,8 @@ function CompaniesPage({
                 );
               })}
               {companies.length === 0 && (
-<<<<<<< HEAD
                 <tr><td colSpan={7} style={{ padding: 20, textAlign: "center", color: THEME.text3 }}>هنوز شرکتی ثبت نشده است</td></tr>
-=======
                 <tr><td colSpan={5} style={{ padding: 20, textAlign: "center", color: THEME.text3 }}>هنوز شرکتی ثبت نشده است</td></tr>
->>>>>>> 62c9c73 (Upload project files)
               )}
             </tbody>
           </table>
@@ -777,11 +732,8 @@ const DEFAULT_MODULE_CONFIG = [
   { moduleKey: "personnelAccess", displayLabel: "مدیریت ورود و تردد پرسنل", description: "ثبت و پیگیری وضعیت پرسنل و مدارک ایشان" },
   { moduleKey: "proactiveIndicators", displayLabel: "شاخص‌های Proactive HSE", description: "اندازه‌گیری استعداد حادثه‌پذیری و جو ایمنی سازمان" },
   { moduleKey: "incidentManagement", displayLabel: "مدیریت حوادث", description: "ثبت حوادث و تحلیل ریشه‌ای Tripod Beta" },
-<<<<<<< HEAD
   { moduleKey: "machineryManagement", displayLabel: "مدیریت ماشین‌آلات و تجهیزات", description: "پیگیری وضعیت و مجوزهای ماشین‌آلات" },
-=======
   { moduleKey: "machineryManagement", displayLabel: "مدیریت ماشین‌آلات", description: "پیگیری وضعیت و مجوزهای ماشین‌آلات" },
->>>>>>> 62c9c73 (Upload project files)
   { moduleKey: "scaffoldManagement", displayLabel: "مدیریت داربست", description: "صدور و پیگیری تگ‌های داربست" },
   { moduleKey: "managementDashboard", displayLabel: "داشبورد مدیریتی", description: "گزارش‌های تحلیلی و شاخص‌های کلان HSE" },
 ];
@@ -936,8 +888,6 @@ function DashboardManagementTab({ currentAdmin }) {
           <RotateCcw size={13} /> بازگردانی چیدمان پیش‌فرض
         </button>
       </div>
-<<<<<<< HEAD
-=======
       <DashboardWidgetsSection currentAdmin={currentAdmin} />
     </div>
   );
@@ -983,7 +933,6 @@ function DashboardWidgetsSection({ currentAdmin }) {
           </button>
         </div>
       ))}
->>>>>>> 62c9c73 (Upload project files)
     </div>
   );
 }
@@ -1155,8 +1104,6 @@ function AppearanceManagementTab({ currentAdmin }) {
         </label>
       </div>
 
-<<<<<<< HEAD
-=======
       <SectionLabel>مدیریت آیکون اپ موبایل / APK</SectionLabel>
       <div style={{ background: "#fff7ed", border: "1px solid #fdba74", borderRadius: 10, padding: 14, marginBottom: 18 }}>
         <p style={{ fontSize: 11.5, color: "#7c2d12", margin: "0 0 10px", lineHeight: 1.9 }}>
@@ -1179,7 +1126,6 @@ function AppearanceManagementTab({ currentAdmin }) {
         )}
       </div>
 
->>>>>>> 62c9c73 (Upload project files)
       {message && <p style={{ fontSize: 11.5, color: message.includes("خطا") ? THEME.danger : "#166534", marginBottom: 10, lineHeight: 1.8 }}>{message}</p>}
       <button type="button" style={btnStyle()} onClick={handleSave} disabled={saving}>{saving ? "در حال ذخیره..." : "ذخیره‌ی تنظیمات ظاهری"}</button>
     </div>
@@ -1206,8 +1152,6 @@ const ANNOUNCEMENT_ICONS = {
   megaphone: Megaphone, sparkles: Sparkles, gift: Gift, info: Info, bell: Bell,
 };
 
-<<<<<<< HEAD
-=======
 // آپلودر عکس مشترک — یک نمونه برای عکس کارت صفحه‌ی اصلی (۱۶:۹) و یک
 // نمونه‌ی جدا برای پس‌زمینه‌ی صفحه‌ی ورود (نسبت عمودی)، چون این دو زمینه
 // ابعاد بصری کاملاً متفاوتی دارند.
@@ -1241,7 +1185,6 @@ function AnnouncementImageUploader({ value, aspectRatio, width, uploading, onUpl
   );
 }
 
->>>>>>> 62c9c73 (Upload project files)
 function AnnouncementManagementTab({ currentAdmin, companies }) {
   const [list, setList] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -1249,16 +1192,13 @@ function AnnouncementManagementTab({ currentAdmin, companies }) {
   const [form, setForm] = useState(emptyAnnouncementForm());
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
-<<<<<<< HEAD
 
   function emptyAnnouncementForm() {
     return { companyId: "", title: "", message: "", iconKey: "megaphone", buttonLabel: "", buttonUrl: "", startsAt: "", endsAt: "", priority: 0, isActive: true };
-=======
   const [uploadingImage, setUploadingImage] = useState(false);
 
   function emptyAnnouncementForm() {
     return { companyId: "", title: "", message: "", iconKey: "megaphone", imageUrl: "", loginImageUrl: "", buttonLabel: "", buttonUrl: "", startsAt: "", endsAt: "", priority: 0, isActive: true, displaySeconds: 10, displayLocation: "both" };
->>>>>>> 62c9c73 (Upload project files)
   }
 
   const load = () => loadAllAnnouncements().then(setList);
@@ -1267,23 +1207,18 @@ function AnnouncementManagementTab({ currentAdmin, companies }) {
   const openCreate = () => { setForm(emptyAnnouncementForm()); setEditingId(null); setShowForm(true); setMessage(""); };
   const openEdit = (a) => {
     setForm({
-<<<<<<< HEAD
       companyId: a.companyId || "", title: a.title, message: a.message, iconKey: a.iconKey,
       buttonLabel: a.buttonLabel, buttonUrl: a.buttonUrl,
       startsAt: a.startsAt ? a.startsAt.slice(0, 16) : "", endsAt: a.endsAt ? a.endsAt.slice(0, 16) : "",
       priority: a.priority, isActive: a.isActive,
-=======
       companyId: a.companyId || "", title: a.title, message: a.message, iconKey: a.iconKey, imageUrl: a.imageUrl || "", loginImageUrl: a.loginImageUrl || "",
       buttonLabel: a.buttonLabel, buttonUrl: a.buttonUrl,
       startsAt: a.startsAt ? a.startsAt.slice(0, 16) : "", endsAt: a.endsAt ? a.endsAt.slice(0, 16) : "",
       priority: a.priority, isActive: a.isActive, displaySeconds: a.displaySeconds || 10, displayLocation: a.displayLocation || "both",
->>>>>>> 62c9c73 (Upload project files)
     });
     setEditingId(a.id); setShowForm(true); setMessage("");
   };
 
-<<<<<<< HEAD
-=======
   // آپلود مستقیم عکس — همان الگوی موجود پروژه (uploadBase64ToStorage)،
   // در باکت اختصاصی announcement-images. طبق درخواست صریح، دو تصویر کاملاً
   // جدا: field='imageUrl' برای کارت صفحه‌ی اصلی (قاب افقی ۱۶:۹) و
@@ -1334,7 +1269,6 @@ function AnnouncementManagementTab({ currentAdmin, companies }) {
     setForm((prev) => ({ ...prev, [field]: "" }));
   };
 
->>>>>>> 62c9c73 (Upload project files)
   const handleSave = async () => {
     if (!form.message.trim()) { setMessage("متن اطلاعیه الزامی است"); return; }
     setSaving(true); setMessage("");
@@ -1399,8 +1333,6 @@ function AnnouncementManagementTab({ currentAdmin, companies }) {
               <input type="number" style={inputStyle} value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} dir="ltr" />
             </div>
             <div>
-<<<<<<< HEAD
-=======
               <label style={{ fontSize: 11, color: THEME.text2, fontWeight: 600, display: "block", marginBottom: 4 }}>مدت‌زمان نمایش در اسلایدر</label>
               <select style={inputStyle} value={form.displaySeconds} onChange={(e) => setForm({ ...form, displaySeconds: Number(e.target.value) })} dir="rtl">
                 <option value={5}>۵ ثانیه</option>
@@ -1410,7 +1342,6 @@ function AnnouncementManagementTab({ currentAdmin, companies }) {
               </select>
             </div>
             <div>
->>>>>>> 62c9c73 (Upload project files)
               <label style={{ fontSize: 11, color: THEME.text2, fontWeight: 600, display: "block", marginBottom: 4 }}>شروع نمایش (اختیاری)</label>
               <input type="datetime-local" style={inputStyle} value={form.startsAt} onChange={(e) => setForm({ ...form, startsAt: e.target.value })} />
             </div>
@@ -1429,8 +1360,6 @@ function AnnouncementManagementTab({ currentAdmin, companies }) {
           </div>
           <label style={{ fontSize: 11, color: THEME.text2, fontWeight: 600, display: "block", marginBottom: 4 }}>متن اطلاعیه</label>
           <textarea style={{ ...inputStyle, minHeight: 60 }} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} dir="rtl" />
-<<<<<<< HEAD
-=======
 
           <label style={{ fontSize: 11, color: THEME.text2, fontWeight: 600, display: "block", marginBottom: 4, marginTop: 10 }}>عکس کارت صفحه‌ی اصلی (اختیاری)</label>
           <p style={{ fontSize: 10.5, color: THEME.text3, margin: "0 0 8px", lineHeight: 1.7 }}>
@@ -1457,7 +1386,6 @@ function AnnouncementManagementTab({ currentAdmin, companies }) {
             <option value="home">فقط صفحه‌ی اصلی پس از ورود</option>
           </select>
 
->>>>>>> 62c9c73 (Upload project files)
           <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: THEME.text2, marginTop: 10, cursor: "pointer" }}>
             <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} /> فعال
           </label>
@@ -1476,27 +1404,21 @@ function AnnouncementManagementTab({ currentAdmin, companies }) {
         return (
           <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, padding: "12px 8px", borderBottom: `1px solid ${THEME.border}`, flexWrap: "wrap" }}>
             <div style={{ display: "flex", gap: 10, flex: 1, minWidth: 220 }}>
-<<<<<<< HEAD
               <Icon size={16} color={THEME.teal} style={{ flexShrink: 0, marginTop: 2 }} />
-=======
               {a.imageUrl ? (
                 <img src={a.imageUrl} alt="" style={{ width: 34, height: 34, borderRadius: 6, objectFit: "cover", flexShrink: 0 }} />
               ) : (
                 <Icon size={16} color={THEME.teal} style={{ flexShrink: 0, marginTop: 2 }} />
               )}
->>>>>>> 62c9c73 (Upload project files)
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: THEME.navy }}>{a.title || "(بدون عنوان)"}</span>
                   <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, background: a.isActive ? "#dcfce7" : "#eef1f5", color: a.isActive ? "#166534" : THEME.text3, fontWeight: 600 }}>{a.isActive ? "فعال" : "غیرفعال"}</span>
                   <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, background: "#eef1f5", color: THEME.text3, fontWeight: 600 }}>اولویت {a.priority}</span>
-<<<<<<< HEAD
-=======
                   <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, background: "#eef1f5", color: THEME.text3, fontWeight: 600 }}>{a.displaySeconds || 10} ثانیه</span>
                   <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, background: "#dbeafe", color: "#1d4ed8", fontWeight: 600 }}>
                     {{ login: "فقط صفحه‌ی ورود", home: "فقط صفحه‌ی اصلی", both: "هر دو صفحه" }[a.displayLocation || "both"]}
                   </span>
->>>>>>> 62c9c73 (Upload project files)
                   <span style={{ fontSize: 10, color: THEME.text3 }}>{a.companyId ? companies.find((c) => c.id === a.companyId)?.name || "شرکت خاص" : "همه‌ی شرکت‌ها"}</span>
                 </div>
                 <p style={{ fontSize: 12, color: THEME.text2, margin: "4px 0" }}>{a.message}</p>
@@ -1611,22 +1533,16 @@ function SuperAdminChangePassword({ onClose }) {
   );
 }
 
-<<<<<<< HEAD
 function PlansManager({ plans, currentAdmin, onChanged }) {
-=======
 function PlansManager({ plans, companies, currentAdmin, onChanged }) {
->>>>>>> 62c9c73 (Upload project files)
   const [showCreate, setShowCreate] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [form, setForm] = useState(emptyPlanForm());
   const [saving, setSaving] = useState(false);
 
   function emptyPlanForm() {
-<<<<<<< HEAD
     return { name: "", priceMonthly: 0, priceYearly: 0, maxUsers: "", maxPersonnel: "", maxStorageMb: "", features: [] };
-=======
     return { name: "", priceMonthly: 0, priceYearly: 0, trialDays: "", maxUsers: "", maxPersonnel: "", maxStorageMb: "", features: [] };
->>>>>>> 62c9c73 (Upload project files)
   }
 
   const handleCreate = async () => {
@@ -1634,17 +1550,14 @@ function PlansManager({ plans, companies, currentAdmin, onChanged }) {
     setSaving(true);
     await createPlan({
       name: form.name.trim(), priceMonthly: Number(form.priceMonthly) || 0, priceYearly: Number(form.priceYearly) || 0,
-<<<<<<< HEAD
       maxUsers: form.maxUsers ? Number(form.maxUsers) : null, maxPersonnel: form.maxPersonnel ? Number(form.maxPersonnel) : null,
       maxStorageMb: form.maxStorageMb ? Number(form.maxStorageMb) : null, features: form.features,
     });
-=======
       trialDays: form.trialDays ? Number(form.trialDays) : null,
       maxUsers: form.maxUsers ? Number(form.maxUsers) : null, maxPersonnel: form.maxPersonnel ? Number(form.maxPersonnel) : null,
       maxStorageMb: form.maxStorageMb ? Number(form.maxStorageMb) : null, features: form.features,
     });
     await syncNotificationTypesWithPlans((await loadPlans()).map((p) => p.features));
->>>>>>> 62c9c73 (Upload project files)
     setSaving(false);
     setForm(emptyPlanForm());
     setShowCreate(false);
@@ -1653,28 +1566,22 @@ function PlansManager({ plans, companies, currentAdmin, onChanged }) {
 
   const openEdit = (p) => {
     setExpandedId(expandedId === p.id ? null : p.id);
-<<<<<<< HEAD
     setForm({ name: p.name, priceMonthly: p.priceMonthly, priceYearly: p.priceYearly, maxUsers: p.maxUsers ?? "", maxPersonnel: p.maxPersonnel ?? "", maxStorageMb: p.maxStorageMb ?? "", features: p.features });
-=======
     setForm({ name: p.name, priceMonthly: p.priceMonthly, priceYearly: p.priceYearly, trialDays: p.trialDays ?? "", maxUsers: p.maxUsers ?? "", maxPersonnel: p.maxPersonnel ?? "", maxStorageMb: p.maxStorageMb ?? "", features: p.features });
->>>>>>> 62c9c73 (Upload project files)
   };
 
   const handleSaveEdit = async (id) => {
     setSaving(true);
     await updatePlan(id, {
       name: form.name.trim(), priceMonthly: Number(form.priceMonthly) || 0, priceYearly: Number(form.priceYearly) || 0,
-<<<<<<< HEAD
       maxUsers: form.maxUsers ? Number(form.maxUsers) : null, maxPersonnel: form.maxPersonnel ? Number(form.maxPersonnel) : null,
       maxStorageMb: form.maxStorageMb ? Number(form.maxStorageMb) : null, features: form.features,
     });
-=======
       trialDays: form.trialDays ? Number(form.trialDays) : null,
       maxUsers: form.maxUsers ? Number(form.maxUsers) : null, maxPersonnel: form.maxPersonnel ? Number(form.maxPersonnel) : null,
       maxStorageMb: form.maxStorageMb ? Number(form.maxStorageMb) : null, features: form.features,
     });
     await syncNotificationTypesWithPlans((await loadPlans()).map((p) => p.features));
->>>>>>> 62c9c73 (Upload project files)
     setSaving(false);
     setExpandedId(null);
     onChanged();
@@ -1771,14 +1678,11 @@ function PlansManager({ plans, companies, currentAdmin, onChanged }) {
                     </button>
                   </td>
                 </tr>
-<<<<<<< HEAD
-=======
                 <tr>
                   <td colSpan={9} style={{ padding: "0 8px 8px" }}>
                     <PlanCompanyUsage plan={p} companies={companies} />
                   </td>
                 </tr>
->>>>>>> 62c9c73 (Upload project files)
                 {expandedId === p.id && (
                   <tr>
                     <td colSpan={9} style={{ padding: 0 }}>
@@ -1798,8 +1702,6 @@ function PlansManager({ plans, companies, currentAdmin, onChanged }) {
   );
 }
 
-<<<<<<< HEAD
-=======
 function PlanCompanyUsage({ plan, companies }) {
   const usingCompanies = (companies || []).filter((c) => c.planId === plan.id);
   if (usingCompanies.length === 0) {
@@ -1840,7 +1742,6 @@ function PlanCompanyUsage({ plan, companies }) {
   );
 }
 
->>>>>>> 62c9c73 (Upload project files)
 function PlanForm({ form, setForm, toggleModule, toggleSub, onSave, saving, saveLabel }) {
   return (
     <div style={{ background: THEME.bg, padding: 14, borderRadius: 8, marginBottom: 14 }}>
@@ -1858,13 +1759,10 @@ function PlanForm({ form, setForm, toggleModule, toggleSub, onSave, saving, save
           <input type="number" style={inputStyle} value={form.priceYearly} onChange={(e) => setForm({ ...form, priceYearly: e.target.value })} dir="ltr" />
         </div>
         <div>
-<<<<<<< HEAD
-=======
           <label style={{ fontSize: 11, color: THEME.text2, fontWeight: 600, display: "block", marginBottom: 4 }}>مدت دوره‌ی آزمایشی — روز (خالی = این پلن Trial ندارد)</label>
           <input type="number" style={inputStyle} value={form.trialDays} onChange={(e) => setForm({ ...form, trialDays: e.target.value })} dir="ltr" placeholder="مثلاً ۷" />
         </div>
         <div>
->>>>>>> 62c9c73 (Upload project files)
           <label style={{ fontSize: 11, color: THEME.text2, fontWeight: 600, display: "block", marginBottom: 4 }}>سقف کاربر (خالی = نامحدود)</label>
           <input type="number" style={inputStyle} value={form.maxUsers} onChange={(e) => setForm({ ...form, maxUsers: e.target.value })} dir="ltr" />
         </div>
@@ -2069,16 +1967,13 @@ function StatBox({ label, value, color }) {
 
 function CompanyManagePanel({ company, companies, plans, currentAdmin, usageStats, onUpdate, onDelete, onSetActive, paymentsPromise, onAddPayment, onPlanChanged }) {
   const [status, setStatus] = useState(company.subscriptionStatus);
-<<<<<<< HEAD
   const [type, setType] = useState(company.subscriptionType);
   const [endDate, setEndDate] = useState(company.subscriptionEndDate);
   const [quota, setQuota] = useState(company.storageQuotaMb);
   const [paymentsList, setPaymentsList] = useState([]);
-=======
   const [quotaInput, setQuotaInput] = useState(company.storageQuotaMb);
   const [paymentsList, setPaymentsList] = useState([]);
   const [onlinePayments, setOnlinePayments] = useState([]);
->>>>>>> 62c9c73 (Upload project files)
   const [payAmount, setPayAmount] = useState("");
   const [accounts, setAccounts] = useState([]);
   const [selectedPlanId, setSelectedPlanId] = useState(company.planId || "");
@@ -2107,11 +2002,8 @@ function CompanyManagePanel({ company, companies, plans, currentAdmin, usageStat
     if (paymentsPromise) paymentsPromise.then(setPaymentsList);
   }, [paymentsPromise]);
 
-<<<<<<< HEAD
-=======
   useEffect(() => { loadOnlinePaymentsForCompany(company.id).then(setOnlinePayments); }, [company.id]);
 
->>>>>>> 62c9c73 (Upload project files)
   const currentPlan = plans.find((p) => p.id === company.planId);
   const selectedPlanForAssign = plans.find((p) => p.id === selectedPlanId);
   // پیش‌نمایش زنده‌ی مبلغ قرارداد — قبل از ذخیره، همین که پلن/نوع/روز عوض بشه
@@ -2122,11 +2014,8 @@ function CompanyManagePanel({ company, companies, plans, currentAdmin, usageStat
   // وضعیت پرداخت و هشدار پایان اشتراک — کاملاً محاسبه‌شده، مستقل از هم
   const paymentStatus = computePaymentStatus(company.finalAmount, paymentsList);
   const overdue = isPaymentOverdue(company, paymentStatus);
-<<<<<<< HEAD
   const alertTier = computeSubscriptionAlertTier(company.subscriptionEndDate);
-=======
   const liveAccess = computeSubscriptionAccess(company);
->>>>>>> 62c9c73 (Upload project files)
   const monthlyAlarm = computeMonthlyPaymentAlarm(company, paymentsList);
 
   const handleAssignPlan = async () => {
@@ -2171,7 +2060,6 @@ function CompanyManagePanel({ company, companies, plans, currentAdmin, usageStat
         <UsageChip label="آنومالی" value={usageStats?.anomalyByCompany?.[company.id] || 0} />
         <UsageChip label="فایل/پیوست" value={usageStats?.attachmentByCompany?.[company.id] || 0} />
       </div>
-<<<<<<< HEAD
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 12 }}>
         <div>
           <label style={{ fontSize: 11, color: THEME.text2, fontWeight: 600, display: "block", marginBottom: 4 }}>وضعیت اشتراک</label>
@@ -2200,10 +2088,8 @@ function CompanyManagePanel({ company, companies, plans, currentAdmin, usageStat
           ذخیره‌ی تغییرات
         </button>
         {/* غیرفعال‌سازی: برای شرکتی که مثلاً پولشو نداده — کاملاً برگشت‌پذیر،
-=======
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         {/* غیرفعال‌سازی: برای شرکتی که مثلاً پولشو نداده — کاملاً برگشت‌پذیر,
->>>>>>> 62c9c73 (Upload project files)
             هیچ داده‌ای پاک نمی‌شود، فقط ورود مسدود می‌شود */}
         {status !== "disabled" ? (
           <button type="button" style={btnStyle("#92400e")} onClick={() => { onSetActive(false); setStatus("disabled"); }}>
@@ -2244,7 +2130,6 @@ function CompanyManagePanel({ company, companies, plans, currentAdmin, usageStat
 
       <div style={{ borderTop: `1px solid ${THEME.border}`, paddingTop: 12, marginBottom: 16 }}>
         <h4 style={{ fontSize: 12.5, color: THEME.navy, fontWeight: 700, margin: "0 0 8px", display: "flex", alignItems: "center", gap: 6 }}>
-<<<<<<< HEAD
           <Layers size={13} /> پلن و قرارداد اشتراک این شرکت
         </h4>
         <p style={{ fontSize: 11.5, color: THEME.text3, marginBottom: 8 }}>
@@ -2255,7 +2140,6 @@ function CompanyManagePanel({ company, companies, plans, currentAdmin, usageStat
             </span>
           )}
         </p>
-=======
           <Layers size={13} /> پلن و اشتراک شرکت
         </h4>
         <p style={{ fontSize: 11.5, color: THEME.text3, marginBottom: 8 }}>
@@ -2276,7 +2160,6 @@ function CompanyManagePanel({ company, companies, plans, currentAdmin, usageStat
             )}
           </p>
         )}
->>>>>>> 62c9c73 (Upload project files)
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8, marginBottom: 8 }}>
           <select style={inputStyle} value={selectedPlanId} onChange={(e) => setSelectedPlanId(e.target.value)} dir="rtl">
             <option value="">— انتخاب پلن —</option>
@@ -2312,8 +2195,6 @@ function CompanyManagePanel({ company, companies, plans, currentAdmin, usageStat
           </div>
         )}
 
-<<<<<<< HEAD
-=======
         <div style={{ marginBottom: 10 }}>
           <label style={{ fontSize: 11, color: THEME.text2, fontWeight: 600, display: "block", marginBottom: 4 }}>سقف فضا (مگابایت)</label>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -2322,7 +2203,6 @@ function CompanyManagePanel({ company, companies, plans, currentAdmin, usageStat
           </div>
         </div>
 
->>>>>>> 62c9c73 (Upload project files)
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <button type="button" style={btnStyle()} onClick={handleAssignPlan} disabled={planSaving || !selectedPlanId}>
             {planSaving ? "در حال ثبت..." : "ثبت پلن و قرارداد"}
@@ -2410,11 +2290,8 @@ function CompanyManagePanel({ company, companies, plans, currentAdmin, usageStat
             <span style={{ fontWeight: 600 }}>{a.name}</span>
             <span style={{ direction: "ltr" }}>({a.username})</span>
             <span style={{ marginInlineStart: "auto", fontSize: 10, padding: "2px 8px", borderRadius: 999, background: a.type === "contractor" ? "#e0e7ff" : "#dcfce7", color: a.type === "contractor" ? "#3730a3" : "#166534" }}>
-<<<<<<< HEAD
               {a.type === "contractor" ? "پیمانکار" : a.role === "admin" ? "ادمین" : "کارفرما"}
-=======
               {a.type === "contractor" ? "پیمانکار" : a.role === "admin" ? "ادمین" : a.role === "hse_supervisor" ? "سرپرست/مدیر HSE" : "کارفرما"}
->>>>>>> 62c9c73 (Upload project files)
             </span>
           </div>
         ))}
@@ -2433,8 +2310,6 @@ function CompanyManagePanel({ company, companies, plans, currentAdmin, usageStat
             {p.note && <span style={{ color: THEME.text3 }}> — {p.note}</span>}
           </div>
         ))}
-<<<<<<< HEAD
-=======
 
         {onlinePayments.length > 0 && (
           <div style={{ marginTop: 14, paddingTop: 10, borderTop: `1px dashed ${THEME.border}` }}>
@@ -2456,7 +2331,6 @@ function CompanyManagePanel({ company, companies, plans, currentAdmin, usageStat
             })}
           </div>
         )}
->>>>>>> 62c9c73 (Upload project files)
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 8, marginTop: 10 }}>
           <input type="number" style={inputStyle} placeholder="مبلغ (تومان)" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} dir="ltr" />
           <select style={inputStyle} value={payType} onChange={(e) => setPayType(e.target.value)} dir="rtl">

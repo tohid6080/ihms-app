@@ -12,10 +12,7 @@ import {
 } from "./tripodAnalysesApi.js";
 import TogglePicker from "./ChecklistPicker.jsx";
 import TripodTree from "./TripodTree.jsx";
-<<<<<<< HEAD
-=======
 import BarrierMappingPicker from "../bowtie/BarrierMappingPicker.jsx";
->>>>>>> 62c9c73 (Upload project files)
 
 const TABS = [
   { key: "summary", label: "خلاصه" },
@@ -114,16 +111,13 @@ export default function TripodAnalysisWorkspace({ analysisId, incident, currentU
       )}
       {tab === "tree" && <TripodTree eventDescription={analysis.eventDescription} branches={branches} />}
       {tab === "rootcause" && (
-<<<<<<< HEAD
         <RootCauseTab analysisId={analysisId} incident={incident} rootCause={rootCause} correctiveActions={correctiveActions} currentUser={currentUser}
           onRefresh={refresh} />
-=======
         <div>
           <RootCauseTab analysisId={analysisId} incident={incident} rootCause={rootCause} correctiveActions={correctiveActions} currentUser={currentUser}
             onRefresh={refresh} />
           <BarrierMappingPicker sourceType="tripod_rca" sourceId={analysisId} currentUser={currentUser} readOnly={role === "CONTRACTOR"} />
         </div>
->>>>>>> 62c9c73 (Upload project files)
       )}
       {tab === "history" && <HistoryTab history={history} />}
     </div>

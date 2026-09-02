@@ -14,10 +14,7 @@ import {
 import { isOnline } from "../offline/networkStatus.js";
 import SyncStatusBadge from "../offline/SyncStatusBadge.jsx";
 import BowTieEditor from "./BowTieEditor.jsx";
-<<<<<<< HEAD
-=======
 import BarrierEffectivenessDashboard from "./BarrierEffectivenessDashboard.jsx";
->>>>>>> 62c9c73 (Upload project files)
 
 /**
  * BowTie Risk Analysis — Dashboard.
@@ -33,14 +30,11 @@ import BarrierEffectivenessDashboard from "./BarrierEffectivenessDashboard.jsx";
  * leave it broken offline, we block entry to the Canvas with a clear
  * message when there's no connection.
  */
-<<<<<<< HEAD
 export default function BowTieDashboard({ onBack, currentUser, readOnly }) {
   const [openBowtie, setOpenBowtie] = useState(null);
-=======
 export default function BowTieDashboard({ onBack, currentUser, readOnly, role }) {
   const [openBowtie, setOpenBowtie] = useState(null);
   const [showEffectivenessDashboard, setShowEffectivenessDashboard] = useState(false);
->>>>>>> 62c9c73 (Upload project files)
   const [bowties, setBowties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -162,13 +156,10 @@ export default function BowTieDashboard({ onBack, currentUser, readOnly, role })
     return <BowTieEditor bowtie={openBowtie} onBack={() => { setOpenBowtie(null); load(); }} readOnly={readOnly} />;
   }
 
-<<<<<<< HEAD
-=======
   if (showEffectivenessDashboard) {
     return <BarrierEffectivenessDashboard currentUser={currentUser} role={role} onBack={() => setShowEffectivenessDashboard(false)} />;
   }
 
->>>>>>> 62c9c73 (Upload project files)
   if (linkedChatId) {
     return <ChatThread conversationId={linkedChatId} currentUser={currentUser} onBack={() => setLinkedChatId(null)} />;
   }
@@ -204,11 +195,9 @@ export default function BowTieDashboard({ onBack, currentUser, readOnly, role })
         </div>
       </div>
 
-<<<<<<< HEAD
       {!readOnly && (
         <div
           style={{ ...styles.menuCard, background: THEME.teal, color: "#fff", justifyContent: "center", marginTop: 18 }}
-=======
       <div
         style={{ ...styles.menuCard, background: THEME.navyMid, color: "#fff", justifyContent: "center", marginTop: 12 }}
         onClick={() => setShowEffectivenessDashboard(true)}
@@ -220,7 +209,6 @@ export default function BowTieDashboard({ onBack, currentUser, readOnly, role })
       {!readOnly && (
         <div
           style={{ ...styles.menuCard, background: THEME.teal, color: "#fff", justifyContent: "center", marginTop: 10 }}
->>>>>>> 62c9c73 (Upload project files)
           onClick={() => setShowForm((v) => !v)}
         >
           <Plus size={16} style={{ marginLeft: 6 }} />

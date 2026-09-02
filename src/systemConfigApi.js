@@ -43,8 +43,6 @@ export async function saveDashboardConfig(list, updatedBy) {
   return { ok: true };
 }
 
-<<<<<<< HEAD
-=======
 // ---------- ویجت‌های داشبورد مدیریتی (پنل‌های داخل HomeDashboard.jsx) ----------
 // مستقل از KPIهای بالا — این‌ها پنل‌های داخل خودِ ماژول «داشبورد مدیریتی» هستند.
 
@@ -59,7 +57,6 @@ export async function saveDashboardWidgetConfig(widgetKey, isVisible, updatedBy)
   return { ok: true };
 }
 
->>>>>>> 62c9c73 (Upload project files)
 // ---------- مدیریت اعلان‌ها ----------
 // این رجیستری روی محاسبه‌ی زنده‌ی موجود اعلان‌ها (نه یک سیستم اعلان
 // موازی) فیلتر می‌زند — نگاه کنید به classifyNotificationKey/
@@ -70,11 +67,8 @@ export async function loadNotificationTypes() {
   return sbOk(rows) ? rows.map((r) => ({
     typeKey: r.type_key, label: r.label, description: r.description || "",
     isEnabled: r.is_enabled !== false, targetRole: r.target_role || "all",
-<<<<<<< HEAD
     priority: r.priority || "medium", warningDays: r.warning_days,
-=======
     priority: r.priority || "medium", warningDays: r.warning_days, ownerModuleKey: r.owner_module_key || null,
->>>>>>> 62c9c73 (Upload project files)
   })) : [];
 }
 
@@ -89,8 +83,6 @@ export async function saveNotificationType(typeKey, patch, updatedBy) {
   return { ok: true };
 }
 
-<<<<<<< HEAD
-=======
 // طبق خواسته‌ی صریح: «هر ماژولی که در پلن سوپرادمین غیرفعال می‌شود،
 // اعلان‌های همان ماژول نیز خودکار غیرفعال شوند». چون یک ماژول می‌تواند
 // در یک پلن فعال و در پلن دیگری غیرفعال باشد، معیار این است: اگر هیچ
@@ -111,18 +103,14 @@ export async function syncNotificationTypesWithPlans(allPlansFeatures) {
   ));
 }
 
->>>>>>> 62c9c73 (Upload project files)
 // ---------- تنظیمات ظاهری ----------
 // طبق الزام «از ساختارهای موجود استفاده کن»: هیچ جدول جدیدی ساخته
 // نمی‌شود — از همان system_settings موجود (key-value، ساخته‌شده برای
 // ظرفیت Storage) با پیشوند کلیدهای appearance_* استفاده می‌شود.
 
 const APPEARANCE_KEYS = [
-<<<<<<< HEAD
   "appearance_system_name", "appearance_system_title", "appearance_logo_url", "appearance_favicon_url",
-=======
   "appearance_system_name", "appearance_system_title", "appearance_logo_url", "appearance_favicon_url", "appearance_apk_icon_url",
->>>>>>> 62c9c73 (Upload project files)
   "appearance_color_primary", "appearance_color_accent", "appearance_theme_mode", "appearance_font_family",
   "appearance_font_size_base", "appearance_sidebar_default_collapsed", "appearance_header_show_company_name",
 ];
@@ -136,10 +124,7 @@ export async function loadAppearanceConfig() {
     systemTitle: map.appearance_system_title || "سامانه مدیریت HSE",
     logoUrl: map.appearance_logo_url || "",
     faviconUrl: map.appearance_favicon_url || "",
-<<<<<<< HEAD
-=======
     apkIconUrl: map.appearance_apk_icon_url || "",
->>>>>>> 62c9c73 (Upload project files)
     colorPrimary: map.appearance_color_primary || "#0e2a3f",
     colorAccent: map.appearance_color_accent || "#0d8f8a",
     themeMode: map.appearance_theme_mode || "light",
@@ -156,10 +141,7 @@ export async function saveAppearanceConfig(config, updatedBy) {
     ["appearance_system_title", config.systemTitle, "text"],
     ["appearance_logo_url", config.logoUrl, "text"],
     ["appearance_favicon_url", config.faviconUrl, "text"],
-<<<<<<< HEAD
-=======
     ["appearance_apk_icon_url", config.apkIconUrl, "text"],
->>>>>>> 62c9c73 (Upload project files)
     ["appearance_color_primary", config.colorPrimary, "text"],
     ["appearance_color_accent", config.colorAccent, "text"],
     ["appearance_theme_mode", config.themeMode, "text"],
@@ -230,7 +212,6 @@ export function applyAppearanceToDom(config) {
 function announcementFromRow(r) {
   return {
     id: r.id, companyId: r.company_id, title: r.title || "", message: r.message || "",
-<<<<<<< HEAD
     iconKey: r.icon_key || "megaphone", buttonLabel: r.button_label || "", buttonUrl: r.button_url || "",
     startsAt: r.starts_at, endsAt: r.ends_at, priority: r.priority || 0,
     isActive: r.is_active !== false, createdAt: r.created_at,
@@ -240,7 +221,6 @@ function announcementFromRow(r) {
 // طرف مشتری — فقط اطلاعیه‌ی فعال، در بازه‌ی زمانی جاری، و برای همین
 // شرکت یا سراسری (company_id=null)؛ بین چند مورد واجد شرایط، بالاترین
 // اولویت (و جدیدترین در تساوی) انتخاب می‌شود.
-=======
     iconKey: r.icon_key || "megaphone", imageUrl: r.image_url || "",
     // اطلاعیه‌های قبلی فقط image_url داشتند و همچنان باید در صفحه‌ی ورود
     // هم عکس نشان بدهند (طبق الزام صریح «اطلاعیه‌های قبلی حذف نشوند و
@@ -277,7 +257,6 @@ export async function loadActiveAnnouncements(locationFilter) {
   return eligible.map(announcementFromRow);
 }
 
->>>>>>> 62c9c73 (Upload project files)
 export async function loadActiveAnnouncement() {
   const companyId = getCurrentCompanyId();
   const nowIso = new Date().toISOString();
@@ -301,16 +280,13 @@ export async function loadAllAnnouncements() {
 export async function createAnnouncement(rec, createdBy) {
   const payload = {
     company_id: rec.companyId || null, title: rec.title || null, message: rec.message,
-<<<<<<< HEAD
     icon_key: rec.iconKey || "megaphone", button_label: rec.buttonLabel || null, button_url: rec.buttonUrl || null,
     starts_at: rec.startsAt || null, ends_at: rec.endsAt || null, priority: rec.priority || 0,
     is_active: rec.isActive !== false, updated_by: createdBy || "",
-=======
     icon_key: rec.iconKey || "megaphone", image_url: rec.imageUrl || null, login_image_url: rec.loginImageUrl || null,
     button_label: rec.buttonLabel || null, button_url: rec.buttonUrl || null,
     starts_at: rec.startsAt || null, ends_at: rec.endsAt || null, priority: rec.priority || 0, display_seconds: rec.displaySeconds || 10,
     display_location: rec.displayLocation || "both", is_active: rec.isActive !== false, updated_by: createdBy || "",
->>>>>>> 62c9c73 (Upload project files)
   };
   const rows = await sb("system_announcements", { method: "POST", body: JSON.stringify([payload]) }, "super_admin");
   if (!sbOk(rows)) return { __error: true, message: "خطا در ثبت اطلاعیه" };
@@ -320,16 +296,13 @@ export async function createAnnouncement(rec, createdBy) {
 export async function updateAnnouncement(id, rec, updatedBy) {
   const payload = {
     company_id: rec.companyId || null, title: rec.title || null, message: rec.message,
-<<<<<<< HEAD
     icon_key: rec.iconKey || "megaphone", button_label: rec.buttonLabel || null, button_url: rec.buttonUrl || null,
     starts_at: rec.startsAt || null, ends_at: rec.endsAt || null, priority: rec.priority || 0,
     is_active: rec.isActive !== false, updated_at: new Date().toISOString(), updated_by: updatedBy || "",
-=======
     icon_key: rec.iconKey || "megaphone", image_url: rec.imageUrl || null, login_image_url: rec.loginImageUrl || null,
     button_label: rec.buttonLabel || null, button_url: rec.buttonUrl || null,
     starts_at: rec.startsAt || null, ends_at: rec.endsAt || null, priority: rec.priority || 0, display_seconds: rec.displaySeconds || 10,
     display_location: rec.displayLocation || "both", is_active: rec.isActive !== false, updated_at: new Date().toISOString(), updated_by: updatedBy || "",
->>>>>>> 62c9c73 (Upload project files)
   };
   const rows = await sb(`system_announcements?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(payload) }, "super_admin");
   if (!sbOk(rows)) return { __error: true, message: "خطا در ذخیره‌ی اطلاعیه" };

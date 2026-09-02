@@ -61,11 +61,8 @@ export const translations = {
   subIncidentsList: { fa: "فهرست حوادث", en: "Incidents List" },
   subPersonnelList: { fa: "لیست پرسنل", en: "Personnel List" },
   subPersonnelForm: { fa: "ثبت پرسنل جدید", en: "Register New Personnel" },
-<<<<<<< HEAD
   moduleMachinery: { fa: "مدیریت ماشین‌آلات و تجهیزات", en: "Machinery & Equipment Management" },
-=======
   moduleMachinery: { fa: "مدیریت ماشین‌آلات", en: "Machinery Management" },
->>>>>>> 62c9c73 (Upload project files)
   subMachineryList: { fa: "لیست ماشین‌آلات", en: "Machinery List" },
   moduleScaffold: { fa: "مدیریت داربست", en: "Scaffolding Management" },
   subScaffoldList: { fa: "لیست تگ داربست", en: "Scaffold Tag List" },

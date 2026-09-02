@@ -11,10 +11,7 @@ const btnStyle = (bg) => ({ padding: "7px 14px", borderRadius: 8, border: "none"
 
 const TABS = [
   { key: "admin", label: "Admin Accounts" },
-<<<<<<< HEAD
-=======
   { key: "hse_supervisor", label: "حساب‌های سرپرست/مدیر HSE" },
->>>>>>> 62c9c73 (Upload project files)
   { key: "employer", label: "Employer Accounts" },
   { key: "contractor", label: "Contractor Accounts" },
 ];

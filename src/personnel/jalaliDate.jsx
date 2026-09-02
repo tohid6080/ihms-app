@@ -52,11 +52,8 @@ function todayJalaliParts() {
   const now = new Date();
   return gregorianToJalali(now.getFullYear(), now.getMonth() + 1, now.getDate());
 }
-<<<<<<< HEAD
 function isoToJalali(iso) {
-=======
 export function isoToJalali(iso) {
->>>>>>> 62c9c73 (Upload project files)
   if (!iso) return null;
   const [gy, gm, gd] = iso.split("-").map(Number);
   if (!gy) return null;
@@ -103,11 +100,8 @@ export function jalaliFileTimestamp() {
   return `${jalaliDate}_${hh}-${mm}`;
 }
 
-<<<<<<< HEAD
 const JALALI_MONTHS = ["فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"];
-=======
 export const JALALI_MONTHS = ["فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"];
->>>>>>> 62c9c73 (Upload project files)
 
 export function JalaliDateInput({ value, onChange, allowEmpty }) {
   const todayParts = todayJalaliParts();

@@ -6,10 +6,7 @@ import { loadActiveIndicators, loadAllAssessments, accidentPronenessLevel } from
 import { loadCorrectiveActionsForAssessments, STATUS_META } from "../correctiveActions/correctiveActionsApi.js";
 import AccidentPronenessAssessmentForm from "./AccidentPronenessAssessmentForm.jsx";
 import HseClimateCampaignManager from "./HseClimateCampaignManager.jsx";
-<<<<<<< HEAD
-=======
 import SbsSubmodule from "./SbsSubmodule.jsx";
->>>>>>> 62c9c73 (Upload project files)
 
 /**
  * نقطه‌ی ورود ماژول — طراحی Dynamic: لیست شاخص‌ها از دیتابیس خوانده می‌شود
@@ -47,13 +44,10 @@ export default function ProactiveIndicatorsDashboard({ onBack, currentUser, role
     return <HseClimateCampaignManager currentUser={currentUser} role={role} onBack={() => setView("list")} />;
   }
 
-<<<<<<< HEAD
-=======
   if (view === "results" && activeIndicatorKey === "sbs") {
     return <SbsSubmodule currentUser={currentUser} role={role} readOnly={readOnly} onBack={() => setView("list")} />;
   }
 
->>>>>>> 62c9c73 (Upload project files)
   if (view === "results" && activeIndicatorKey) {
     return (
       <ResultsList
